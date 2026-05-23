@@ -50,6 +50,12 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* ── ANIMAÇÃO ── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Ocultar elementos padrão do Streamlit */
 #MainMenu {visibility: hidden;}
 footer    {visibility: hidden;}
@@ -77,6 +83,12 @@ label                   { color: #94A3B8 !important; font-size: .78rem !importan
     padding: 6px 14px 14px !important;
     margin-bottom: 18px !important;
     box-shadow: 0 4px 24px rgba(0,0,0,.25) !important;
+    animation: fadeIn 0.45s ease-out forwards !important;
+    transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 14px 40px rgba(0,0,0,.4) !important;
 }
 
 /* ── LOGIN FORM ── */
@@ -272,6 +284,14 @@ div[data-testid="stButton"] > button:hover {
     border-color: #10B981 !important;
     transform: translateY(-2px) !important;
     box-shadow: 0 4px 14px rgba(16,185,129,.3) !important;
+}
+div[data-testid="stButton"] > button:disabled {
+    background-color: #1A2436 !important;
+    color: #2D3F55 !important;
+    border-color: #1E293B !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    transform: none !important;
 }
 
 /* ── BOTÕES DE AÇÃO PRIMÁRIOS (Gerar TXT / XLSX) ── */
@@ -906,14 +926,16 @@ def pagina_usuarios():
 
 # ── PÁGINA: CONVERSOR ─────────────────────────────────────────────────────────
 def pagina_conversor():
+    # Header: centrado e impactante
     st.markdown("""
-    <div style="padding: 1rem 0 1.6rem;">
-        <div style="color:#F8FAFC; font-size:1.45rem; font-weight:800; letter-spacing:-.3px;">
+    <div style="text-align:center; padding:1.4rem 0 2.2rem;">
+        <div style="color:#10B981; font-size:.7rem; font-weight:700;
+                    letter-spacing:1.6px; text-transform:uppercase; margin-bottom:.7rem;">
             Conversor NFS-e
         </div>
-        <div style="color:#334155; font-size:.75rem; margin-top:.4rem; font-weight:600;
-                    letter-spacing:.5px; text-transform:uppercase;">
-            ISS Fortaleza &nbsp;·&nbsp; SPED GOV
+        <div style="color:#F8FAFC; font-size:1.95rem; font-weight:800;
+                    letter-spacing:-.5px; line-height:1.15;">
+            ISS Fortaleza <span style="color:#334155; font-weight:300;">&amp;</span> SPED GOV
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -934,6 +956,16 @@ def pagina_conversor():
             accept_multiple_files=True,
             label_visibility="collapsed",
         )
+
+        # Toast dinâmico ao detectar novos arquivos
+        n_atual = len(uploaded) if uploaded else 0
+        if n_atual != st.session_state.get("_n_xml_prev", 0):
+            if n_atual > 0:
+                st.toast(
+                    f"{n_atual} arquivo{'s' if n_atual > 1 else ''} carregado{'s' if n_atual > 1 else ''}",
+                    icon="📂",
+                )
+            st.session_state["_n_xml_prev"] = n_atual
 
         if uploaded:
             total = len(uploaded)
@@ -963,6 +995,8 @@ def pagina_conversor():
         im_input = st.text_input("im", placeholder="Ex: 12345678-0  (opcional)", label_visibility="collapsed")
 
     # ── ETAPA 3 ────────────────────────────────────────────────────────────────
+    tem_arquivos = bool(uploaded)
+
     with st.container(border=True):
         st.markdown("""
         <div class="step-header">
@@ -973,6 +1007,14 @@ def pagina_conversor():
         </div>
         """, unsafe_allow_html=True)
 
+        if not tem_arquivos:
+            st.markdown(
+                '<div style="color:#475569; font-size:.8rem; margin-bottom:.6rem;">'
+                '⚠️&nbsp; Faça o upload dos XMLs na etapa 1 para liberar a conversão.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
         col1, col2 = st.columns(2, gap="medium")
 
         with col1:
@@ -982,7 +1024,13 @@ def pagina_conversor():
                 <div class="format-name">ISS Fortaleza</div>
             </div>
             """, unsafe_allow_html=True)
-            btn_txt = st.button("Gerar TXT", use_container_width=True, type="primary", key="btn_txt")
+            btn_txt = st.button(
+                "Gerar TXT",
+                disabled=not tem_arquivos,
+                use_container_width=True,
+                type="primary",
+                key="btn_txt",
+            )
 
         with col2:
             st.markdown("""
@@ -991,12 +1039,18 @@ def pagina_conversor():
                 <div class="format-name">SPED GOV</div>
             </div>
             """, unsafe_allow_html=True)
-            btn_xlsx = st.button("Gerar XLSX", use_container_width=True, type="primary", key="btn_xlsx")
+            btn_xlsx = st.button(
+                "Gerar XLSX",
+                disabled=not tem_arquivos,
+                use_container_width=True,
+                type="primary",
+                key="btn_xlsx",
+            )
 
     # ── Processamento ──────────────────────────────────────────────────────────
     if btn_txt or btn_xlsx:
         if not uploaded:
-            st.markdown("""<div class="warn-box">⚠️ Selecione pelo menos um arquivo XML na Etapa 1 antes de processar.</div>""", unsafe_allow_html=True)
+            st.markdown('<div class="warn-box">⚠️ Selecione pelo menos um arquivo XML na Etapa 1.</div>', unsafe_allow_html=True)
         else:
             modo       = "txt" if btn_txt else "xlsx"
             im         = im_input.strip() or "0"
@@ -1014,6 +1068,8 @@ def pagina_conversor():
                 nome       = f"nfse_{modo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
                 tamanho_kb = round(len(dados_saida) / 1024, 1)
                 icone      = "📄" if modo == "txt" else "📊"
+
+                st.toast(f"Arquivo {tipo_label} gerado com sucesso!", icon="✅")
 
                 st.markdown(f"""
                 <div class="result-success">
@@ -1034,14 +1090,14 @@ def pagina_conversor():
                     use_container_width=True,
                 )
             else:
-                st.markdown("""<div class="error-box">❌ Nenhum arquivo foi gerado. Verifique o log abaixo.</div>""", unsafe_allow_html=True)
+                st.markdown('<div class="error-box">❌ Nenhum arquivo foi gerado. Verifique o log abaixo.</div>', unsafe_allow_html=True)
 
             with st.expander("📋  Ver log de processamento"):
                 st.code(log.strip() if log.strip() else "(nenhuma saída registrada)", language="")
 
     st.markdown("""
     <div class="footer">
-        Conversor NFS-e v1.4&nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
+        Conversor NFS-e v1.5&nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
     </div>
     """, unsafe_allow_html=True)
 
