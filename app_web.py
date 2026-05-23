@@ -561,12 +561,15 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     cs = linha.split(";")
                     if len(cs) != 46:
                         return linha
-                    # Campo 26 (índice 25) – descrição: remove apenas acentos/non-ASCII
-                    # (mantém . , : () / e demais pontuações ASCII normalmente)
-                    cs[25] = "".join(
+                    # Campo 26 (índice 25) – descrição: remove acentos E pontuações
+                    # Mantém apenas letras, dígitos e espaço simples
+                    import re as _re
+                    _desc = "".join(
                         c for c in _ud.normalize("NFD", cs[25])
                         if ord(c) < 128
                     )
+                    _desc = _re.sub(r"[^A-Za-z0-9 ]", " ", _desc)
+                    cs[25] = _re.sub(r" {2,}", " ", _desc).strip()
                     # Campo 30 (índice 29) – natureza: prestação em Fortaleza → "1"
                     if cs[28] == "2304400":
                         cs[29] = "1"
