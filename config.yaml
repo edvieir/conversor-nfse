@@ -16,3 +16,9 @@ credentials:
       password: $2b$12$ZpQGsSex3iHn2tb1IjRpPedH8akyA5ekSgB/B.zSg5GXcLsUwQmH6
       failed_login_attempts: 0
       logged_in: false
+    P&P:
+      name: P&P Contabilidade
+      email: P&P@exemplo.com
+      password: $2b$12$cdTTFVBoZs2w41pIQaEJF.3gwzSVMQq.EAs5EnxC5AQB5GfnsSr.i
+      failed_login_attempts: 0
+      logged_in: false
