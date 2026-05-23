@@ -48,351 +48,326 @@ except Exception as _e:
 # ── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ── RESET / BASE ── */
+#MainMenu, footer, header { visibility: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, [data-testid="stAppViewContainer"] {
+    background: #0A0E1A !important;
+    font-family: 'Inter', -apple-system, sans-serif;
+}
+[data-testid="stHeader"] { background: transparent !important; height: 0 !important; }
+[data-testid="stSidebar"] {
+    background: #0D1117 !important;
+    border-right: 1px solid #1C2333 !important;
+}
+.block-container { max-width: 740px; padding: 0 1.5rem 5rem; margin: 0 auto; }
+
+body, p, div, span, li { color: #8B949E; }
+h1,h2,h3,h4 { color: #E6EDF3 !important; font-weight: 700; }
+label {
+    color: #6E7681 !important; font-size: .75rem !important;
+    font-weight: 600 !important; letter-spacing: .4px !important;
+    text-transform: uppercase !important;
+}
 
 /* ── ANIMAÇÃO ── */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(14px); }
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(18px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Ocultar elementos padrão do Streamlit */
-#MainMenu {visibility: hidden;}
-footer    {visibility: hidden;}
-
-*, *::before, *::after { box-sizing: border-box; }
-html, body, [data-testid="stAppViewContainer"] {
-    background: #0F172A !important;
-    font-family: 'Inter', sans-serif;
+/* ── TOPBAR (banner de topo decorativo) ── */
+.topbar {
+    background: linear-gradient(90deg, #0D1117 0%, #131A2E 50%, #0D1117 100%);
+    border-bottom: 1px solid #1C2333;
+    padding: 14px 0 12px;
+    margin: 0 -1.5rem 2.4rem;
+    display: flex; align-items: center; justify-content: center;
+    gap: 14px;
 }
-[data-testid="stHeader"]  { background: transparent !important; }
-[data-testid="stSidebar"] { background: #1E293B !important; border-right: 1px solid #334155; }
-.block-container          { max-width: 700px; padding: 2rem 1.5rem 4rem; }
+.topbar-logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #2F6FEB 0%, #7B3FE4 100%);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    box-shadow: 0 0 20px rgba(47,111,235,.35);
+}
+.topbar-name {
+    color: #E6EDF3; font-size: 1rem; font-weight: 700; letter-spacing: -.2px;
+}
+.topbar-divider {
+    width: 1px; height: 16px; background: #1C2333;
+}
+.topbar-tag {
+    color: #484F58; font-size: .7rem; font-weight: 500; letter-spacing: .2px;
+}
 
-body, p, div, span, li { color: #CBD5E1; }
-h1,h2,h3,h4            { color: #F8FAFC !important; font-weight: 700; }
-label                   { color: #94A3B8 !important; font-size: .78rem !important;
-                          font-weight: 600 !important; letter-spacing: .3px !important; }
-
-/* ── STEP CONTAINERS (st.container border=True) ── */
+/* ── STEP CONTAINERS ── */
 [data-testid="stVerticalBlockBorderWrapper"] {
-    border: 1px solid #334155 !important;
-    border-left: 4px solid #10B981 !important;
-    border-radius: 12px !important;
-    background: #1E293B !important;
-    padding: 6px 14px 14px !important;
-    margin-bottom: 18px !important;
-    box-shadow: 0 4px 24px rgba(0,0,0,.25) !important;
-    animation: fadeIn 0.45s ease-out forwards !important;
-    transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+    border: 1px solid #1C2333 !important;
+    border-radius: 14px !important;
+    background: #0D1117 !important;
+    padding: 6px 18px 18px !important;
+    margin-bottom: 14px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.02) !important;
+    animation: slideUp .3s ease-out forwards !important;
+    transition: border-color .2s, box-shadow .2s !important;
 }
 [data-testid="stVerticalBlockBorderWrapper"]:hover {
-    transform: translateY(-3px) !important;
-    box-shadow: 0 14px 40px rgba(0,0,0,.4) !important;
+    border-color: #2F3E55 !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.03) !important;
 }
+
+/* ── STEP HEADER ── */
+.step-header {
+    display: flex; align-items: center; gap: 12px;
+    margin: 10px 0 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #1C2333;
+}
+.step-num {
+    min-width: 26px; height: 26px;
+    background: #161B27;
+    border: 1px solid #2F3E55;
+    color: #2F6FEB;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .78rem; font-weight: 800; flex-shrink: 0;
+    letter-spacing: -.3px;
+}
+.step-title { color: #C9D1D9; font-weight: 600; font-size: .9rem; letter-spacing: -.1px; }
+.step-desc  { color: #484F58; font-size: .75rem; margin-top: 2px; }
 
 /* ── LOGIN FORM ── */
 [data-testid="stForm"] {
-    background: #1E293B !important;
-    border: 1px solid #334155 !important;
+    background: #0D1117 !important;
+    border: 1px solid #1C2333 !important;
     border-radius: 16px !important;
-    padding: 28px 30px !important;
-    box-shadow: 0 24px 60px rgba(0,0,0,.5) !important;
+    padding: 28px 28px !important;
+    box-shadow: 0 24px 64px rgba(0,0,0,.6) !important;
 }
-/* Ocultar título "Login" gerado pelo streamlit-authenticator */
 [data-testid="stForm"] h2 { display: none !important; }
 
-/* Botão submit do login — seletor agressivo duplo */
 div[data-testid="stFormSubmitButton"] > button,
 [data-testid="stFormSubmitButton"] > button {
-    background-color: #10B981 !important;
+    background: linear-gradient(135deg, #2F6FEB, #1A56C8) !important;
     color: #fff !important; border: none !important;
     border-radius: 8px !important; width: 100% !important;
-    height: 3.2em !important; font-weight: 700 !important;
-    font-size: .95rem !important; letter-spacing: .3px !important;
-    box-shadow: 0 2px 12px rgba(16,185,129,.3) !important;
-    transition: all .25s ease !important; margin-top: .4rem !important;
+    height: 3em !important; font-weight: 700 !important;
+    font-size: .92rem !important; letter-spacing: .1px !important;
+    box-shadow: 0 2px 10px rgba(47,111,235,.3) !important;
+    transition: all .2s ease !important; margin-top: .5rem !important;
 }
 div[data-testid="stFormSubmitButton"] > button:hover,
 [data-testid="stFormSubmitButton"] > button:hover {
-    background-color: #D97706 !important;
-    box-shadow: 0 4px 18px rgba(217,119,6,.4) !important;
-    transform: translateY(-2px) !important;
-}
-
-/* ── BADGE ── */
-.badge {
-    display: inline-block;
-    background: #1E293B; color: #10B981;
-    border: 1px solid #334155; border-radius: 20px;
-    font-size: .7rem; font-weight: 700; letter-spacing: .6px;
-    padding: 3px 12px; margin-bottom: 12px; text-transform: uppercase;
-}
-
-/* ── HERO ── */
-.hero {
-    background: #1E293B;
-    border: 1px solid #334155;
-    border-left: 4px solid #10B981;
-    border-radius: 12px;
-    padding: 28px 32px 24px;
-    margin-bottom: 28px;
-}
-.hero-title {
-    color: #F8FAFC; font-size: 1.75rem; font-weight: 800;
-    letter-spacing: -.3px; margin: 0 0 8px; line-height: 1.2;
-}
-.hero-sub { color: #64748B; font-size: .88rem; margin: 0 0 16px; }
-.hero-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.chip {
-    background: #0F172A; border: 1px solid #334155; color: #64748B;
-    border-radius: 20px; font-size: .7rem; font-weight: 500; padding: 4px 11px;
+    background: linear-gradient(135deg, #4080F0, #2563EB) !important;
+    box-shadow: 0 4px 18px rgba(47,111,235,.45) !important;
+    transform: translateY(-1px) !important;
 }
 
 /* ── ADMIN HERO ── */
 .admin-hero {
-    background: #1E293B;
-    border: 1px solid #334155;
-    border-left: 4px solid #10B981;
-    border-radius: 12px;
-    padding: 24px 32px 20px;
-    margin-bottom: 24px;
+    background: #0D1117; border: 1px solid #1C2333;
+    border-radius: 12px; padding: 24px 28px 20px; margin-bottom: 20px;
 }
-.admin-hero-title {
-    color: #F8FAFC; font-size: 1.4rem; font-weight: 800;
-    letter-spacing: -.3px; margin: 0 0 6px;
-}
-.admin-hero-sub { color: #64748B; font-size: .85rem; }
+.admin-hero-title { color: #E6EDF3; font-size: 1.3rem; font-weight: 700; margin: 0 0 4px; }
+.admin-hero-sub   { color: #484F58; font-size: .84rem; }
 
-/* ── ETAPAS ── */
-.step-header {
-    display: flex; align-items: center; gap: 14px;
-    margin: 6px 0 12px;
+/* ── BADGES ── */
+.badge {
+    display: inline-block; background: #131A2E; color: #2F6FEB;
+    border: 1px solid #1C3060; border-radius: 20px;
+    font-size: .68rem; font-weight: 700; letter-spacing: .5px;
+    padding: 3px 10px; margin-bottom: 10px; text-transform: uppercase;
 }
-.step-num {
-    min-width: 32px; height: 32px;
-    background: #10B981;
-    color: #fff; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: .85rem; font-weight: 800; flex-shrink: 0;
-    box-shadow: 0 2px 8px #10B98140;
-}
-.step-title { color: #F8FAFC; font-weight: 700; font-size: .95rem; }
-.step-desc  { color: #475569; font-size: .78rem; margin-top: 2px; }
 
-/* ── CARDS DE FORMATO ── */
+/* ── FORMAT CARDS ── */
 .format-card {
-    background: #1E293B; border: 1px solid #334155;
-    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
-    text-align: center;
-    transition: border-color .2s;
+    background: #0A0E1A; border: 1px solid #1C2333;
+    border-radius: 10px; padding: 16px 14px 12px; margin-bottom: 10px;
+    text-align: center; transition: border-color .2s, box-shadow .2s;
 }
-.format-card:hover { border-color: #10B981; }
-.format-icon { font-size: 1.6rem; margin-bottom: 6px; }
-.format-name { color: #F8FAFC; font-weight: 700; font-size: .9rem; }
-.format-desc { color: #475569; font-size: .75rem; margin-top: 4px; line-height: 1.4; }
+.format-card:hover { border-color: #2F6FEB; box-shadow: 0 4px 14px rgba(47,111,235,.12); }
+.format-icon { font-size: 1.7rem; margin-bottom: 7px; }
+.format-name { color: #C9D1D9; font-weight: 700; font-size: .88rem; }
+.format-desc { color: #484F58; font-size: .73rem; margin-top: 4px; line-height: 1.4; }
 
-/* ── LISTA DE ARQUIVOS ── */
-.file-list {
-    background: #0F172A; border: 1px solid #334155;
-    border-left: 3px solid #10B981;
-    border-radius: 8px; padding: 12px 14px; margin: 8px 0 4px;
-}
-.file-list-header { color: #10B981; font-size: .78rem; font-weight: 700; margin-bottom: 8px; }
-.file-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.file-chip {
-    background: #1E293B; border: 1px solid #334155; color: #94A3B8;
-    border-radius: 6px; font-size: .72rem; padding: 3px 10px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
-}
-.file-chip-more {
-    background: #1E293B; border: 1px solid #10B98160; color: #10B981;
-    border-radius: 6px; font-size: .72rem; padding: 3px 10px;
-}
-
-/* ── INFO / WARN / ERROR / SUCCESS ── */
+/* ── STATUS BOXES ── */
 .info-box {
-    background: #0F172A; border: 1px solid #334155; border-left: 3px solid #38BDF8;
-    border-radius: 6px; padding: 10px 14px; margin: 8px 0;
-    color: #7BA7C0; font-size: .8rem; line-height: 1.5;
+    background: #0B1525; border: 1px solid #1A2E50; border-left: 3px solid #2F6FEB;
+    border-radius: 8px; padding: 11px 15px; margin: 8px 0;
+    color: #5B8DD9; font-size: .8rem; line-height: 1.55;
 }
 .warn-box {
-    background: #1C1A0D; border: 1px solid #4A3E00; border-left: 3px solid #D97706;
-    border-radius: 6px; padding: 10px 14px; margin: 12px 0;
-    color: #D97706; font-size: .82rem;
+    background: #14100A; border: 1px solid #3A2800; border-left: 3px solid #C77D0A;
+    border-radius: 8px; padding: 11px 15px; margin: 10px 0;
+    color: #C77D0A; font-size: .8rem;
 }
 .error-box {
-    background: #1A0D0D; border: 1px solid #4A1515; border-left: 3px solid #EF4444;
-    border-radius: 6px; padding: 10px 14px; margin: 12px 0;
-    color: #EF4444; font-size: .82rem;
+    background: #130B0B; border: 1px solid #3A1010; border-left: 3px solid #D93025;
+    border-radius: 8px; padding: 11px 15px; margin: 10px 0;
+    color: #D93025; font-size: .8rem;
 }
 .success-box {
-    background: #0A1F10; border: 1px solid #166534; border-left: 3px solid #10B981;
-    border-radius: 6px; padding: 10px 14px; margin: 12px 0;
-    color: #10B981; font-size: .82rem;
+    background: #071412; border: 1px solid #0D3027; border-left: 3px solid #1AB87A;
+    border-radius: 8px; padding: 11px 15px; margin: 10px 0;
+    color: #1AB87A; font-size: .8rem;
 }
 
 /* ── TABELA DE USUÁRIOS ── */
 .user-table {
-    width: 100%; border-collapse: collapse;
-    background: #1E293B; border-radius: 10px; overflow: hidden;
-    border: 1px solid #334155; margin: 12px 0 20px;
+    width: 100%; border-collapse: collapse; background: #0D1117;
+    border-radius: 10px; overflow: hidden; border: 1px solid #1C2333; margin: 10px 0 18px;
 }
 .user-table th {
-    background: #0F172A; color: #475569; font-size: .72rem;
+    background: #0A0E1A; color: #484F58; font-size: .7rem;
     font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
-    padding: 10px 14px; border-bottom: 1px solid #334155; text-align: left;
+    padding: 10px 14px; border-bottom: 1px solid #1C2333; text-align: left;
 }
 .user-table td {
-    padding: 10px 14px; border-bottom: 1px solid #334155;
-    color: #CBD5E1; font-size: .83rem;
+    padding: 10px 14px; border-bottom: 1px solid #1C2333; color: #C9D1D9; font-size: .82rem;
 }
 .user-table tr:last-child td { border-bottom: none; }
-.user-table tr:hover td { background: #0F172A; }
+.user-table tr:hover td { background: #0A0E1A; }
 .user-badge {
-    display: inline-block; background: #0F172A; color: #10B981;
-    border: 1px solid #10B98160; border-radius: 12px;
-    font-size: .65rem; font-weight: 700; padding: 2px 9px;
+    display: inline-block; background: #0B1525; color: #2F6FEB;
+    border: 1px solid #1A2E50; border-radius: 12px;
+    font-size: .65rem; font-weight: 700; padding: 2px 8px;
 }
-.user-badge-admin {
-    background: #0F172A; color: #D97706; border-color: #D9770660;
-}
+.user-badge-admin { background: #14100A; color: #C77D0A; border-color: #3A2800; }
 
 /* ── RESULTADO ── */
 .result-success {
-    background: #1E293B;
-    border: 1px solid #334155; border-left: 4px solid #10B981;
-    border-radius: 12px;
-    padding: 18px 22px; margin: 16px 0 12px;
+    background: #0D1117; border: 1px solid #1C2333;
+    border-radius: 12px; padding: 18px 22px; margin: 14px 0 10px;
     display: flex; align-items: center; gap: 16px;
 }
-.result-success-icon { font-size: 2rem; flex-shrink: 0; }
-.result-success-title { color: #10B981; font-weight: 700; font-size: .95rem; }
-.result-success-meta  { color: #475569; font-size: .78rem; margin-top: 4px; }
+.result-success-icon  { font-size: 2rem; flex-shrink: 0; }
+.result-success-title { color: #1AB87A; font-weight: 700; font-size: .95rem; }
+.result-success-meta  { color: #484F58; font-size: .77rem; margin-top: 4px; }
 
-/* ── BOTÕES GERAIS (navegação, sidebar) ── */
+/* ── BOTÕES GERAIS ── */
 div[data-testid="stButton"] > button {
-    background-color: #1E293B !important;
-    color: #CBD5E1 !important; border: 1px solid #334155 !important;
-    border-radius: 8px !important; font-weight: 600 !important;
-    font-size: .85rem !important; height: 2.8em !important;
-    width: 100% !important; letter-spacing: .2px !important;
-    transition: all .25s ease !important;
+    background: #161B27 !important; color: #C9D1D9 !important;
+    border: 1px solid #2F3E55 !important; border-radius: 8px !important;
+    font-weight: 600 !important; font-size: .84rem !important;
+    height: 2.7em !important; width: 100% !important;
+    transition: all .2s ease !important;
 }
 div[data-testid="stButton"] > button:hover {
-    background-color: #10B981 !important; color: #fff !important;
-    border-color: #10B981 !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 14px rgba(16,185,129,.3) !important;
+    background: #1C2540 !important; color: #E6EDF3 !important;
+    border-color: #2F6FEB !important;
+    box-shadow: 0 0 0 3px rgba(47,111,235,.15) !important;
 }
 div[data-testid="stButton"] > button:disabled {
-    background-color: #1A2436 !important;
-    color: #2D3F55 !important;
-    border-color: #1E293B !important;
-    cursor: not-allowed !important;
-    box-shadow: none !important;
-    transform: none !important;
+    background: #0D1117 !important; color: #2F3E55 !important;
+    border-color: #1C2333 !important; cursor: not-allowed !important;
+    box-shadow: none !important; transform: none !important;
 }
 
-/* ── BOTÕES DE AÇÃO PRIMÁRIOS (Gerar TXT / XLSX) ── */
+/* ── BOTÕES PRIMÁRIOS (Gerar TXT / XLSX) ── */
 div[data-testid="stButton"] > button[kind="primary"] {
-    background-color: #10B981 !important;
+    background: linear-gradient(135deg, #2F6FEB, #1A56C8) !important;
     color: #fff !important; border: none !important;
-    font-weight: 700 !important; font-size: .92rem !important;
-    height: 3.2em !important;
-    box-shadow: 0 2px 10px rgba(16,185,129,.25) !important;
+    font-weight: 700 !important; font-size: .9rem !important; height: 3em !important;
+    box-shadow: 0 2px 8px rgba(47,111,235,.3) !important;
 }
 div[data-testid="stButton"] > button[kind="primary"]:hover {
-    background-color: #D97706 !important;
-    box-shadow: 0 4px 18px rgba(217,119,6,.4) !important;
-    transform: translateY(-2px) !important;
+    background: linear-gradient(135deg, #4080F0, #2563EB) !important;
+    box-shadow: 0 4px 16px rgba(47,111,235,.4) !important;
+    transform: translateY(-1px) !important;
 }
 
-/* ── BOTÃO DOWNLOAD ── */
+/* ── DOWNLOAD ── */
 div[data-testid="stDownloadButton"] > button {
-    background-color: #10B981 !important;
+    background: linear-gradient(135deg, #1AB87A, #0D9B64) !important;
     color: #fff !important; border: none !important; border-radius: 8px !important;
-    font-weight: 700 !important; font-size: .92rem !important;
-    height: 3.2em !important; width: 100% !important;
-    box-shadow: 0 2px 10px rgba(16,185,129,.25) !important; transition: all .25s !important;
+    font-weight: 700 !important; font-size: .9rem !important;
+    height: 3em !important; width: 100% !important;
+    box-shadow: 0 2px 8px rgba(26,184,122,.25) !important; transition: all .2s !important;
 }
 div[data-testid="stDownloadButton"] > button:hover {
-    background-color: #D97706 !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 16px rgba(217,119,6,.4) !important;
+    background: linear-gradient(135deg, #20D48D, #12AD70) !important;
+    box-shadow: 0 4px 14px rgba(26,184,122,.4) !important;
+    transform: translateY(-1px) !important;
 }
 
 /* ── INPUTS ── */
 div[data-testid="stTextInput"] input {
-    background-color: #1E293B !important; color: #F8FAFC !important;
-    border: 1px solid #334155 !important; border-radius: 8px !important;
-    font-size: .88rem !important; padding: 12px 15px !important;
-    transition: border-color .25s, box-shadow .25s !important;
+    background: #0A0E1A !important; color: #E6EDF3 !important;
+    border: 1px solid #2F3E55 !important; border-radius: 8px !important;
+    font-size: .87rem !important; padding: 10px 14px !important;
+    transition: border-color .2s, box-shadow .2s !important;
 }
 div[data-testid="stTextInput"] input:focus {
-    border-color: #D97706 !important; box-shadow: 0 0 0 2px rgba(217,119,6,.25) !important;
+    border-color: #2F6FEB !important;
+    box-shadow: 0 0 0 3px rgba(47,111,235,.18) !important;
+    outline: none !important;
 }
-div[data-testid="stTextInput"] input::placeholder { color: #475569 !important; }
+div[data-testid="stTextInput"] input::placeholder { color: #3A4455 !important; }
 
 /* ── FILE UPLOADER ── */
 div[data-testid="stFileUploader"] {
-    background-color: #1E293B !important; border: 2px dashed #475569 !important;
-    border-radius: 12px !important; padding: 20px !important;
-    transition: border-color .25s !important;
+    background: #0A0E1A !important; border: 2px dashed #2F3E55 !important;
+    border-radius: 12px !important; padding: 18px !important;
+    transition: border-color .2s, box-shadow .2s !important;
 }
-div[data-testid="stFileUploader"]:hover { border-color: #10B981 !important; }
-div[data-testid="stFileUploader"] * { color: #64748B !important; }
+div[data-testid="stFileUploader"]:hover {
+    border-color: #2F6FEB !important;
+    box-shadow: 0 0 0 3px rgba(47,111,235,.1) !important;
+}
+div[data-testid="stFileUploader"] * { color: #484F58 !important; }
 div[data-testid="stFileUploader"] button {
-    background-color: #334155 !important; color: #fff !important; border: none !important;
+    background: #2F3E55 !important; color: #C9D1D9 !important; border: none !important;
 }
 
 /* ── LOG / CODE ── */
 [data-testid="stCode"], pre {
-    background: #0F172A !important; border: 1px solid #334155 !important;
-    border-radius: 8px !important; color: #94A3B8 !important;
-    font-size: .78rem !important; line-height: 1.6 !important;
+    background: #0A0E1A !important; border: 1px solid #1C2333 !important;
+    border-radius: 8px !important; color: #6E7681 !important;
+    font-size: .77rem !important; line-height: 1.65 !important;
 }
 
 /* ── EXPANDER ── */
 [data-testid="stExpander"] {
-    background: #1E293B !important; border: 1px solid #334155 !important;
+    background: #0D1117 !important; border: 1px solid #1C2333 !important;
     border-radius: 8px !important;
 }
 
 /* ── SIDEBAR ── */
-[data-testid="stSidebar"] * { color: #94A3B8 !important; }
-[data-testid="stSidebar"] strong { color: #F8FAFC !important; }
+[data-testid="stSidebar"] * { color: #6E7681 !important; }
+[data-testid="stSidebar"] strong { color: #E6EDF3 !important; }
 .user-info-card {
-    background: #0F172A; border: 1px solid #334155;
+    background: #161B27; border: 1px solid #1C2333;
     border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
 }
 .user-avatar {
-    width: 38px; height: 38px;
-    background: #10B981;
-    border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; font-size: 1rem; margin-bottom: 10px;
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #2F6FEB, #7B3FE4);
+    border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: .9rem; font-weight: 800;
+    color: #fff; margin-bottom: 10px;
 }
-.user-name  { color: #F8FAFC !important; font-weight: 700; font-size: .9rem; }
-.user-login { color: #475569 !important; font-size: .75rem; margin-top: 2px; }
+.user-name  { color: #E6EDF3 !important; font-weight: 700; font-size: .88rem; }
+.user-login { color: #484F58 !important; font-size: .73rem; margin-top: 2px; }
 
 /* ── FOOTER ── */
 .footer {
-    text-align: center; color: #334155; font-size: .72rem;
-    margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #1E293B;
+    text-align: center; color: #2F3E55; font-size: .7rem;
+    margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid #161B27;
+    letter-spacing: .2px;
 }
 
-/* ── LOGIN FORM ── */
-[data-testid="stForm"] {
-    background: #1E293B; border: 1px solid #334155;
-    border-radius: 14px; padding: 24px 28px !important;
-}
-[data-testid="stCaptionContainer"] { color: #94A3B8 !important; font-size: .78rem !important; }
-hr { border-color: #334155 !important; margin: 1rem 0 !important; }
-
-/* ── SELECT BOX ── */
+/* ── HR / CAPTION / SELECT ── */
+hr { border-color: #1C2333 !important; margin: 1rem 0 !important; }
+[data-testid="stCaptionContainer"] { color: #6E7681 !important; font-size: .77rem !important; }
 [data-testid="stSelectbox"] > div > div {
-    background: #1E293B !important; border: 1px solid #334155 !important;
-    border-radius: 8px !important; color: #F8FAFC !important;
+    background: #0A0E1A !important; border: 1px solid #2F3E55 !important;
+    border-radius: 8px !important; color: #E6EDF3 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -423,18 +398,22 @@ auth = _carregar_auth()
 
 if st.session_state.get("authentication_status") is not True:
     # Cabeçalho da tela de login
-    st.markdown('<div style="height:40px;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:56px;"></div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="text-align:center; margin-bottom:1.6rem;">
-        <h4 style="color:#10B981 !important; font-size:.8rem; font-weight:700;
-                   letter-spacing:.8px; text-transform:uppercase; margin-bottom:.5rem;">
-            Autenticação
-        </h4>
-        <div style="color:#F8FAFC; font-size:1.7rem; font-weight:800; letter-spacing:-.3px;">
-            Acesso Restrito
+    <div style="text-align:center; margin-bottom:2rem;">
+        <div style="
+            width:54px; height:54px;
+            background:linear-gradient(135deg,#2F6FEB 0%,#7B3FE4 100%);
+            border-radius:14px;
+            display:inline-flex; align-items:center; justify-content:center;
+            font-size:1.6rem; margin-bottom:1.4rem;
+            box-shadow:0 8px 28px rgba(47,111,235,.35);
+        ">📊</div>
+        <div style="color:#E6EDF3; font-size:1.45rem; font-weight:800; letter-spacing:-.4px; line-height:1.2;">
+            Conversor NFS-e
         </div>
-        <div style="color:#475569; font-size:.88rem; margin-top:.5rem;">
-            Identifique-se para acessar o sistema.
+        <div style="color:#484F58; font-size:.82rem; margin-top:.55rem; letter-spacing:.1px;">
+            ISS Fortaleza &nbsp;·&nbsp; SPED GOV &nbsp;·&nbsp; Modelo Nacional 2026
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -492,7 +471,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Sistema</div>', unsafe_allow_html=True)
-    st.caption("Conversor NFS-e  v1.4")
+    st.caption("Conversor NFS-e  v1.5")
     st.caption("Modelo Nacional 2026")
     st.caption("ISS Fortaleza / SPED GOV")
 
@@ -1039,17 +1018,13 @@ def pagina_usuarios():
 
 # ── PÁGINA: CONVERSOR ─────────────────────────────────────────────────────────
 def pagina_conversor():
-    # Header: centrado e impactante
+    # ── Top bar de identidade visual ──
     st.markdown("""
-    <div style="text-align:center; padding:1.4rem 0 2.2rem;">
-        <div style="color:#10B981; font-size:.7rem; font-weight:700;
-                    letter-spacing:1.6px; text-transform:uppercase; margin-bottom:.7rem;">
-            Conversor NFS-e
-        </div>
-        <div style="color:#F8FAFC; font-size:1.95rem; font-weight:800;
-                    letter-spacing:-.5px; line-height:1.15;">
-            ISS Fortaleza <span style="color:#334155; font-weight:300;">&amp;</span> SPED GOV
-        </div>
+    <div class="topbar">
+        <div class="topbar-logo">📊</div>
+        <span class="topbar-name">Conversor NFS-e</span>
+        <div class="topbar-divider"></div>
+        <span class="topbar-tag">ISS Fortaleza · SPED GOV · Modelo Nacional 2026</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1238,7 +1213,8 @@ def pagina_conversor():
 
     st.markdown("""
     <div class="footer">
-        Conversor NFS-e v1.5&nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
+        Conversor NFS-e &nbsp;v1.5 &nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp;
+        ISS Fortaleza &nbsp;/&nbsp; SPED GOV
     </div>
     """, unsafe_allow_html=True)
 
