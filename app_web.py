@@ -26,7 +26,7 @@ st.set_page_config(
     page_title="Conversor NFS-e  |  ISS Fortaleza",
     page_icon="📊",
     layout="centered",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 import yaml
@@ -150,7 +150,15 @@ label {
     padding: 28px 28px !important;
     box-shadow: 0 24px 64px rgba(0,0,0,.6) !important;
 }
-[data-testid="stForm"] h2 { display: none !important; }
+/* Esconde o título "Login" / "Entrar" gerado pelo streamlit-authenticator */
+[data-testid="stForm"] h1,
+[data-testid="stForm"] h2,
+[data-testid="stForm"] h3,
+[data-testid="stForm"] [data-testid="stMarkdownContainer"] h1,
+[data-testid="stForm"] [data-testid="stMarkdownContainer"] h2,
+[data-testid="stForm"] [data-testid="stMarkdownContainer"] h3 {
+    display: none !important;
+}
 
 div[data-testid="stFormSubmitButton"] > button,
 [data-testid="stFormSubmitButton"] > button {
@@ -339,6 +347,7 @@ div[data-testid="stFileUploader"] button {
 }
 
 /* ── SIDEBAR ── */
+[data-testid="stSidebar"] { min-width: 220px !important; max-width: 260px !important; }
 [data-testid="stSidebar"] * { color: #6E7681 !important; }
 [data-testid="stSidebar"] strong { color: #E6EDF3 !important; }
 .user-info-card {
@@ -397,8 +406,15 @@ def _carregar_auth():
 auth = _carregar_auth()
 
 if st.session_state.get("authentication_status") is not True:
+    # Esconde sidebar na tela de login
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+        .block-container { max-width: 480px !important; }
+    </style>""", unsafe_allow_html=True)
     # Cabeçalho da tela de login
-    st.markdown('<div style="height:56px;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:48px;"></div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="text-align:center; margin-bottom:2rem;">
         <div style="
@@ -418,10 +434,13 @@ if st.session_state.get("authentication_status") is not True:
     </div>
     """, unsafe_allow_html=True)
 
-    # Formulário centralizado em coluna estreita
-    _, _col_login, _ = st.columns([0.8, 2, 0.8])
-    with _col_login:
-        auth.login()
+    # Formulário de login
+    auth.login(fields={
+        "Form name": "",
+        "Username": "Usuário",
+        "Password": "Senha",
+        "Login": "Entrar",
+    })
 
     _status = st.session_state.get("authentication_status")
     if _status is False:
@@ -464,10 +483,12 @@ with st.sidebar:
 
     if st.button("📄  Conversor", use_container_width=True, key="nav_conversor"):
         st.session_state.pagina = "conversor"
+        st.rerun()
 
     if _is_admin:
         if st.button("👥  Gerenciar Usuários", use_container_width=True, key="nav_usuarios"):
             st.session_state.pagina = "usuarios"
+            st.rerun()
 
     st.divider()
     st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Sistema</div>', unsafe_allow_html=True)
