@@ -531,12 +531,19 @@ def processar_xlsx_sped(uploaded_files, im: str):
             return iso
 
     def _local_prestacao(d):
-        xLP = _str(d.get("xLP", ""))
-        uf  = _str(d.get("uf", ""))
-        if xLP and uf:
-            return f"{xLP.upper()} - {uf.upper()}"
+        # Tenta xLP (nome do município de prestação), depois lookup pelo código IBGE, depois xMun (emitente)
+        uf   = _str(d.get("uf", ""))
+        xLP  = _str(d.get("xLP", ""))
+        cLP  = _str(d.get("cLP", ""))
         xMun = _str(d.get("xMun", ""))
-        return f"{xMun.upper()} - {uf.upper()}" if xMun and uf else xLP or xMun
+        nome_mun = (
+            xLP
+            or getattr(C, "IBGE_TO_NOME", {}).get(cLP, "")
+            or xMun
+        )
+        if nome_mun and uf:
+            return f"{nome_mun.upper()} - {uf.upper()}"
+        return nome_mun.upper() if nome_mun else ""
 
     def _cnae_desc(cnae9):
         desc = getattr(C, "CNAE9_TO_DESC", {}).get(cnae9, "")
@@ -578,24 +585,21 @@ def processar_xlsx_sped(uploaded_files, im: str):
                     if im:
                         d["im"] = im
 
-                    cnae9, item, _ = C.resolver_cnae9(d)
+                    cnae9, item, aliq_cnae = C.resolver_cnae9(d)
                     dhEmi = _str(d.get("dhEmi", ""))
 
-                    # Tipo Doc. e Natureza da Operação dependem do município emitente
-                    cmun = _str(d.get("cmun", ""))
-                    cLP  = _str(d.get("cLP", ""))
-                    eh_fortaleza = (cmun == IBGE_FORTALEZA or cLP == IBGE_FORTALEZA)
+                    # Fixo para SPED GOV — serviços tomados de outros municípios
+                    tipo_doc = "NFS-e de Outro Município"
+                    natureza = "Tributação Fora do Município"
 
-                    tipo_doc   = "NFS-e" if eh_fortaleza else "NFS-e de Outro Município"
-                    natureza   = "Tributação no Município" if eh_fortaleza else "Tributação Fora do Município"
-
-                    vS     = _float(d.get("vS"))
-                    vISS   = _float(d.get("vISS"))
-                    vPIS   = _float(d.get("vPIS"))
-                    vCOFINS= _float(d.get("vCOFINS"))
-                    vINSS  = _float(d.get("vINSS"))
-                    aliq   = _float(d.get("aliq"))
-                    tpRet  = _str(d.get("tpRet", "1"))
+                    vS      = _float(d.get("vS"))
+                    vISS    = _float(d.get("vISS"))
+                    vPIS    = _float(d.get("vPIS"))
+                    vCOFINS = _float(d.get("vCOFINS"))
+                    vINSS   = _float(d.get("vINSS"))
+                    # Alíquota: usa o valor do XML; se vazio, usa o sugerido pela tabela CNAE
+                    aliq    = _float(d.get("aliq")) or float(aliq_cnae or 0)
+                    tpRet   = _str(d.get("tpRet", "1"))
 
                     ret_federais = vPIS + vCOFINS + vINSS
 
@@ -637,7 +641,7 @@ def processar_xlsx_sped(uploaded_files, im: str):
                         vISS,                              # AI Valor do ISS
                         vS,                                # AJ Valor Líquido
                         "NORMAL",                          # AK Status Doc.
-                        _str(d.get("im")),                 # AL Inscrição Prestador
+                        "",                                # AL Inscrição Prestador (vazio)
                         _str(d.get("cnpj")),               # AM CPF/CNPJ Prestador
                         _str(d.get("nome")),               # AN Razão Social/Nome do Prestador
                         "Atual",                           # AO Escrituração
