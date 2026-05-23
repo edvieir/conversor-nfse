@@ -672,6 +672,11 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         except Exception:
                             pass
 
+                    # Campo 44 (índice 43) – indicador de retenção ISS
+                    # 0 = não retido  |  1 = retido pelo tomador
+                    if cs[20] == "1":
+                        cs[43] = "1"
+
                     return ";".join(cs)
 
                 texto  = data.decode("utf-8")
