@@ -533,7 +533,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
     #   BUG 2 – Campos 39/40 (PIS/COFINS): o script busca tags 'vPIS'/'vCOFINS'
     #           (maiúsculas), mas o XML usa 'vPis'/'vCofins' (misto). Case-sensitive
     #           no ElementTree → valores nunca são encontrados → ficam vazios.
-    _ret_lookup = {}   # {numero_nota: {tpRet, vPis, vCofins}}
+    _ret_lookup = {}   # {numero_nota: {tpRet, vPis, vCofins, vCSLL}}
     if modo == "txt":
         for _uf in uploaded_files:
             try:
@@ -550,15 +550,22 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # Tipo retenção PIS/COFINS (1=só PIS, 2=só COFINS, 3=ambos)
                 _tpRetPC = next((e.text or "0" for e in _root.iter()
                                  if e.tag.endswith("tpRetPisCofins")), "0")
-                # Valores de PIS e COFINS (busca case-insensitive via endswith)
+                # Valores de PIS, COFINS e CSLL
+                # Busca case-insensitive (XML usa vPis/vCofins, script buscava vPIS/vCOFINS)
                 _vPis    = next((e.text or "" for e in _root.iter()
                                  if e.tag.lower().endswith("vpis")), "")
                 _vCofins = next((e.text or "" for e in _root.iter()
                                  if e.tag.lower().endswith("vcofins")), "")
+                _vCSLL   = next((e.text or "" for e in _root.iter()
+                                 if e.tag.lower().endswith("vretcsll")), "")
                 _rinfo = {
-                    "tpRet":   _tpRet,
-                    "vPis":    _vPis    if _tpRetPC in ("1", "3") else "",
-                    "vCofins": _vCofins if _tpRetPC in ("2", "3") else "",
+                    "tpRet": _tpRet,
+                    # PIS/COFINS não entram nos campos 39/40:
+                    # quando são "Débito Apuração Própria" o emitente os recolhe
+                    # por conta própria — não são retidos pelo tomador em Fortaleza.
+                    # O campo "Contribuições Sociais Retidas" (vRetCSLL) já consolida
+                    # o total das retenções federais e vai sozinho no campo 41.
+                    "vCSLL": _vCSLL,
                 }
                 for _nk in [_nDFSe, _nNFSe]:
                     if _nk:
@@ -628,17 +635,13 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     if _rinfo.get("tpRet") == "2" and cs[20] == "2":
                         cs[20] = "1"
 
-                    # Campo 39 (índice 38) – PIS em centavos (quando retido)
-                    if _rinfo.get("vPis") and not cs[38].strip():
+                    # Campo 41 (índice 40) – Contribuições Sociais retidas (CSLL)
+                    # O XML traz vRetCSLL = total das contribuições sociais retidas
+                    # pelo tomador (consolidado). Campos 39/40 (PIS/COFINS) ficam
+                    # vazios pois são "Débito Apuração Própria" do emitente.
+                    if _rinfo.get("vCSLL") and not cs[40].strip():
                         try:
-                            cs[38] = str(int(round(float(_rinfo["vPis"]) * 100)))
-                        except Exception:
-                            pass
-
-                    # Campo 40 (índice 39) – COFINS em centavos (quando retido)
-                    if _rinfo.get("vCofins") and not cs[39].strip():
-                        try:
-                            cs[39] = str(int(round(float(_rinfo["vCofins"]) * 100)))
+                            cs[40] = str(int(round(float(_rinfo["vCSLL"]) * 100)))
                         except Exception:
                             pass
 
