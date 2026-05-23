@@ -566,10 +566,14 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # Valor ISS retido (vISSQN)
                 _vISS = next((e.text or "" for e in _root.iter()
                               if e.tag.endswith("vISSQN")), "")
+                # Valor bruto (base de cálculo do ISS, antes de deduções)
+                _vBC  = next((e.text or "" for e in _root.iter()
+                              if e.tag.endswith("vBC")), "")
                 _rinfo = {
                     "tpRet": _tpRet,
                     "aliq":  _aliq,
                     "vISS":  _vISS,
+                    "vBC":   _vBC,
                     # PIS/COFINS não entram nos campos 39/40:
                     # quando são "Débito Apuração Própria" o emitente os recolhe
                     # por conta própria — não são retidos pelo tomador em Fortaleza.
@@ -642,25 +646,39 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     # Campo 21 (índice 20) – tipo recolhimento
                     # tpRetISSQN=2 → ISS retido pelo tomador
                     # ISS Fortaleza: campo 21=1 significa "retido" (não "2"!)
-                    if _rinfo.get("tpRet") == "2" and cs[20] == "2":
+                    _iss_retido = _rinfo.get("tpRet") == "2"
+                    if _iss_retido and cs[20] == "2":
                         cs[20] = "1"
 
-                    # Campo 25 (índice 24) – alíquota ISS em centésimos
-                    # Fica logo após o CNAE. Só preenche quando ISS é retido (campo 21=1).
-                    # Ex.: pAliqAplic="2.00" → campo 25="200"
-                    if cs[20] == "1" and not cs[24].strip() and _rinfo.get("aliq"):
-                        try:
-                            cs[24] = str(int(round(float(_rinfo["aliq"]) * 100)))
-                        except Exception:
-                            pass
+                    if _iss_retido:
+                        # Campo 25 (índice 24) – alíquota ISS em centésimos
+                        # Fica logo após o CNAE. Ex.: pAliqAplic="2.00" → "200"
+                        if not cs[24].strip() and _rinfo.get("aliq"):
+                            try:
+                                cs[24] = str(int(round(float(_rinfo["aliq"]) * 100)))
+                            except Exception:
+                                pass
 
-                    # Campo 31 (índice 30) – valor ISS retido em centavos
-                    # Ex.: vISSQN="6.84" → campo 31="684"
-                    if cs[20] == "1" and not cs[30].strip() and _rinfo.get("vISS"):
-                        try:
-                            cs[30] = str(int(round(float(_rinfo["vISS"]) * 100)))
-                        except Exception:
-                            pass
+                        # Campo 31 (índice 30) – valor ISS retido em centavos
+                        # Ex.: vISSQN="6.84" → "684"
+                        if not cs[30].strip() and _rinfo.get("vISS"):
+                            try:
+                                cs[30] = str(int(round(float(_rinfo["vISS"]) * 100)))
+                            except Exception:
+                                pass
+
+                        # Campo 33 (índice 32) – valor do serviço em centavos
+                        # nfse_xml_to_txt.py usa vLiq (líquido, já descontado o ISS);
+                        # o portal exige o valor bruto (vBC) para calcular ISS corretamente.
+                        if _rinfo.get("vBC"):
+                            try:
+                                cs[32] = str(int(round(float(_rinfo["vBC"]) * 100)))
+                            except Exception:
+                                pass
+
+                        # Campo 44 (índice 43) – indicador de retenção ISS
+                        # 0 = não retido (padrão)  |  1 = retido pelo tomador
+                        cs[43] = "1"
 
                     # Campo 41 (índice 40) – Contribuições Sociais retidas (CSLL)
                     # O XML traz vRetCSLL = total das contribuições sociais retidas
@@ -671,11 +689,6 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                             cs[40] = str(int(round(float(_rinfo["vCSLL"]) * 100)))
                         except Exception:
                             pass
-
-                    # Campo 44 (índice 43) – indicador de retenção ISS
-                    # 0 = não retido  |  1 = retido pelo tomador
-                    if cs[20] == "1":
-                        cs[43] = "1"
 
                     return ";".join(cs)
 
