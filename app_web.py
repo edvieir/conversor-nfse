@@ -597,56 +597,61 @@ def processar_xlsx_sped(uploaded_files, im: str):
                     vPIS    = _float(d.get("vPIS"))
                     vCOFINS = _float(d.get("vCOFINS"))
                     vINSS   = _float(d.get("vINSS"))
-                    # Alíquota: usa o valor do XML; se vazio, usa o sugerido pela tabela CNAE
+                    # Alíquota: usa o valor do XML; se vazio/zero, usa sugerido pela tabela CNAE
                     aliq    = _float(d.get("aliq")) or float(aliq_cnae or 0)
                     tpRet   = _str(d.get("tpRet", "1"))
+                    iss_retido = (tpRet == "2")
 
+                    # Retenções federais: soma numérica (0 se nenhuma)
                     ret_federais = vPIS + vCOFINS + vINSS
 
+                    # Valor do ISS: só mostra se o tomador retém (tpRet=2), senão 0
+                    valor_iss_col = vISS if iss_retido else 0
+
                     ws.append([
-                        tipo_doc,                          # A  Tipo Doc.
-                        _str(d.get("nDFSe")),             # B  Número
-                        None,                              # C  Código de Verificação
-                        _data_fmt(dhEmi, "mes"),           # D  Competência
-                        _data_fmt(dhEmi, "dia"),           # E  Data
-                        "",                                # F  Vencimento
-                        "",                                # G  Número RPS
-                        "",                                # H  Série RPS
-                        "",                                # I  Tipo RPS
-                        natureza,                          # J  Natureza da Operação
-                        "",                                # K  Regime Especial Tributação
-                        "Não",                             # L  Operação Simples Nacional
-                        None,                              # M  Incentivador Cultural
-                        item,                              # N  Item da Lista
-                        _cnae_desc(cnae9),                 # O  CNAE
-                        "",                                # P  ART
-                        "",                                # Q  Código Obra
-                        "",                                # R  Número Empenho
-                        _str(d.get("desc")),               # S  Discriminação dos Serviços
-                        vS,                                # T  Valor dos Serviços
-                        "",                                # U  Deduções Permitidas em Lei
-                        "",                                # V  Desconto Condicionado
-                        "",                                # W  Desconto Incondicionado
-                        ret_federais if ret_federais else 0, # X Retenções Federais
-                        "",                                # Y  Outras Retenções
-                        vPIS if vPIS else "",              # Z  PIS
-                        vCOFINS if vCOFINS else "",        # AA COFINS
-                        "",                                # AB IRRF
-                        "",                                # AC CSLL
-                        vINSS if vINSS else "",            # AD INSS
-                        vS,                                # AE Base de Cálculo
-                        aliq,                              # AF Alíquota
-                        _local_prestacao(d),               # AG Local da Prestação
-                        "Sim" if tpRet == "2" else "Não",  # AH ISS Retido
-                        vISS,                              # AI Valor do ISS
-                        vS,                                # AJ Valor Líquido
-                        "NORMAL",                          # AK Status Doc.
-                        "",                                # AL Inscrição Prestador (vazio)
-                        _str(d.get("cnpj")),               # AM CPF/CNPJ Prestador
-                        _str(d.get("nome")),               # AN Razão Social/Nome do Prestador
-                        "Atual",                           # AO Escrituração
-                        "Prestador",                       # AP Origem
-                        "Não informada",                   # AQ Status Aceite
+                        "NFS-e de Outro Município",        # A  Tipo Doc.        (FIXO)
+                        _str(d.get("nDFSe")),             # B  Número           (XML)
+                        None,                              # C  Cód. Verificação (FIXO vazio)
+                        _data_fmt(dhEmi, "mes"),           # D  Competência      (XML MM/AAAA)
+                        _data_fmt(dhEmi, "dia"),           # E  Data             (XML DD/MM/AAAA)
+                        "",                                # F  Vencimento       (FIXO vazio)
+                        "",                                # G  Número RPS       (FIXO vazio)
+                        "",                                # H  Série RPS        (FIXO vazio)
+                        "",                                # I  Tipo RPS         (FIXO vazio)
+                        "Tributação Fora do Município",    # J  Natureza         (FIXO)
+                        "",                                # K  Regime Especial  (FIXO vazio)
+                        "Não",                             # L  Simples Nacional (FIXO)
+                        None,                              # M  Incentivador     (FIXO vazio)
+                        item,                              # N  Item da Lista    (XML)
+                        _cnae_desc(cnae9),                 # O  CNAE             (XML cnae9+desc)
+                        "",                                # P  ART              (FIXO vazio)
+                        "",                                # Q  Código Obra      (FIXO vazio)
+                        "",                                # R  Nº Empenho       (FIXO vazio)
+                        _str(d.get("desc")),               # S  Discriminação    (XML)
+                        vS,                                # T  Valor Serviços   (XML float)
+                        "",                                # U  Deduções         (FIXO vazio)
+                        "",                                # V  Desc. Condic.    (FIXO vazio)
+                        "",                                # W  Desc. Incondic.  (FIXO vazio)
+                        ret_federais,                      # X  Ret. Federais    (XML soma, 0 se nenhuma)
+                        "",                                # Y  Outras Retenções (FIXO vazio)
+                        vPIS    if vPIS    else "",        # Z  PIS              (XML, vazio se 0)
+                        vCOFINS if vCOFINS else "",        # AA COFINS           (XML, vazio se 0)
+                        "",                                # AB IRRF             (FIXO vazio)
+                        "",                                # AC CSLL             (FIXO vazio)
+                        vINSS   if vINSS   else "",        # AD INSS             (XML, vazio se 0)
+                        vS,                                # AE Base de Cálculo  (XML = vS)
+                        aliq,                              # AF Alíquota         (XML ou CNAE)
+                        _local_prestacao(d),               # AG Local Prestação  (XML município+UF)
+                        "Sim" if iss_retido else "Não",    # AH ISS Retido       (XML tpRet)
+                        valor_iss_col,                     # AI Valor do ISS     (XML se retido, 0 se não)
+                        vS,                                # AJ Valor Líquido    (XML = vS)
+                        "NORMAL",                          # AK Status Doc.      (FIXO)
+                        "",                                # AL Inscrição Prest. (FIXO vazio)
+                        _str(d.get("cnpj")),               # AM CPF/CNPJ Prest.  (XML)
+                        _str(d.get("nome")),               # AN Razão Social     (XML)
+                        "Atual",                           # AO Escrituração     (FIXO)
+                        "Prestador",                       # AP Origem           (FIXO)
+                        "Não informada",                   # AQ Status Aceite    (FIXO)
                     ])
 
                     # Formatação numérica com 2 casas decimais nas colunas monetárias
