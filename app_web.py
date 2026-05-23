@@ -451,6 +451,114 @@ def _hash_senha(senha: str) -> str:
     return bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
+def processar_xlsx_sped(uploaded_files, im: str):
+    """Gera XLSX SPED GOV usando parse_nfse() diretamente — processa TODOS os XMLs."""
+    import glob as _glob
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for uf in uploaded_files:
+            uf.seek(0)
+            with open(os.path.join(tmp, uf.name), "wb") as fh:
+                fh.write(uf.read())
+
+        arquivos = sorted(_glob.glob(os.path.join(tmp, "*.xml")))
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "NFSe SPED GOV"
+
+        colunas = [
+            "Nº NFSe", "Data Emissão", "CNPJ Prestador", "Razão Social",
+            "Município Prestador", "UF", "Cód. Tributação Nacional",
+            "CNAE", "Item LC 116", "Descrição Serviço",
+            "Município Prestação", "Valor Serviço (R$)",
+            "Alíquota ISS (%)", "Valor ISS (R$)", "Tipo Retenção ISS",
+            "PIS (R$)", "COFINS (R$)", "INSS (R$)",
+        ]
+
+        header_fill = PatternFill(start_color="1558B8", end_color="1558B8", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+
+        for col, titulo in enumerate(colunas, 1):
+            cell = ws.cell(row=1, column=col, value=titulo)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        ws.row_dimensions[1].height = 30
+        ws.freeze_panes = "A2"
+
+        buf   = io.StringIO()
+        total = 0
+        erros = []
+
+        with contextlib.redirect_stdout(buf):
+            for xml_path in arquivos:
+                nome = os.path.basename(xml_path)
+                try:
+                    dados = C.parse_nfse(xml_path)
+
+                    if im:
+                        dados["im"] = im
+
+                    cnae9, item, _ = C.resolver_cnae9(dados)
+
+                    dhEmi = dados.get("dhEmi", "")
+                    if dhEmi and "T" in dhEmi:
+                        dhEmi = dhEmi[:10]
+
+                    ws.append([
+                        dados.get("nDFSe", ""),
+                        dhEmi,
+                        dados.get("cnpj", ""),
+                        dados.get("nome", ""),
+                        dados.get("xMun", ""),
+                        dados.get("uf", ""),
+                        dados.get("cTN", ""),
+                        cnae9,
+                        item,
+                        dados.get("desc", ""),
+                        dados.get("xLP", "") or dados.get("cLP", ""),
+                        dados.get("vS", ""),
+                        dados.get("aliq", ""),
+                        dados.get("vISS", ""),
+                        dados.get("tpRet", ""),
+                        dados.get("vPIS", ""),
+                        dados.get("vCOFINS", ""),
+                        dados.get("vINSS", ""),
+                    ])
+                    total += 1
+                    print(f"  OK   {nome}")
+                    print(f"       NFSe {dados.get('nDFSe','')} | {dados.get('nome','')[:30]}")
+                except Exception as exc:
+                    erros.append((nome, str(exc)))
+                    print(f"  ERRO {nome}: {exc}")
+
+        # Largura automática das colunas
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or "")) for cell in col), default=0)
+            ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 2, 12), 45)
+
+        print(f"\n  Processadas: {total} nota(s)")
+        if erros:
+            print(f"  Com erro:    {len(erros)}")
+            for n, e in erros:
+                print(f"    - {n}: {e}")
+
+        log  = buf.getvalue()
+        saida = os.path.join(tmp, "resultado.xlsx")
+        wb.save(saida)
+
+        data = b""
+        if os.path.exists(saida):
+            with open(saida, "rb") as fh:
+                data = fh.read()
+
+    return data, log
+
+
 # ── PÁGINA: GERENCIAR USUÁRIOS ─────────────────────────────────────────────────
 def pagina_usuarios():
     if not _is_admin:
@@ -687,7 +795,10 @@ def pagina_conversor():
             tipo_label = "ISS Fortaleza (TXT)" if modo == "txt" else "SPED GOV (XLSX)"
 
             with st.spinner(f"⏳  Processando {len(uploaded)} arquivo(s) — {tipo_label}…"):
-                dados_saida, log = processar_uploads(uploaded, im, modo)
+                if modo == "xlsx":
+                    dados_saida, log = processar_xlsx_sped(uploaded, im_input.strip())
+                else:
+                    dados_saida, log = processar_uploads(uploaded, im, modo)
 
             if dados_saida:
                 ext        = "txt" if modo == "txt" else "xlsx"
