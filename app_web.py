@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Conversor NFSe — Interface Web  v1.2
+Conversor NFSe — Interface Web  v1.3
 Uso: streamlit run app_web.py
 """
 
@@ -32,6 +32,7 @@ st.set_page_config(
 import yaml
 from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
+import bcrypt
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -98,6 +99,20 @@ label                   { color: #8b949e !important; font-size: .78rem !importan
     border-radius: 20px; font-size: .7rem; font-weight: 500; padding: 4px 11px;
 }
 
+/* ── ADMIN HERO ── */
+.admin-hero {
+    background: linear-gradient(135deg, #1a0f2e 0%, #2d1b4e 55%, #1a0f3a 100%);
+    border: 1px solid #3d2a6e;
+    border-radius: 16px;
+    padding: 26px 34px 22px;
+    margin-bottom: 28px;
+}
+.admin-hero-title {
+    color: #d2b4ff; font-size: 1.4rem; font-weight: 800;
+    letter-spacing: -.3px; margin: 0 0 6px;
+}
+.admin-hero-sub { color: #6a5a8a; font-size: .85rem; }
+
 /* ── ETAPAS ── */
 .step-header {
     display: flex; align-items: flex-start; gap: 14px;
@@ -156,6 +171,37 @@ label                   { color: #8b949e !important; font-size: .78rem !importan
     background: #1a0d0d; border: 1px solid #4a1515; border-left: 3px solid #f85149;
     border-radius: 6px; padding: 10px 14px; margin: 12px 0;
     color: #c04040; font-size: .82rem;
+}
+.success-box {
+    background: #0a1f10; border: 1px solid #1a5c30; border-left: 3px solid #3fb950;
+    border-radius: 6px; padding: 10px 14px; margin: 12px 0;
+    color: #3fb950; font-size: .82rem;
+}
+
+/* ── TABELA DE USUÁRIOS ── */
+.user-table {
+    width: 100%; border-collapse: collapse;
+    background: #161b27; border-radius: 10px; overflow: hidden;
+    border: 1px solid #21273a; margin: 12px 0 20px;
+}
+.user-table th {
+    background: #0d1117; color: #484f58; font-size: .72rem;
+    font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    padding: 10px 14px; border-bottom: 1px solid #21273a; text-align: left;
+}
+.user-table td {
+    padding: 10px 14px; border-bottom: 1px solid #21273a;
+    color: #c9d1d9; font-size: .83rem;
+}
+.user-table tr:last-child td { border-bottom: none; }
+.user-table tr:hover td { background: #1a2035; }
+.user-badge {
+    display: inline-block; background: #0d2040; color: #58a6ff;
+    border: 1px solid #2d5fa8; border-radius: 12px;
+    font-size: .65rem; font-weight: 700; padding: 2px 9px;
+}
+.user-badge-admin {
+    background: #2d1b4e; color: #b17aff; border-color: #6a3fa8;
 }
 
 /* ── RESULTADO ── */
@@ -242,6 +288,17 @@ div.stDownloadButton > button:hover {
 .user-name  { color: #e6edf3 !important; font-weight: 700; font-size: .9rem; }
 .user-login { color: #484f58 !important; font-size: .75rem; margin-top: 2px; }
 
+/* ── NAV ── */
+.nav-btn {
+    display: block; width: 100%;
+    background: transparent; border: 1px solid #21273a;
+    border-radius: 8px; padding: 9px 14px; margin-bottom: 6px;
+    color: #8b949e; font-size: .82rem; font-weight: 500;
+    cursor: pointer; text-align: left; transition: all .18s;
+}
+.nav-btn:hover  { background: #1a2035; color: #c9d1d9; border-color: #2d3a5e; }
+.nav-btn.active { background: #0d2040; color: #58a6ff; border-color: #2d5fa8; font-weight: 700; }
+
 /* ── FOOTER ── */
 .footer {
     text-align: center; color: #2d333b; font-size: .72rem;
@@ -313,27 +370,43 @@ if _status is None:
 
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    nome    = st.session_state.get("name", "Usuário")
-    usuario = st.session_state.get("username", "")
-    inicial = nome[0].upper() if nome else "U"
+_usuario_atual = st.session_state.get("username", "")
+_nome_atual    = st.session_state.get("name", "Usuário")
+_is_admin      = (_usuario_atual == "admin")
 
+with st.sidebar:
+    inicial = _nome_atual[0].upper() if _nome_atual else "U"
     st.markdown(f"""
     <div class="user-info-card">
         <div class="user-avatar">{inicial}</div>
-        <div class="user-name">{nome}</div>
-        <div class="user-login">@{usuario}</div>
+        <div class="user-name">{_nome_atual}</div>
+        <div class="user-login">@{_usuario_atual}</div>
     </div>
     """, unsafe_allow_html=True)
 
     auth.logout("↩  Sair", location="sidebar")
     st.divider()
+
+    # Navegação
+    st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Navegação</div>', unsafe_allow_html=True)
+
+    if "pagina" not in st.session_state:
+        st.session_state.pagina = "conversor"
+
+    if st.button("📄  Conversor", use_container_width=True, key="nav_conversor"):
+        st.session_state.pagina = "conversor"
+
+    if _is_admin:
+        if st.button("👥  Gerenciar Usuários", use_container_width=True, key="nav_usuarios"):
+            st.session_state.pagina = "usuarios"
+
+    st.divider()
     st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Sistema</div>', unsafe_allow_html=True)
-    st.caption("Conversor NFSe  v1.2")
+    st.caption("Conversor NFSe  v1.3")
     st.caption("Modelo Nacional 2026")
     st.caption("ISS Fortaleza / SPED GOV")
 
-if not _CONVERSOR_OK:
+if not _CONVERSOR_OK and st.session_state.pagina == "conversor":
     st.error(f"Não foi possível carregar `nfse_xml_to_txt.py`:\n\n`{_CONVERSOR_ERR}`")
     st.stop()
 
@@ -364,151 +437,300 @@ def processar_uploads(uploaded_files, im: str, modo: str):
     return data, log
 
 
-# ── INTERFACE PRINCIPAL ───────────────────────────────────────────────────────
+def _carregar_cfg() -> dict:
+    with open(_CFG_PATH, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
-st.markdown("""
-<div class="hero">
-    <div class="hero-badge">✦ NFSe · Modelo Nacional 2026</div>
-    <div class="hero-title">Conversor de Notas Fiscais</div>
-    <p class="hero-sub">Transforme XMLs de NFSe no layout do portal ISS Fortaleza ou na planilha SPED GOV — direto do navegador, sem instalar nada.</p>
-    <div class="hero-chips">
-        <span class="chip">📄 ISS Fortaleza</span>
-        <span class="chip">📊 SPED GOV</span>
-        <span class="chip">🔒 Acesso seguro</span>
-        <span class="chip">⚡ Segundos</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
-# ── ETAPA 1 ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="step-header">
-    <div class="step-num">1</div>
-    <div class="step-info">
-        <div class="step-title">Selecione os arquivos XML</div>
-        <div class="step-desc">Arraste ou clique para carregar um ou mais XMLs de NFSe</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+def _salvar_cfg(cfg: dict):
+    with open(_CFG_PATH, "w", encoding="utf-8") as f:
+        yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
-uploaded = st.file_uploader(
-    "xml_upload", type=["xml"],
-    accept_multiple_files=True,
-    label_visibility="collapsed",
-)
 
-if uploaded:
-    total = len(uploaded)
-    chips = "".join(
-        f'<span class="file-chip">📄 {u.name}</span>'
-        for u in uploaded[:8]
-    )
-    extra = f'<span class="file-chip-more">+{total - 8} mais</span>' if total > 8 else ""
-    st.markdown(f"""
-    <div class="file-list">
-        <div class="file-list-header">✅ {total} arquivo{'s' if total > 1 else ''} selecionado{'s' if total > 1 else ''}</div>
-        <div class="file-chips">{chips}{extra}</div>
-    </div>
-    """, unsafe_allow_html=True)
+def _hash_senha(senha: str) -> str:
+    return bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
-# ── ETAPA 2 ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="step-header">
-    <div class="step-num">2</div>
-    <div class="step-info">
-        <div class="step-title">Inscrição Municipal Tomadora</div>
-        <div class="step-desc">Opcional — deixe em branco para usar a do próprio XML</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
-im_input = st.text_input("im", placeholder="Ex: 12345678-0", label_visibility="collapsed")
+# ── PÁGINA: GERENCIAR USUÁRIOS ─────────────────────────────────────────────────
+def pagina_usuarios():
+    if not _is_admin:
+        st.error("Acesso restrito ao administrador.")
+        return
 
-st.markdown("""
-<div class="info-box">
-    💡 Notas <strong>emitidas em Fortaleza</strong> são ignoradas no modo TXT — o portal ISS já as importa automaticamente. Exceção: MEI.
-</div>
-""", unsafe_allow_html=True)
-
-# ── ETAPA 3 ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="step-header">
-    <div class="step-num">3</div>
-    <div class="step-info">
-        <div class="step-title">Gerar o arquivo de saída</div>
-        <div class="step-desc">Escolha o formato e clique para processar</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-col1, col2 = st.columns(2, gap="medium")
-
-with col1:
     st.markdown("""
-    <div class="format-card">
-        <div class="format-icon">📄</div>
-        <div class="format-name">ISS Fortaleza</div>
-        <div class="format-desc">Layout TXT para importação no portal da prefeitura de Fortaleza</div>
+    <div class="admin-hero">
+        <div class="admin-hero-title">👥 Gerenciar Usuários</div>
+        <div class="admin-hero-sub">Adicione ou remova logins de acesso ao sistema</div>
     </div>
     """, unsafe_allow_html=True)
-    btn_txt = st.button("▶  Gerar TXT", use_container_width=True, type="primary", key="btn_txt")
 
-with col2:
-    st.markdown("""
-    <div class="format-card">
-        <div class="format-icon">📊</div>
-        <div class="format-name">SPED GOV</div>
-        <div class="format-desc">Planilha XLSX para o sistema SPED do governo federal</div>
-    </div>
-    """, unsafe_allow_html=True)
-    btn_xlsx = st.button("▶  Gerar XLSX", use_container_width=True, key="btn_xlsx")
+    cfg = _carregar_cfg()
+    usuarios = cfg.get("credentials", {}).get("usernames", {})
 
-# ── Processamento ──────────────────────────────────────────────────────────────
-if btn_txt or btn_xlsx:
-    if not uploaded:
-        st.markdown("""<div class="warn-box">⚠️ Selecione pelo menos um arquivo XML na Etapa 1 antes de processar.</div>""", unsafe_allow_html=True)
+    # ── Lista de usuários ──
+    st.markdown("#### Usuários cadastrados")
+
+    if not usuarios:
+        st.markdown('<div class="warn-box">⚠️ Nenhum usuário cadastrado.</div>', unsafe_allow_html=True)
     else:
-        modo       = "txt" if btn_txt else "xlsx"
-        im         = im_input.strip() or "0"
-        tipo_label = "ISS Fortaleza (TXT)" if modo == "txt" else "SPED GOV (XLSX)"
+        linhas = ""
+        for login, dados in usuarios.items():
+            badge = '<span class="user-badge user-badge-admin">admin</span>' if login == "admin" else '<span class="user-badge">usuário</span>'
+            nome_u = dados.get("name", "—")
+            email_u = dados.get("email", "—")
+            linhas += f"""
+            <tr>
+                <td>{badge} <strong style="color:#e6edf3">{login}</strong></td>
+                <td>{nome_u}</td>
+                <td>{email_u}</td>
+            </tr>"""
+        st.markdown(f"""
+        <table class="user-table">
+            <thead><tr>
+                <th>Login</th>
+                <th>Nome</th>
+                <th>E-mail</th>
+            </tr></thead>
+            <tbody>{linhas}</tbody>
+        </table>
+        """, unsafe_allow_html=True)
 
-        with st.spinner(f"⏳  Processando {len(uploaded)} arquivo(s) — {tipo_label}…"):
-            dados_saida, log = processar_uploads(uploaded, im, modo)
+    st.divider()
 
-        if dados_saida:
-            ext        = "txt" if modo == "txt" else "xlsx"
-            mime       = "text/plain" if modo == "txt" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            nome       = f"nfse_{modo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
-            tamanho_kb = round(len(dados_saida) / 1024, 1)
-            icone      = "📄" if modo == "txt" else "📊"
+    # ── Adicionar usuário ──
+    st.markdown("#### ➕ Adicionar novo usuário")
 
-            st.markdown(f"""
-            <div class="result-success">
-                <div class="result-success-icon">✅</div>
-                <div class="result-success-body">
-                    <div class="result-success-title">Arquivo gerado com sucesso!</div>
-                    <div class="result-success-meta">
-                        {icone} {nome} &nbsp;·&nbsp; {tamanho_kb} KB &nbsp;·&nbsp;
-                        {len(uploaded)} XML{'s' if len(uploaded) > 1 else ''} processado{'s' if len(uploaded) > 1 else ''}
+    with st.form("form_add_user", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            novo_login = st.text_input("Login *", placeholder="ex: joao")
+            novo_nome  = st.text_input("Nome completo *", placeholder="ex: João Silva")
+        with col2:
+            novo_email = st.text_input("E-mail", placeholder="ex: joao@empresa.com")
+            nova_senha = st.text_input("Senha *  (mín. 6 caracteres)", type="password")
+
+        confirmar_senha = st.text_input("Confirmar senha *", type="password")
+
+        submitted = st.form_submit_button("✅  Criar usuário", use_container_width=True, type="primary")
+
+        if submitted:
+            erros = []
+            if not novo_login.strip():
+                erros.append("Login é obrigatório.")
+            elif " " in novo_login.strip():
+                erros.append("Login não pode ter espaços.")
+            if not novo_nome.strip():
+                erros.append("Nome completo é obrigatório.")
+            if len(nova_senha) < 6:
+                erros.append("Senha deve ter pelo menos 6 caracteres.")
+            if nova_senha != confirmar_senha:
+                erros.append("As senhas não coincidem.")
+            if novo_login.strip() in usuarios:
+                erros.append(f"Já existe um usuário com o login '{novo_login.strip()}'.")
+
+            if erros:
+                for e in erros:
+                    st.markdown(f'<div class="error-box">❌ {e}</div>', unsafe_allow_html=True)
+            else:
+                with st.spinner("Gerando hash da senha…"):
+                    hashed = _hash_senha(nova_senha)
+
+                cfg["credentials"]["usernames"][novo_login.strip()] = {
+                    "name": novo_nome.strip(),
+                    "email": novo_email.strip() or f"{novo_login.strip()}@exemplo.com",
+                    "password": hashed,
+                    "failed_login_attempts": 0,
+                    "logged_in": False,
+                }
+                _salvar_cfg(cfg)
+                st.markdown(f'<div class="success-box">✅ Usuário <strong>{novo_login.strip()}</strong> criado com sucesso!</div>', unsafe_allow_html=True)
+                st.rerun()
+
+    st.divider()
+
+    # ── Remover usuário ──
+    st.markdown("#### 🗑️ Remover usuário")
+
+    opcoes_remover = [u for u in usuarios.keys() if u != _usuario_atual]
+
+    if not opcoes_remover:
+        st.markdown('<div class="info-box">💡 Não há outros usuários para remover.</div>', unsafe_allow_html=True)
+    else:
+        with st.form("form_remove_user"):
+            login_remover = st.selectbox(
+                "Selecione o usuário a remover",
+                options=opcoes_remover,
+                format_func=lambda u: f"{u}  —  {usuarios[u].get('name', '')}",
+            )
+            st.markdown('<div class="warn-box">⚠️ Esta ação é irreversível. O usuário perderá o acesso imediatamente.</div>', unsafe_allow_html=True)
+            confirmar_remocao = st.form_submit_button("🗑️  Remover usuário", type="primary", use_container_width=True)
+
+            if confirmar_remocao:
+                del cfg["credentials"]["usernames"][login_remover]
+                _salvar_cfg(cfg)
+                st.markdown(f'<div class="success-box">✅ Usuário <strong>{login_remover}</strong> removido com sucesso.</div>', unsafe_allow_html=True)
+                st.rerun()
+
+    st.markdown("""
+    <div class="footer">
+        Conversor NFSe v1.3 &nbsp;·&nbsp; Painel Administrativo
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ── PÁGINA: CONVERSOR ─────────────────────────────────────────────────────────
+def pagina_conversor():
+    st.markdown("""
+    <div class="hero">
+        <div class="hero-badge">✦ NFSe · Modelo Nacional 2026</div>
+        <div class="hero-title">Conversor de Notas Fiscais</div>
+        <p class="hero-sub">Transforme XMLs de NFSe no layout do portal ISS Fortaleza ou na planilha SPED GOV — direto do navegador, sem instalar nada.</p>
+        <div class="hero-chips">
+            <span class="chip">📄 ISS Fortaleza</span>
+            <span class="chip">📊 SPED GOV</span>
+            <span class="chip">🔒 Acesso seguro</span>
+            <span class="chip">⚡ Segundos</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── ETAPA 1 ────────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-info">
+            <div class="step-title">Selecione os arquivos XML</div>
+            <div class="step-desc">Arraste ou clique para carregar um ou mais XMLs de NFSe</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    uploaded = st.file_uploader(
+        "xml_upload", type=["xml"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
+
+    if uploaded:
+        total = len(uploaded)
+        chips = "".join(
+            f'<span class="file-chip">📄 {u.name}</span>'
+            for u in uploaded[:8]
+        )
+        extra = f'<span class="file-chip-more">+{total - 8} mais</span>' if total > 8 else ""
+        st.markdown(f"""
+        <div class="file-list">
+            <div class="file-list-header">✅ {total} arquivo{'s' if total > 1 else ''} selecionado{'s' if total > 1 else ''}</div>
+            <div class="file-chips">{chips}{extra}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── ETAPA 2 ────────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-info">
+            <div class="step-title">Inscrição Municipal Tomadora</div>
+            <div class="step-desc">Opcional — deixe em branco para usar a do próprio XML</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    im_input = st.text_input("im", placeholder="Ex: 12345678-0", label_visibility="collapsed")
+
+    st.markdown("""
+    <div class="info-box">
+        💡 Notas <strong>emitidas em Fortaleza</strong> são ignoradas no modo TXT — o portal ISS já as importa automaticamente. Exceção: MEI.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── ETAPA 3 ────────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-info">
+            <div class="step-title">Gerar o arquivo de saída</div>
+            <div class="step-desc">Escolha o formato e clique para processar</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2, gap="medium")
+
+    with col1:
+        st.markdown("""
+        <div class="format-card">
+            <div class="format-icon">📄</div>
+            <div class="format-name">ISS Fortaleza</div>
+            <div class="format-desc">Layout TXT para importação no portal da prefeitura de Fortaleza</div>
+        </div>
+        """, unsafe_allow_html=True)
+        btn_txt = st.button("▶  Gerar TXT", use_container_width=True, type="primary", key="btn_txt")
+
+    with col2:
+        st.markdown("""
+        <div class="format-card">
+            <div class="format-icon">📊</div>
+            <div class="format-name">SPED GOV</div>
+            <div class="format-desc">Planilha XLSX para o sistema SPED do governo federal</div>
+        </div>
+        """, unsafe_allow_html=True)
+        btn_xlsx = st.button("▶  Gerar XLSX", use_container_width=True, key="btn_xlsx")
+
+    # ── Processamento ──────────────────────────────────────────────────────────
+    if btn_txt or btn_xlsx:
+        if not uploaded:
+            st.markdown("""<div class="warn-box">⚠️ Selecione pelo menos um arquivo XML na Etapa 1 antes de processar.</div>""", unsafe_allow_html=True)
+        else:
+            modo       = "txt" if btn_txt else "xlsx"
+            im         = im_input.strip() or "0"
+            tipo_label = "ISS Fortaleza (TXT)" if modo == "txt" else "SPED GOV (XLSX)"
+
+            with st.spinner(f"⏳  Processando {len(uploaded)} arquivo(s) — {tipo_label}…"):
+                dados_saida, log = processar_uploads(uploaded, im, modo)
+
+            if dados_saida:
+                ext        = "txt" if modo == "txt" else "xlsx"
+                mime       = "text/plain" if modo == "txt" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                nome       = f"nfse_{modo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
+                tamanho_kb = round(len(dados_saida) / 1024, 1)
+                icone      = "📄" if modo == "txt" else "📊"
+
+                st.markdown(f"""
+                <div class="result-success">
+                    <div class="result-success-icon">✅</div>
+                    <div class="result-success-body">
+                        <div class="result-success-title">Arquivo gerado com sucesso!</div>
+                        <div class="result-success-meta">
+                            {icone} {nome} &nbsp;·&nbsp; {tamanho_kb} KB &nbsp;·&nbsp;
+                            {len(uploaded)} XML{'s' if len(uploaded) > 1 else ''} processado{'s' if len(uploaded) > 1 else ''}
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-            st.download_button(
-                label=f"⬇  Baixar  {nome}",
-                data=dados_saida, file_name=nome, mime=mime,
-                use_container_width=True,
-            )
-        else:
-            st.markdown("""<div class="error-box">❌ Nenhum arquivo foi gerado. Verifique o log abaixo.</div>""", unsafe_allow_html=True)
+                st.download_button(
+                    label=f"⬇  Baixar  {nome}",
+                    data=dados_saida, file_name=nome, mime=mime,
+                    use_container_width=True,
+                )
+            else:
+                st.markdown("""<div class="error-box">❌ Nenhum arquivo foi gerado. Verifique o log abaixo.</div>""", unsafe_allow_html=True)
 
-        with st.expander("📋  Ver log de processamento"):
-            st.code(log.strip() if log.strip() else "(nenhuma saída registrada)", language="")
+            with st.expander("📋  Ver log de processamento"):
+                st.code(log.strip() if log.strip() else "(nenhuma saída registrada)", language="")
 
-# ── Footer ─────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="footer">
-    Conversor NFSe v1.2 &nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
-</div>
-""", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="footer">
+        Conversor NFSe v1.3 &nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ── ROTEADOR ─────────────────────────────────────────────────────────────────
+pagina = st.session_state.get("pagina", "conversor")
+
+if pagina == "usuarios":
+    pagina_usuarios()
+else:
+    pagina_conversor()
