@@ -639,6 +639,22 @@ def processar_xlsx_sped(uploaded_files, im: str):
         desc = getattr(C, "CNAE9_TO_DESC", {}).get(cnae9, "")
         return f"{cnae9} - {desc}" if desc else cnae9
 
+    def _irrf_csll(xml_path):
+        """Extrai vRetIRRF e vRetCSLL do XML — parse_nfse não retorna esses campos."""
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.parse(xml_path).getroot()
+            vals = []
+            for tag in ("vRetIRRF", "vRetCSLL"):
+                el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
+                try:
+                    vals.append(float(el.text.strip()) if el is not None and el.text else 0.0)
+                except (ValueError, AttributeError):
+                    vals.append(0.0)
+            return vals[0], vals[1]
+        except Exception:
+            return 0.0, 0.0
+
     with tempfile.TemporaryDirectory() as tmp:
         for uf_file in uploaded_files:
             uf_file.seek(0)
@@ -687,13 +703,15 @@ def processar_xlsx_sped(uploaded_files, im: str):
                     vPIS    = _float(d.get("vPIS"))
                     vCOFINS = _float(d.get("vCOFINS"))
                     vINSS   = _float(d.get("vINSS"))
+                    # IRRF e CSLL: parse_nfse não os extrai — lidos diretamente do XML
+                    vIRRF, vCSLL = _irrf_csll(xml_path)
                     # Alíquota: usa o valor do XML; se vazio/zero, usa sugerido pela tabela CNAE
                     aliq    = _float(d.get("aliq")) or float(aliq_cnae or 0)
                     tpRet   = _str(d.get("tpRet", "1"))
                     iss_retido = (tpRet == "2")
 
-                    # Retenções federais: soma numérica (0 se nenhuma)
-                    ret_federais = vPIS + vCOFINS + vINSS
+                    # Retenções federais: PIS + COFINS + INSS + IRRF + CSLL
+                    ret_federais = vPIS + vCOFINS + vINSS + vIRRF + vCSLL
 
                     # Valor do ISS: só mostra se o tomador retém (tpRet=2), senão 0
                     valor_iss_col = vISS if iss_retido else 0
@@ -726,8 +744,8 @@ def processar_xlsx_sped(uploaded_files, im: str):
                         "",                                # Y  Outras Retenções (FIXO vazio)
                         vPIS    if vPIS    else "",        # Z  PIS              (XML, vazio se 0)
                         vCOFINS if vCOFINS else "",        # AA COFINS           (XML, vazio se 0)
-                        "",                                # AB IRRF             (FIXO vazio)
-                        "",                                # AC CSLL             (FIXO vazio)
+                        vIRRF   if vIRRF   else "",        # AB IRRF             (XML vRetIRRF)
+                        vCSLL   if vCSLL   else "",        # AC CSLL             (XML vRetCSLL)
                         vINSS   if vINSS   else "",        # AD INSS             (XML, vazio se 0)
                         vS,                                # AE Base de Cálculo  (XML = vS)
                         aliq,                              # AF Alíquota         (XML ou CNAE)
