@@ -61,12 +61,52 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 [data-testid="stHeader"]  { background: transparent !important; }
 [data-testid="stSidebar"] { background: #1E293B !important; border-right: 1px solid #334155; }
-.block-container          { max-width: 760px; padding: 1.5rem 1.5rem 3rem; }
+.block-container          { max-width: 700px; padding: 2rem 1.5rem 4rem; }
 
 body, p, div, span, li { color: #CBD5E1; }
 h1,h2,h3,h4            { color: #F8FAFC !important; font-weight: 700; }
 label                   { color: #94A3B8 !important; font-size: .78rem !important;
                           font-weight: 600 !important; letter-spacing: .3px !important; }
+
+/* ── STEP CONTAINERS (st.container border=True) ── */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    border: 1px solid #334155 !important;
+    border-left: 4px solid #10B981 !important;
+    border-radius: 12px !important;
+    background: #1E293B !important;
+    padding: 6px 14px 14px !important;
+    margin-bottom: 18px !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,.25) !important;
+}
+
+/* ── LOGIN FORM ── */
+[data-testid="stForm"] {
+    max-width: 400px !important;
+    margin: 0 auto !important;
+    background: #1E293B !important;
+    border: 1px solid #334155 !important;
+    border-radius: 16px !important;
+    padding: 32px 36px !important;
+    box-shadow: 0 24px 60px rgba(0,0,0,.5) !important;
+}
+/* Ocultar título "Login" gerado pelo streamlit-authenticator */
+[data-testid="stForm"] h2 { display: none !important; }
+
+/* Botão de submit do formulário de login */
+[data-testid="stFormSubmitButton"] > button {
+    background: #10B981 !important;
+    color: #fff !important; border: none !important;
+    border-radius: 8px !important; width: 100% !important;
+    padding: .75rem 1rem !important; font-weight: 700 !important;
+    font-size: .95rem !important; letter-spacing: .3px !important;
+    box-shadow: 0 2px 12px #10B98135 !important; transition: all .25s !important;
+    margin-top: .5rem !important;
+}
+[data-testid="stFormSubmitButton"] > button:hover {
+    background: #D97706 !important;
+    box-shadow: 0 4px 18px #D9770645 !important;
+    transform: translateY(-1px) !important;
+}
 
 /* ── BADGE ── */
 .badge {
@@ -218,31 +258,46 @@ label                   { color: #94A3B8 !important; font-size: .78rem !importan
 .result-success-title { color: #10B981; font-weight: 700; font-size: .95rem; }
 .result-success-meta  { color: #475569; font-size: .78rem; margin-top: 4px; }
 
-/* ── BOTÕES PRIMÁRIOS ── */
+/* ── BOTÕES PRIMÁRIOS (navegação, ações gerais) ── */
 div.stButton > button {
-    background: #10B981 !important;
-    color: #fff !important; border: none !important; border-radius: 8px !important;
-    font-weight: 600 !important; font-size: .88rem !important;
-    padding: .65rem .9rem !important; letter-spacing: .2px !important;
-    box-shadow: 0 2px 8px #10B98130 !important; transition: all .25s !important;
+    background: #1E293B !important;
+    color: #CBD5E1 !important; border: 1px solid #334155 !important;
+    border-radius: 8px !important; font-weight: 600 !important;
+    font-size: .85rem !important; padding: .55rem .9rem !important;
+    letter-spacing: .2px !important; transition: all .2s !important;
     width: 100% !important;
 }
 div.stButton > button:hover {
-    background: #D97706 !important;
-    transform: translateY(-1px) !important; box-shadow: 0 4px 14px #D9770640 !important;
+    background: #10B981 !important; color: #fff !important;
+    border-color: #10B981 !important;
+    transform: translateY(-1px) !important; box-shadow: 0 4px 14px #10B98130 !important;
+}
+
+/* ── BOTÕES DE AÇÃO (Gerar TXT / XLSX) — type=primary ── */
+div.stButton > button[kind="primary"] {
+    background: #10B981 !important;
+    color: #fff !important; border: none !important;
+    font-weight: 700 !important; font-size: .9rem !important;
+    padding: .7rem 1rem !important;
+    box-shadow: 0 2px 10px #10B98128 !important;
+}
+div.stButton > button[kind="primary"]:hover {
+    background: #059669 !important;
+    box-shadow: 0 4px 18px #10B98140 !important;
+    color: #fff !important; border-color: transparent !important;
 }
 
 /* ── BOTÃO DOWNLOAD ── */
 div.stDownloadButton > button {
     background: #10B981 !important;
     color: #fff !important; border: none !important; border-radius: 8px !important;
-    font-weight: 700 !important; font-size: .95rem !important;
-    padding: .75rem 1.3rem !important;
-    box-shadow: 0 2px 10px #10B98130 !important; transition: all .25s !important;
+    font-weight: 700 !important; font-size: .92rem !important;
+    padding: .7rem 1.2rem !important;
+    box-shadow: 0 2px 10px #10B98128 !important; transition: all .25s !important;
 }
 div.stDownloadButton > button:hover {
     background: #D97706 !important;
-    transform: translateY(-1px) !important; box-shadow: 0 4px 16px #D9770650 !important;
+    transform: translateY(-1px) !important; box-shadow: 0 4px 16px #D9770645 !important;
 }
 
 /* ── INPUTS ── */
@@ -861,87 +916,90 @@ def pagina_conversor():
     """, unsafe_allow_html=True)
 
     # ── ETAPA 1 ────────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="step-header">
-        <div class="step-num">1</div>
-        <div class="step-info">
-            <div class="step-title">Selecione os arquivos XML</div>
-            <div class="step-desc">Arraste ou clique para carregar um ou mais XMLs de NFSe</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    uploaded = st.file_uploader(
-        "xml_upload", type=["xml"],
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-    )
-
-    if uploaded:
-        total = len(uploaded)
-        chips = "".join(
-            f'<span class="file-chip">📄 {u.name}</span>'
-            for u in uploaded[:8]
-        )
-        extra = f'<span class="file-chip-more">+{total - 8} mais</span>' if total > 8 else ""
-        st.markdown(f"""
-        <div class="file-list">
-            <div class="file-list-header">✅ {total} arquivo{'s' if total > 1 else ''} selecionado{'s' if total > 1 else ''}</div>
-            <div class="file-chips">{chips}{extra}</div>
+    with st.container(border=True):
+        st.markdown("""
+        <div class="step-header">
+            <div class="step-num">1</div>
+            <div class="step-info">
+                <div class="step-title">Selecione os arquivos XML</div>
+                <div class="step-desc">Arraste ou clique para carregar um ou mais XMLs de NFS-e</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+
+        uploaded = st.file_uploader(
+            "xml_upload", type=["xml"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+        )
+
+        if uploaded:
+            total = len(uploaded)
+            chips = "".join(
+                f'<span class="file-chip">📄 {u.name}</span>'
+                for u in uploaded[:8]
+            )
+            extra = f'<span class="file-chip-more">+{total - 8} mais</span>' if total > 8 else ""
+            st.markdown(f"""
+            <div class="file-list">
+                <div class="file-list-header">✅ {total} arquivo{'s' if total > 1 else ''} selecionado{'s' if total > 1 else ''}</div>
+                <div class="file-chips">{chips}{extra}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # ── ETAPA 2 ────────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="step-header">
-        <div class="step-num">2</div>
-        <div class="step-info">
-            <div class="step-title">Inscrição Municipal Tomadora</div>
-            <div class="step-desc">Opcional — deixe em branco para usar a do próprio XML</div>
+    with st.container(border=True):
+        st.markdown("""
+        <div class="step-header">
+            <div class="step-num">2</div>
+            <div class="step-info">
+                <div class="step-title">Inscrição Municipal Tomadora</div>
+                <div class="step-desc">Opcional — deixe em branco para usar a do próprio XML</div>
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    im_input = st.text_input("im", placeholder="Ex: 12345678-0", label_visibility="collapsed")
+        im_input = st.text_input("im", placeholder="Ex: 12345678-0", label_visibility="collapsed")
 
-    st.markdown("""
-    <div class="info-box">
-        💡 Notas <strong>emitidas em Fortaleza</strong> são ignoradas no modo TXT — o portal ISS já as importa automaticamente. Exceção: MEI.
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class="info-box">
+            💡 Notas <strong>emitidas em Fortaleza</strong> são ignoradas no modo TXT — o portal ISS já as importa automaticamente. Exceção: MEI.
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── ETAPA 3 ────────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="step-header">
-        <div class="step-num">3</div>
-        <div class="step-info">
-            <div class="step-title">Gerar o arquivo de saída</div>
-            <div class="step-desc">Escolha o formato e clique para processar</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2, gap="medium")
-
-    with col1:
+    with st.container(border=True):
         st.markdown("""
-        <div class="format-card">
-            <div class="format-icon">📄</div>
-            <div class="format-name">ISS Fortaleza</div>
-            <div class="format-desc">Layout TXT para importação no portal da prefeitura de Fortaleza</div>
+        <div class="step-header">
+            <div class="step-num">3</div>
+            <div class="step-info">
+                <div class="step-title">Gerar o arquivo de saída</div>
+                <div class="step-desc">Escolha o formato e clique para processar</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-        btn_txt = st.button("▶  Gerar TXT", use_container_width=True, type="primary", key="btn_txt")
 
-    with col2:
-        st.markdown("""
-        <div class="format-card">
-            <div class="format-icon">📊</div>
-            <div class="format-name">SPED GOV</div>
-            <div class="format-desc">Planilha XLSX para o sistema SPED do governo federal</div>
-        </div>
-        """, unsafe_allow_html=True)
-        btn_xlsx = st.button("▶  Gerar XLSX", use_container_width=True, key="btn_xlsx")
+        col1, col2 = st.columns(2, gap="medium")
+
+        with col1:
+            st.markdown("""
+            <div class="format-card">
+                <div class="format-icon">📄</div>
+                <div class="format-name">ISS Fortaleza</div>
+                <div class="format-desc">Layout TXT para importação no portal da prefeitura de Fortaleza</div>
+            </div>
+            """, unsafe_allow_html=True)
+            btn_txt = st.button("Gerar TXT", use_container_width=True, type="primary", key="btn_txt")
+
+        with col2:
+            st.markdown("""
+            <div class="format-card">
+                <div class="format-icon">📊</div>
+                <div class="format-name">SPED GOV</div>
+                <div class="format-desc">Planilha XLSX para o sistema SPED do governo federal</div>
+            </div>
+            """, unsafe_allow_html=True)
+            btn_xlsx = st.button("Gerar XLSX", use_container_width=True, type="primary", key="btn_xlsx")
 
     # ── Processamento ──────────────────────────────────────────────────────────
     if btn_txt or btn_xlsx:
