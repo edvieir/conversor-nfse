@@ -558,8 +558,14 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                                  if e.tag.lower().endswith("vcofins")), "")
                 _vCSLL   = next((e.text or "" for e in _root.iter()
                                  if e.tag.lower().endswith("vretcsll")), "")
+                # Alíquota ISS: busca pAliqAplic (nível NFSe) ou pAliq (nível DPS/tribMun)
+                _aliq = (next((e.text or "" for e in _root.iter()
+                                if e.tag.endswith("pAliqAplic")), "")
+                         or next((e.text or "" for e in _root.iter()
+                                  if e.tag.endswith("pAliq")), ""))
                 _rinfo = {
                     "tpRet": _tpRet,
+                    "aliq":  _aliq,
                     # PIS/COFINS não entram nos campos 39/40:
                     # quando são "Débito Apuração Própria" o emitente os recolhe
                     # por conta própria — não são retidos pelo tomador em Fortaleza.
@@ -634,6 +640,15 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     # ISS Fortaleza: campo 21=1 significa "retido" (não "2"!)
                     if _rinfo.get("tpRet") == "2" and cs[20] == "2":
                         cs[20] = "1"
+
+                    # Campo 31 (índice 30) – alíquota ISS em centésimos
+                    # Só preenche quando ISS é retido (campo 21=1) e campo ainda vazio.
+                    # Ex.: pAliqAplic="2.00" → campo 31="200"
+                    if cs[20] == "1" and not cs[30].strip() and _rinfo.get("aliq"):
+                        try:
+                            cs[30] = str(int(round(float(_rinfo["aliq"]) * 100)))
+                        except Exception:
+                            pass
 
                     # Campo 41 (índice 40) – Contribuições Sociais retidas (CSLL)
                     # O XML traz vRetCSLL = total das contribuições sociais retidas
