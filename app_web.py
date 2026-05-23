@@ -907,23 +907,13 @@ def pagina_usuarios():
 # ── PÁGINA: CONVERSOR ─────────────────────────────────────────────────────────
 def pagina_conversor():
     st.markdown("""
-    <div style="text-align:center; padding: 1rem 0 .5rem;">
-        <span class="badge">✦ NFS-e · Modelo Nacional 2026</span>
-        <div style="color:#F8FAFC; font-size:1.65rem; font-weight:800; letter-spacing:-.3px; margin:.4rem 0 .3rem;">
-            📊 Conversor Inteligente NFS-e
+    <div style="padding: 1rem 0 1.6rem;">
+        <div style="color:#F8FAFC; font-size:1.45rem; font-weight:800; letter-spacing:-.3px;">
+            Conversor NFS-e
         </div>
-        <div style="color:#475569; font-size:.88rem; margin-bottom:1.4rem;">
-            Processamento e Estruturação de Lotes XML
-        </div>
-    </div>
-    <div class="hero">
-        <div class="hero-title" style="font-size:1rem; margin-bottom:6px;">Sobre o sistema</div>
-        <p class="hero-sub">Transforme XMLs de NFS-e no layout do portal ISS Fortaleza ou na planilha SPED GOV — direto do navegador, sem instalar nada.</p>
-        <div class="hero-chips">
-            <span class="chip">📄 ISS Fortaleza</span>
-            <span class="chip">📊 SPED GOV</span>
-            <span class="chip">🔒 Acesso seguro</span>
-            <span class="chip">⚡ Processamento rápido</span>
+        <div style="color:#334155; font-size:.75rem; margin-top:.4rem; font-weight:600;
+                    letter-spacing:.5px; text-transform:uppercase;">
+            ISS Fortaleza &nbsp;·&nbsp; SPED GOV
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -934,8 +924,7 @@ def pagina_conversor():
         <div class="step-header">
             <div class="step-num">1</div>
             <div class="step-info">
-                <div class="step-title">Selecione os arquivos XML</div>
-                <div class="step-desc">Arraste ou clique para carregar um ou mais XMLs de NFS-e</div>
+                <div class="step-title">Arquivos XML</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -966,19 +955,12 @@ def pagina_conversor():
         <div class="step-header">
             <div class="step-num">2</div>
             <div class="step-info">
-                <div class="step-title">Inscrição Municipal Tomadora</div>
-                <div class="step-desc">Opcional — deixe em branco para usar a do próprio XML</div>
+                <div class="step-title">Inscrição Municipal</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        im_input = st.text_input("im", placeholder="Ex: 12345678-0", label_visibility="collapsed")
-
-        st.markdown("""
-        <div class="info-box">
-            💡 Notas <strong>emitidas em Fortaleza</strong> são ignoradas no modo TXT — o portal ISS já as importa automaticamente. Exceção: MEI.
-        </div>
-        """, unsafe_allow_html=True)
+        im_input = st.text_input("im", placeholder="Ex: 12345678-0  (opcional)", label_visibility="collapsed")
 
     # ── ETAPA 3 ────────────────────────────────────────────────────────────────
     with st.container(border=True):
@@ -986,8 +968,7 @@ def pagina_conversor():
         <div class="step-header">
             <div class="step-num">3</div>
             <div class="step-info">
-                <div class="step-title">Gerar o arquivo de saída</div>
-                <div class="step-desc">Escolha o formato e clique para processar</div>
+                <div class="step-title">Gerar arquivo</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -999,7 +980,6 @@ def pagina_conversor():
             <div class="format-card">
                 <div class="format-icon">📄</div>
                 <div class="format-name">ISS Fortaleza</div>
-                <div class="format-desc">Layout TXT para importação no portal da prefeitura de Fortaleza</div>
             </div>
             """, unsafe_allow_html=True)
             btn_txt = st.button("Gerar TXT", use_container_width=True, type="primary", key="btn_txt")
@@ -1009,7 +989,6 @@ def pagina_conversor():
             <div class="format-card">
                 <div class="format-icon">📊</div>
                 <div class="format-name">SPED GOV</div>
-                <div class="format-desc">Planilha XLSX para o sistema SPED do governo federal</div>
             </div>
             """, unsafe_allow_html=True)
             btn_xlsx = st.button("Gerar XLSX", use_container_width=True, type="primary", key="btn_xlsx")
