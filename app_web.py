@@ -547,6 +547,38 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         if os.path.exists(saida):
             with open(saida, "rb") as fh:
                 data = fh.read()
+            # ── Pós-processamento do TXT (padrão ISS Fortaleza) ──────────────
+            # Corrige dois problemas que nfse_xml_to_txt.py não resolve:
+            #   1. Natureza (campo 30): quando o local de prestação (campo 29)
+            #      é Fortaleza (2304400), deve ser "1" (tributação no município),
+            #      não "2" (fora do município).
+            #   2. Descrição (campo 26): remove acentos e caracteres não-ASCII
+            #      que causam erro de importação no portal ISS Fortaleza.
+            if modo == "txt" and data:
+                import unicodedata as _ud
+
+                def _fix_linha(linha: str) -> str:
+                    cs = linha.split(";")
+                    if len(cs) != 46:
+                        return linha
+                    # Remove acentos / non-ASCII de TODOS os campos de texto
+                    for idx in range(len(cs)):
+                        if any(ord(c) > 127 for c in cs[idx]):
+                            cs[idx] = "".join(
+                                c for c in _ud.normalize("NFD", cs[idx])
+                                if ord(c) < 128
+                            )
+                    # Campo 30 (índice 29) – natureza: prestação em Fortaleza → "1"
+                    if cs[28] == "2304400":
+                        cs[29] = "1"
+                    return ";".join(cs)
+
+                texto  = data.decode("utf-8")
+                linhas = texto.split("\n")
+                data   = "\n".join(
+                    _fix_linha(l) if ";" in l else l
+                    for l in linhas
+                ).encode("utf-8")
     return data, log
 
 
