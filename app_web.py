@@ -1091,7 +1091,14 @@ def pagina_conversor():
         col_im, col_comp = st.columns(2, gap="medium")
         with col_im:
             st.markdown('<div style="color:#475569; font-size:.7rem; font-weight:600; letter-spacing:.4px; text-transform:uppercase; margin-bottom:3px;">Inscrição Municipal</div>', unsafe_allow_html=True)
-            im_input = st.text_input("im", placeholder="Ex: 12345678-0  (opcional)", label_visibility="collapsed")
+            im_input = st.text_input("im", placeholder="Ex: 12345678-0", label_visibility="collapsed")
+            if not im_input.strip():
+                st.markdown(
+                    '<div style="color:#C97400; font-size:.72rem; margin-top:3px;">'
+                    '⚠️ Obrigatória para gerar TXT (ISS Fortaleza)'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
         with col_comp:
             st.markdown('<div style="color:#475569; font-size:.7rem; font-weight:600; letter-spacing:.4px; text-transform:uppercase; margin-bottom:3px;">Competência</div>', unsafe_allow_html=True)
             comp_input = st.text_input("comp", placeholder="Ex: 05/2026  (opcional)", label_visibility="collapsed")
@@ -1128,7 +1135,7 @@ def pagina_conversor():
             """, unsafe_allow_html=True)
             btn_txt = st.button(
                 "Gerar TXT",
-                disabled=not tem_arquivos,
+                disabled=not tem_arquivos or not im_input.strip(),
                 use_container_width=True,
                 type="primary",
                 key="btn_txt",
@@ -1169,13 +1176,15 @@ def pagina_conversor():
             st.markdown('<div class="warn-box">⚠️ Selecione pelo menos um arquivo XML na Etapa 1.</div>', unsafe_allow_html=True)
         else:
             modo       = "txt" if btn_txt else "xlsx"
-            im         = im_input.strip() or "0"
             tipo_label = "ISS Fortaleza (TXT)" if modo == "txt" else "SPED GOV (XLSX)"
 
             with st.spinner(f"⏳  Processando {len(uploaded)} arquivo(s) — {tipo_label}…"):
                 if modo == "xlsx":
-                    dados_saida, log = processar_xlsx_sped(uploaded, im_input.strip(), comp_filtro)
+                    # IM é ignorada para SPED GOV — passa string vazia
+                    dados_saida, log = processar_xlsx_sped(uploaded, "", comp_filtro)
                 else:
+                    # IM obrigatória para TXT (botão já fica desabilitado se vazia)
+                    im = im_input.strip()
                     dados_saida, log = processar_uploads(uploaded, im, modo, comp_filtro)
 
             if dados_saida:
