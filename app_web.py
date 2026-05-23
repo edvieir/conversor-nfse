@@ -81,31 +81,31 @@ label                   { color: #94A3B8 !important; font-size: .78rem !importan
 
 /* ── LOGIN FORM ── */
 [data-testid="stForm"] {
-    max-width: 400px !important;
-    margin: 0 auto !important;
     background: #1E293B !important;
     border: 1px solid #334155 !important;
     border-radius: 16px !important;
-    padding: 32px 36px !important;
+    padding: 28px 30px !important;
     box-shadow: 0 24px 60px rgba(0,0,0,.5) !important;
 }
 /* Ocultar título "Login" gerado pelo streamlit-authenticator */
 [data-testid="stForm"] h2 { display: none !important; }
 
-/* Botão de submit do formulário de login */
+/* Botão submit do login — seletor agressivo duplo */
+div[data-testid="stFormSubmitButton"] > button,
 [data-testid="stFormSubmitButton"] > button {
-    background: #10B981 !important;
+    background-color: #10B981 !important;
     color: #fff !important; border: none !important;
     border-radius: 8px !important; width: 100% !important;
-    padding: .75rem 1rem !important; font-weight: 700 !important;
+    height: 3.2em !important; font-weight: 700 !important;
     font-size: .95rem !important; letter-spacing: .3px !important;
-    box-shadow: 0 2px 12px #10B98135 !important; transition: all .25s !important;
-    margin-top: .5rem !important;
+    box-shadow: 0 2px 12px rgba(16,185,129,.3) !important;
+    transition: all .25s ease !important; margin-top: .4rem !important;
 }
+div[data-testid="stFormSubmitButton"] > button:hover,
 [data-testid="stFormSubmitButton"] > button:hover {
-    background: #D97706 !important;
-    box-shadow: 0 4px 18px #D9770645 !important;
-    transform: translateY(-1px) !important;
+    background-color: #D97706 !important;
+    box-shadow: 0 4px 18px rgba(217,119,6,.4) !important;
+    transform: translateY(-2px) !important;
 }
 
 /* ── BADGE ── */
@@ -258,67 +258,73 @@ label                   { color: #94A3B8 !important; font-size: .78rem !importan
 .result-success-title { color: #10B981; font-weight: 700; font-size: .95rem; }
 .result-success-meta  { color: #475569; font-size: .78rem; margin-top: 4px; }
 
-/* ── BOTÕES PRIMÁRIOS (navegação, ações gerais) ── */
-div.stButton > button {
-    background: #1E293B !important;
+/* ── BOTÕES GERAIS (navegação, sidebar) ── */
+div[data-testid="stButton"] > button {
+    background-color: #1E293B !important;
     color: #CBD5E1 !important; border: 1px solid #334155 !important;
     border-radius: 8px !important; font-weight: 600 !important;
-    font-size: .85rem !important; padding: .55rem .9rem !important;
-    letter-spacing: .2px !important; transition: all .2s !important;
-    width: 100% !important;
+    font-size: .85rem !important; height: 2.8em !important;
+    width: 100% !important; letter-spacing: .2px !important;
+    transition: all .25s ease !important;
 }
-div.stButton > button:hover {
-    background: #10B981 !important; color: #fff !important;
+div[data-testid="stButton"] > button:hover {
+    background-color: #10B981 !important; color: #fff !important;
     border-color: #10B981 !important;
-    transform: translateY(-1px) !important; box-shadow: 0 4px 14px #10B98130 !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 14px rgba(16,185,129,.3) !important;
 }
 
-/* ── BOTÕES DE AÇÃO (Gerar TXT / XLSX) — type=primary ── */
-div.stButton > button[kind="primary"] {
-    background: #10B981 !important;
+/* ── BOTÕES DE AÇÃO PRIMÁRIOS (Gerar TXT / XLSX) ── */
+div[data-testid="stButton"] > button[kind="primary"] {
+    background-color: #10B981 !important;
     color: #fff !important; border: none !important;
-    font-weight: 700 !important; font-size: .9rem !important;
-    padding: .7rem 1rem !important;
-    box-shadow: 0 2px 10px #10B98128 !important;
+    font-weight: 700 !important; font-size: .92rem !important;
+    height: 3.2em !important;
+    box-shadow: 0 2px 10px rgba(16,185,129,.25) !important;
 }
-div.stButton > button[kind="primary"]:hover {
-    background: #059669 !important;
-    box-shadow: 0 4px 18px #10B98140 !important;
-    color: #fff !important; border-color: transparent !important;
+div[data-testid="stButton"] > button[kind="primary"]:hover {
+    background-color: #D97706 !important;
+    box-shadow: 0 4px 18px rgba(217,119,6,.4) !important;
+    transform: translateY(-2px) !important;
 }
 
 /* ── BOTÃO DOWNLOAD ── */
-div.stDownloadButton > button {
-    background: #10B981 !important;
+div[data-testid="stDownloadButton"] > button {
+    background-color: #10B981 !important;
     color: #fff !important; border: none !important; border-radius: 8px !important;
     font-weight: 700 !important; font-size: .92rem !important;
-    padding: .7rem 1.2rem !important;
-    box-shadow: 0 2px 10px #10B98128 !important; transition: all .25s !important;
+    height: 3.2em !important; width: 100% !important;
+    box-shadow: 0 2px 10px rgba(16,185,129,.25) !important; transition: all .25s !important;
 }
-div.stDownloadButton > button:hover {
-    background: #D97706 !important;
-    transform: translateY(-1px) !important; box-shadow: 0 4px 16px #D9770645 !important;
+div[data-testid="stDownloadButton"] > button:hover {
+    background-color: #D97706 !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 16px rgba(217,119,6,.4) !important;
 }
 
 /* ── INPUTS ── */
-[data-testid="stTextInput"] input {
-    background: #1E293B !important; color: #F8FAFC !important;
+div[data-testid="stTextInput"] input {
+    background-color: #1E293B !important; color: #F8FAFC !important;
     border: 1px solid #334155 !important; border-radius: 8px !important;
-    font-size: .88rem !important; padding: .55rem .85rem !important;
-    transition: border-color .2s, box-shadow .2s !important;
+    font-size: .88rem !important; padding: 12px 15px !important;
+    transition: border-color .25s, box-shadow .25s !important;
 }
-[data-testid="stTextInput"] input:focus {
-    border-color: #D97706 !important; box-shadow: 0 0 0 2px #D9770630 !important;
+div[data-testid="stTextInput"] input:focus {
+    border-color: #D97706 !important; box-shadow: 0 0 0 2px rgba(217,119,6,.25) !important;
 }
-[data-testid="stTextInput"] input::placeholder { color: #475569 !important; }
+div[data-testid="stTextInput"] input::placeholder { color: #475569 !important; }
 
 /* ── FILE UPLOADER ── */
-[data-testid="stFileUploader"] {
-    background: #0F172A !important; border: 2px dashed #334155 !important;
-    border-radius: 10px !important; padding: .6rem !important; transition: border-color .2s !important;
+div[data-testid="stFileUploader"] {
+    background-color: #1E293B !important; border: 2px dashed #475569 !important;
+    border-radius: 12px !important; padding: 20px !important;
+    transition: border-color .25s !important;
 }
-[data-testid="stFileUploader"]:hover { border-color: #10B981 !important; }
-[data-testid="stFileUploader"] * { color: #64748B !important; }
+div[data-testid="stFileUploader"]:hover { border-color: #10B981 !important; }
+div[data-testid="stFileUploader"] * { color: #64748B !important; }
+div[data-testid="stFileUploader"] button {
+    background-color: #334155 !important; color: #fff !important; border: none !important;
+}
 
 /* ── LOG / CODE ── */
 [data-testid="stCode"], pre {
@@ -396,33 +402,40 @@ def _carregar_auth():
 auth = _carregar_auth()
 
 if st.session_state.get("authentication_status") is not True:
+    # Cabeçalho da tela de login
+    st.markdown('<div style="height:40px;"></div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="text-align:center; padding: 2.5rem 0 1.5rem;">
-        <div style="font-size:3.2rem; margin-bottom:.5rem;">📊</div>
-        <span class="badge">Autenticação</span>
-        <div style="color:#F8FAFC; font-size:1.5rem; font-weight:800; letter-spacing:-.3px; margin-top:.4rem;">
-            🛡️ Acesso Restrito
+    <div style="text-align:center; margin-bottom:1.6rem;">
+        <h4 style="color:#10B981 !important; font-size:.8rem; font-weight:700;
+                   letter-spacing:.8px; text-transform:uppercase; margin-bottom:.5rem;">
+            Autenticação
+        </h4>
+        <div style="color:#F8FAFC; font-size:1.7rem; font-weight:800; letter-spacing:-.3px;">
+            Acesso Restrito
         </div>
-        <div style="color:#475569; font-size:.88rem; margin-top:.4rem;">
+        <div style="color:#475569; font-size:.88rem; margin-top:.5rem;">
             Identifique-se para acessar o sistema.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-auth.login()
+    # Formulário centralizado em coluna estreita
+    _, _col_login, _ = st.columns([0.8, 2, 0.8])
+    with _col_login:
+        auth.login()
+
+    _status = st.session_state.get("authentication_status")
+    if _status is False:
+        st.error("Usuário ou senha incorretos. Tente novamente.")
+    if _status is not True:
+        st.markdown("""
+        <div style="text-align:center; color:#334155; font-size:.72rem; margin-top:1.2rem;">
+            🔒 Acesso restrito · Entre com suas credenciais acima
+        </div>""", unsafe_allow_html=True)
+        st.stop()
 
 _status = st.session_state.get("authentication_status")
-
-if _status is False:
-    st.error("Usuário ou senha incorretos. Tente novamente.")
-    st.stop()
-
-if _status is None:
-    st.markdown("""
-    <div style="text-align:center; color:#334155; font-size:.75rem; margin-top:1.5rem;">
-        🔒 Acesso restrito · Entre com suas credenciais acima
-    </div>
-    """, unsafe_allow_html=True)
+if _status is not True:
     st.stop()
 
 
