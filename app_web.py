@@ -502,15 +502,38 @@ if not _CONVERSOR_OK and st.session_state.pagina == "conversor":
 
 
 # ── HELPER ────────────────────────────────────────────────────────────────────
-def processar_uploads(uploaded_files, im: str, modo: str):
+def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: str = ""):
+    import xml.etree.ElementTree as _ET
+
+    def _comp_bytes(b):
+        """Extrai competência MM/AAAA do conteúdo do XML."""
+        try:
+            root = _ET.fromstring(b)
+            el = next((e for e in root.iter() if e.tag.endswith("dCompet")), None)
+            if el is not None and el.text:
+                p = el.text.strip()[:7].split("-")
+                return f"{p[1]}/{p[0]}"
+        except Exception:
+            pass
+        return ""
+
     with tempfile.TemporaryDirectory() as tmp:
+        ignorados = 0
         for uf in uploaded_files:
             uf.seek(0)
+            content = uf.read()
+            if competencia_filtro:
+                comp = _comp_bytes(content)
+                if comp and comp != competencia_filtro:
+                    ignorados += 1
+                    continue
             with open(os.path.join(tmp, uf.name), "wb") as fh:
-                fh.write(uf.read())
+                fh.write(content)
         ext   = "txt" if modo == "txt" else "xlsx"
         saida = os.path.join(tmp, f"resultado.{ext}")
         buf   = io.StringIO()
+        if ignorados:
+            buf.write(f"  FILTRO  {ignorados} arquivo(s) ignorado(s) — competência ≠ {competencia_filtro}\n\n")
         with contextlib.redirect_stdout(buf):
             try:
                 if modo == "txt":
@@ -541,7 +564,7 @@ def _hash_senha(senha: str) -> str:
     return bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
-def processar_xlsx_sped(uploaded_files, im: str):
+def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
     """Gera XLSX no layout exato do SPED GOV — aba 'Serviços Tomados', 43 colunas."""
     import glob as _glob
     import openpyxl
@@ -674,6 +697,19 @@ def processar_xlsx_sped(uploaded_files, im: str):
         except Exception:
             return 0.0, 0.0, 0.0, 0.0, 0.0
 
+    def _competencia_xml(xml_path):
+        """Extrai competência MM/AAAA do campo dCompet do XML."""
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.parse(xml_path).getroot()
+            el = next((e for e in root.iter() if e.tag.endswith("dCompet")), None)
+            if el is not None and el.text:
+                p = el.text.strip()[:7].split("-")
+                return f"{p[1]}/{p[0]}"
+        except Exception:
+            pass
+        return ""
+
     with tempfile.TemporaryDirectory() as tmp:
         for uf_file in uploaded_files:
             uf_file.seek(0)
@@ -705,6 +741,13 @@ def processar_xlsx_sped(uploaded_files, im: str):
             for xml_path in arquivos:
                 nome_arq = os.path.basename(xml_path)
                 try:
+                    # Filtro de competência — ignora XMLs de outros meses
+                    if competencia_filtro:
+                        comp = _competencia_xml(xml_path)
+                        if comp and comp != competencia_filtro:
+                            print(f"  SKIP {nome_arq}: competência {comp} ≠ {competencia_filtro}")
+                            continue
+
                     d = C.parse_nfse(xml_path)
 
                     if im:
@@ -1031,12 +1074,18 @@ def pagina_conversor():
         <div class="step-header">
             <div class="step-num">2</div>
             <div class="step-info">
-                <div class="step-title">Inscrição Municipal</div>
+                <div class="step-title">Parâmetros</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        im_input = st.text_input("im", placeholder="Ex: 12345678-0  (opcional)", label_visibility="collapsed")
+        col_im, col_comp = st.columns(2, gap="medium")
+        with col_im:
+            st.markdown('<div style="color:#475569; font-size:.7rem; font-weight:600; letter-spacing:.4px; text-transform:uppercase; margin-bottom:3px;">Inscrição Municipal</div>', unsafe_allow_html=True)
+            im_input = st.text_input("im", placeholder="Ex: 12345678-0  (opcional)", label_visibility="collapsed")
+        with col_comp:
+            st.markdown('<div style="color:#475569; font-size:.7rem; font-weight:600; letter-spacing:.4px; text-transform:uppercase; margin-bottom:3px;">Competência</div>', unsafe_allow_html=True)
+            comp_input = st.text_input("comp", placeholder="Ex: 05/2026  (opcional)", label_visibility="collapsed")
 
     # ── ETAPA 3 ────────────────────────────────────────────────────────────────
     tem_arquivos = bool(uploaded)
@@ -1092,6 +1141,20 @@ def pagina_conversor():
             )
 
     # ── Processamento ──────────────────────────────────────────────────────────
+    # Normalizar filtro de competência (aceita MM/AAAA ou MM.AAAA)
+    comp_filtro = ""
+    if comp_input.strip():
+        try:
+            parts = comp_input.strip().replace(".", "/").split("/")
+            if len(parts) == 2:
+                mes, ano = int(parts[0]), int(parts[1])
+                if 1 <= mes <= 12 and ano >= 2020:
+                    comp_filtro = f"{mes:02d}/{ano}"
+        except (ValueError, IndexError):
+            pass
+        if not comp_filtro:
+            st.markdown('<div class="warn-box">⚠️ Competência inválida — use o formato MM/AAAA (ex: 05/2026).</div>', unsafe_allow_html=True)
+
     if btn_txt or btn_xlsx:
         if not uploaded:
             st.markdown('<div class="warn-box">⚠️ Selecione pelo menos um arquivo XML na Etapa 1.</div>', unsafe_allow_html=True)
@@ -1102,9 +1165,9 @@ def pagina_conversor():
 
             with st.spinner(f"⏳  Processando {len(uploaded)} arquivo(s) — {tipo_label}…"):
                 if modo == "xlsx":
-                    dados_saida, log = processar_xlsx_sped(uploaded, im_input.strip())
+                    dados_saida, log = processar_xlsx_sped(uploaded, im_input.strip(), comp_filtro)
                 else:
-                    dados_saida, log = processar_uploads(uploaded, im, modo)
+                    dados_saida, log = processar_uploads(uploaded, im, modo, comp_filtro)
 
             if dados_saida:
                 ext        = "txt" if modo == "txt" else "xlsx"
