@@ -563,9 +563,13 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                                 if e.tag.endswith("pAliqAplic")), "")
                          or next((e.text or "" for e in _root.iter()
                                   if e.tag.endswith("pAliq")), ""))
+                # Valor ISS retido (vISSQN)
+                _vISS = next((e.text or "" for e in _root.iter()
+                              if e.tag.endswith("vISSQN")), "")
                 _rinfo = {
                     "tpRet": _tpRet,
                     "aliq":  _aliq,
+                    "vISS":  _vISS,
                     # PIS/COFINS não entram nos campos 39/40:
                     # quando são "Débito Apuração Própria" o emitente os recolhe
                     # por conta própria — não são retidos pelo tomador em Fortaleza.
@@ -641,12 +645,20 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     if _rinfo.get("tpRet") == "2" and cs[20] == "2":
                         cs[20] = "1"
 
-                    # Campo 31 (índice 30) – alíquota ISS em centésimos
-                    # Só preenche quando ISS é retido (campo 21=1) e campo ainda vazio.
-                    # Ex.: pAliqAplic="2.00" → campo 31="200"
-                    if cs[20] == "1" and not cs[30].strip() and _rinfo.get("aliq"):
+                    # Campo 25 (índice 24) – alíquota ISS em centésimos
+                    # Fica logo após o CNAE. Só preenche quando ISS é retido (campo 21=1).
+                    # Ex.: pAliqAplic="2.00" → campo 25="200"
+                    if cs[20] == "1" and not cs[24].strip() and _rinfo.get("aliq"):
                         try:
-                            cs[30] = str(int(round(float(_rinfo["aliq"]) * 100)))
+                            cs[24] = str(int(round(float(_rinfo["aliq"]) * 100)))
+                        except Exception:
+                            pass
+
+                    # Campo 31 (índice 30) – valor ISS retido em centavos
+                    # Ex.: vISSQN="6.84" → campo 31="684"
+                    if cs[20] == "1" and not cs[30].strip() and _rinfo.get("vISS"):
+                        try:
+                            cs[30] = str(int(round(float(_rinfo["vISS"]) * 100)))
                         except Exception:
                             pass
 
