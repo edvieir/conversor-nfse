@@ -26,7 +26,7 @@ st.set_page_config(
     page_title="Conversor NFS-e  |  ISS Fortaleza",
     page_icon="📊",
     layout="centered",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 import yaml
@@ -83,28 +83,63 @@ label {
 .topbar {
     background: linear-gradient(90deg, #0D1117 0%, #131A2E 50%, #0D1117 100%);
     border-bottom: 1px solid #1C2333;
-    padding: 14px 0 12px;
-    margin: 0 -1.5rem 2.4rem;
-    display: flex; align-items: center; justify-content: center;
-    gap: 14px;
+    padding: 12px 20px 10px;
+    margin: 0 -1.5rem .2rem;
+    display: flex; align-items: center;
+    gap: 12px;
 }
 .topbar-logo {
-    width: 32px; height: 32px;
+    width: 30px; height: 30px;
     background: linear-gradient(135deg, #2F6FEB 0%, #7B3FE4 100%);
     border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1rem;
-    box-shadow: 0 0 20px rgba(47,111,235,.35);
+    font-size: .95rem;
+    box-shadow: 0 0 16px rgba(47,111,235,.35);
+    flex-shrink: 0;
 }
 .topbar-name {
-    color: #E6EDF3; font-size: 1rem; font-weight: 700; letter-spacing: -.2px;
+    color: #E6EDF3; font-size: .95rem; font-weight: 700; letter-spacing: -.2px;
 }
 .topbar-divider {
-    width: 1px; height: 16px; background: #1C2333;
+    width: 1px; height: 14px; background: #1C2333;
 }
 .topbar-tag {
-    color: #484F58; font-size: .7rem; font-weight: 500; letter-spacing: .2px;
+    color: #484F58; font-size: .68rem; font-weight: 500; letter-spacing: .2px;
 }
+.topbar-spacer { flex: 1; }
+
+/* ── NAVBAR (barra de ações/usuário) ── */
+.navbar {
+    background: #0D1117;
+    border-bottom: 1px solid #1C2333;
+    padding: 8px 20px;
+    margin: 0 -1.5rem 1.8rem;
+    display: flex; align-items: center; gap: 10px;
+}
+.navbar-user {
+    display: flex; align-items: center; gap: 8px;
+}
+.navbar-avatar {
+    width: 26px; height: 26px;
+    background: linear-gradient(135deg, #2F6FEB, #7B3FE4);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .72rem; font-weight: 800; color: #fff;
+}
+.navbar-name {
+    color: #8B949E; font-size: .78rem; font-weight: 500;
+}
+.navbar-spacer { flex: 1; }
+.navbar-btn {
+    background: #161B27; border: 1px solid #2F3E55;
+    border-radius: 7px; color: #8B949E;
+    font-size: .74rem; font-weight: 600;
+    padding: 5px 12px; cursor: pointer;
+    text-decoration: none; display: inline-flex;
+    align-items: center; gap: 5px;
+    transition: all .2s;
+}
+.navbar-btn:hover { background: #1C2540; color: #E6EDF3; border-color: #2F6FEB; }
 
 /* ── STEP CONTAINERS ── */
 [data-testid="stVerticalBlockBorderWrapper"] {
@@ -462,39 +497,8 @@ _usuario_atual = st.session_state.get("username", "")
 _nome_atual    = st.session_state.get("name", "Usuário")
 _is_admin      = (_usuario_atual == "admin")
 
-with st.sidebar:
-    inicial = _nome_atual[0].upper() if _nome_atual else "U"
-    st.markdown(f"""
-    <div class="user-info-card">
-        <div class="user-avatar">{inicial}</div>
-        <div class="user-name">{_nome_atual}</div>
-        <div class="user-login">@{_usuario_atual}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    auth.logout("↩  Sair", location="sidebar")
-    st.divider()
-
-    # Navegação
-    st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Navegação</div>', unsafe_allow_html=True)
-
-    if "pagina" not in st.session_state:
-        st.session_state.pagina = "conversor"
-
-    if st.button("📄  Conversor", use_container_width=True, key="nav_conversor"):
-        st.session_state.pagina = "conversor"
-        st.rerun()
-
-    if _is_admin:
-        if st.button("👥  Gerenciar Usuários", use_container_width=True, key="nav_usuarios"):
-            st.session_state.pagina = "usuarios"
-            st.rerun()
-
-    st.divider()
-    st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Sistema</div>', unsafe_allow_html=True)
-    st.caption("Conversor NFS-e  v1.5")
-    st.caption("Modelo Nacional 2026")
-    st.caption("ISS Fortaleza / SPED GOV")
+if "pagina" not in st.session_state:
+    st.session_state.pagina = "conversor"
 
 if not _CONVERSOR_OK and st.session_state.pagina == "conversor":
     st.error(f"Não foi possível carregar `nfse_xml_to_txt.py`:\n\n`{_CONVERSOR_ERR}`")
@@ -894,6 +898,36 @@ def pagina_usuarios():
         st.error("Acesso restrito ao administrador.")
         return
 
+    # ── Top bar ──
+    inicial = _nome_atual[0].upper() if _nome_atual else "U"
+    st.markdown("""
+    <div class="topbar">
+        <div class="topbar-logo">📊</div>
+        <span class="topbar-name">Conversor NFS-e</span>
+        <div class="topbar-divider"></div>
+        <span class="topbar-tag">Painel Administrativo</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Navbar: usuário + botões ──
+    _ua1, _ua2, _ua3 = st.columns([5, 1.8, 1.2])
+    with _ua1:
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+            <div style="width:26px;height:26px;background:linear-gradient(135deg,#2F6FEB,#7B3FE4);
+                border-radius:6px;display:flex;align-items:center;justify-content:center;
+                font-size:.72rem;font-weight:800;color:#fff;">{inicial}</div>
+            <span style="color:#8B949E;font-size:.78rem;font-weight:500;">{_nome_atual}</span>
+        </div>""", unsafe_allow_html=True)
+    with _ua2:
+        if st.button("📄 Conversor", key="nav_conv_admin", use_container_width=True):
+            st.session_state.pagina = "conversor"
+            st.rerun()
+    with _ua3:
+        auth.logout("↩ Sair", key="logout_admin")
+
+    st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
+
     st.markdown("""
     <div class="admin-hero">
         <div class="admin-hero-title">👥 Gerenciar Usuários</div>
@@ -1039,7 +1073,7 @@ def pagina_usuarios():
 
 # ── PÁGINA: CONVERSOR ─────────────────────────────────────────────────────────
 def pagina_conversor():
-    # ── Top bar de identidade visual ──
+    # ── Top bar ──
     st.markdown("""
     <div class="topbar">
         <div class="topbar-logo">📊</div>
@@ -1048,6 +1082,33 @@ def pagina_conversor():
         <span class="topbar-tag">ISS Fortaleza · SPED GOV · Modelo Nacional 2026</span>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Navbar: usuário + botões ──
+    inicial = _nome_atual[0].upper() if _nome_atual else "U"
+    if _is_admin:
+        _nc1, _nc2, _nc3 = st.columns([5, 1.8, 1.2])
+    else:
+        _nc1, _nc3 = st.columns([7, 1.2])
+
+    with _nc1:
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+            <div style="width:26px;height:26px;background:linear-gradient(135deg,#2F6FEB,#7B3FE4);
+                border-radius:6px;display:flex;align-items:center;justify-content:center;
+                font-size:.72rem;font-weight:800;color:#fff;">{inicial}</div>
+            <span style="color:#8B949E;font-size:.78rem;font-weight:500;">{_nome_atual}</span>
+        </div>""", unsafe_allow_html=True)
+
+    if _is_admin:
+        with _nc2:
+            if st.button("👥 Usuários", key="nav_usuarios_main", use_container_width=True):
+                st.session_state.pagina = "usuarios"
+                st.rerun()
+
+    with _nc3:
+        auth.logout("↩ Sair", key="logout_main")
+
+    st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
 
     # Chave dinâmica para permitir limpeza total do uploader
     if "upload_key" not in st.session_state:
