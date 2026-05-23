@@ -23,8 +23,8 @@ for _mod in (
 import streamlit as st
 
 st.set_page_config(
-    page_title="Conversor NFSe  |  ISS Fortaleza",
-    page_icon="📄",
+    page_title="Conversor NFS-e  |  ISS Fortaleza",
+    page_icon="📊",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
@@ -50,68 +50,67 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* Ocultar elementos padrão do Streamlit */
+#MainMenu {visibility: hidden;}
+footer    {visibility: hidden;}
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body, [data-testid="stAppViewContainer"] {
-    background: #0d1117 !important;
+    background: #0F172A !important;
     font-family: 'Inter', sans-serif;
 }
 [data-testid="stHeader"]  { background: transparent !important; }
-[data-testid="stSidebar"] { background: #161b27 !important; border-right: 1px solid #21273a; }
+[data-testid="stSidebar"] { background: #1E293B !important; border-right: 1px solid #334155; }
 .block-container          { max-width: 760px; padding: 1.5rem 1.5rem 3rem; }
 
-body, p, div, span, li { color: #c9d1d9; }
-h1,h2,h3,h4            { color: #f0f4ff !important; font-weight: 700; }
-label                   { color: #8b949e !important; font-size: .78rem !important;
+body, p, div, span, li { color: #CBD5E1; }
+h1,h2,h3,h4            { color: #F8FAFC !important; font-weight: 700; }
+label                   { color: #94A3B8 !important; font-size: .78rem !important;
                           font-weight: 600 !important; letter-spacing: .3px !important; }
 
-/* ── HERO ── */
-.hero {
-    background: linear-gradient(135deg, #0f1c3a 0%, #0d2b5e 55%, #0a1f47 100%);
-    border: 1px solid #1f3a6e;
-    border-radius: 16px;
-    padding: 30px 34px 26px;
-    margin-bottom: 32px;
-    position: relative;
-    overflow: hidden;
-}
-.hero::before {
-    content: "";
-    position: absolute; top: -50px; right: -50px;
-    width: 200px; height: 200px;
-    background: radial-gradient(circle, #1a4aa840 0%, transparent 70%);
-    border-radius: 50%;
-}
-.hero-badge {
+/* ── BADGE ── */
+.badge {
     display: inline-block;
-    background: #1a3a6e; color: #58a6ff;
-    border: 1px solid #2d5fa8; border-radius: 20px;
+    background: #1E293B; color: #10B981;
+    border: 1px solid #334155; border-radius: 20px;
     font-size: .7rem; font-weight: 700; letter-spacing: .6px;
     padding: 3px 12px; margin-bottom: 12px; text-transform: uppercase;
 }
+
+/* ── HERO ── */
+.hero {
+    background: #1E293B;
+    border: 1px solid #334155;
+    border-left: 4px solid #10B981;
+    border-radius: 12px;
+    padding: 28px 32px 24px;
+    margin-bottom: 28px;
+}
 .hero-title {
-    color: #f0f6ff; font-size: 1.75rem; font-weight: 800;
+    color: #F8FAFC; font-size: 1.75rem; font-weight: 800;
     letter-spacing: -.3px; margin: 0 0 8px; line-height: 1.2;
 }
-.hero-sub { color: #7d8fa8; font-size: .88rem; margin: 0 0 16px; }
+.hero-sub { color: #64748B; font-size: .88rem; margin: 0 0 16px; }
 .hero-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip {
-    background: #0d1117; border: 1px solid #21273a; color: #8b949e;
+    background: #0F172A; border: 1px solid #334155; color: #64748B;
     border-radius: 20px; font-size: .7rem; font-weight: 500; padding: 4px 11px;
 }
 
 /* ── ADMIN HERO ── */
 .admin-hero {
-    background: linear-gradient(135deg, #1a0f2e 0%, #2d1b4e 55%, #1a0f3a 100%);
-    border: 1px solid #3d2a6e;
-    border-radius: 16px;
-    padding: 26px 34px 22px;
-    margin-bottom: 28px;
+    background: #1E293B;
+    border: 1px solid #334155;
+    border-left: 4px solid #10B981;
+    border-radius: 12px;
+    padding: 24px 32px 20px;
+    margin-bottom: 24px;
 }
 .admin-hero-title {
-    color: #d2b4ff; font-size: 1.4rem; font-weight: 800;
+    color: #F8FAFC; font-size: 1.4rem; font-weight: 800;
     letter-spacing: -.3px; margin: 0 0 6px;
 }
-.admin-hero-sub { color: #6a5a8a; font-size: .85rem; }
+.admin-hero-sub { color: #64748B; font-size: .85rem; }
 
 /* ── ETAPAS ── */
 .step-header {
@@ -120,198 +119,200 @@ label                   { color: #8b949e !important; font-size: .78rem !importan
 }
 .step-num {
     min-width: 32px; height: 32px;
-    background: linear-gradient(135deg, #1d6fdb, #1558b8);
+    background: #10B981;
     color: #fff; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: .85rem; font-weight: 800; flex-shrink: 0;
-    box-shadow: 0 2px 8px #1558b840;
+    box-shadow: 0 2px 8px #10B98140;
 }
-.step-title { color: #e6edf3; font-weight: 700; font-size: .95rem; }
-.step-desc  { color: #484f58; font-size: .78rem; margin-top: 2px; }
+.step-title { color: #F8FAFC; font-weight: 700; font-size: .95rem; }
+.step-desc  { color: #475569; font-size: .78rem; margin-top: 2px; }
 
 /* ── CARDS DE FORMATO ── */
 .format-card {
-    background: #161b27; border: 1px solid #21273a;
+    background: #1E293B; border: 1px solid #334155;
     border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
     text-align: center;
+    transition: border-color .2s;
 }
+.format-card:hover { border-color: #10B981; }
 .format-icon { font-size: 1.6rem; margin-bottom: 6px; }
-.format-name { color: #e6edf3; font-weight: 700; font-size: .9rem; }
-.format-desc { color: #484f58; font-size: .75rem; margin-top: 4px; line-height: 1.4; }
+.format-name { color: #F8FAFC; font-weight: 700; font-size: .9rem; }
+.format-desc { color: #475569; font-size: .75rem; margin-top: 4px; line-height: 1.4; }
 
 /* ── LISTA DE ARQUIVOS ── */
 .file-list {
-    background: #0d1117; border: 1px solid #1f3a6e;
+    background: #0F172A; border: 1px solid #334155;
+    border-left: 3px solid #10B981;
     border-radius: 8px; padding: 12px 14px; margin: 8px 0 4px;
 }
-.file-list-header { color: #3fb950; font-size: .78rem; font-weight: 700; margin-bottom: 8px; }
+.file-list-header { color: #10B981; font-size: .78rem; font-weight: 700; margin-bottom: 8px; }
 .file-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .file-chip {
-    background: #161b27; border: 1px solid #21273a; color: #8b949e;
+    background: #1E293B; border: 1px solid #334155; color: #94A3B8;
     border-radius: 6px; font-size: .72rem; padding: 3px 10px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
 }
 .file-chip-more {
-    background: #1a2340; border: 1px solid #2a3a5e; color: #58a6ff;
+    background: #1E293B; border: 1px solid #10B98160; color: #10B981;
     border-radius: 6px; font-size: .72rem; padding: 3px 10px;
 }
 
-/* ── INFO / WARN / ERROR ── */
+/* ── INFO / WARN / ERROR / SUCCESS ── */
 .info-box {
-    background: #0d1f2d; border: 1px solid #1a3a5e; border-left: 3px solid #58a6ff;
+    background: #0F172A; border: 1px solid #334155; border-left: 3px solid #38BDF8;
     border-radius: 6px; padding: 10px 14px; margin: 8px 0;
-    color: #7d9fc0; font-size: .8rem; line-height: 1.5;
+    color: #7BA7C0; font-size: .8rem; line-height: 1.5;
 }
 .warn-box {
-    background: #1c1a0d; border: 1px solid #4a3e00; border-left: 3px solid #d29922;
+    background: #1C1A0D; border: 1px solid #4A3E00; border-left: 3px solid #D97706;
     border-radius: 6px; padding: 10px 14px; margin: 12px 0;
-    color: #b08020; font-size: .82rem;
+    color: #D97706; font-size: .82rem;
 }
 .error-box {
-    background: #1a0d0d; border: 1px solid #4a1515; border-left: 3px solid #f85149;
+    background: #1A0D0D; border: 1px solid #4A1515; border-left: 3px solid #EF4444;
     border-radius: 6px; padding: 10px 14px; margin: 12px 0;
-    color: #c04040; font-size: .82rem;
+    color: #EF4444; font-size: .82rem;
 }
 .success-box {
-    background: #0a1f10; border: 1px solid #1a5c30; border-left: 3px solid #3fb950;
+    background: #0A1F10; border: 1px solid #166534; border-left: 3px solid #10B981;
     border-radius: 6px; padding: 10px 14px; margin: 12px 0;
-    color: #3fb950; font-size: .82rem;
+    color: #10B981; font-size: .82rem;
 }
 
 /* ── TABELA DE USUÁRIOS ── */
 .user-table {
     width: 100%; border-collapse: collapse;
-    background: #161b27; border-radius: 10px; overflow: hidden;
-    border: 1px solid #21273a; margin: 12px 0 20px;
+    background: #1E293B; border-radius: 10px; overflow: hidden;
+    border: 1px solid #334155; margin: 12px 0 20px;
 }
 .user-table th {
-    background: #0d1117; color: #484f58; font-size: .72rem;
+    background: #0F172A; color: #475569; font-size: .72rem;
     font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
-    padding: 10px 14px; border-bottom: 1px solid #21273a; text-align: left;
+    padding: 10px 14px; border-bottom: 1px solid #334155; text-align: left;
 }
 .user-table td {
-    padding: 10px 14px; border-bottom: 1px solid #21273a;
-    color: #c9d1d9; font-size: .83rem;
+    padding: 10px 14px; border-bottom: 1px solid #334155;
+    color: #CBD5E1; font-size: .83rem;
 }
 .user-table tr:last-child td { border-bottom: none; }
-.user-table tr:hover td { background: #1a2035; }
+.user-table tr:hover td { background: #0F172A; }
 .user-badge {
-    display: inline-block; background: #0d2040; color: #58a6ff;
-    border: 1px solid #2d5fa8; border-radius: 12px;
+    display: inline-block; background: #0F172A; color: #10B981;
+    border: 1px solid #10B98160; border-radius: 12px;
     font-size: .65rem; font-weight: 700; padding: 2px 9px;
 }
 .user-badge-admin {
-    background: #2d1b4e; color: #b17aff; border-color: #6a3fa8;
+    background: #0F172A; color: #D97706; border-color: #D9770660;
 }
 
 /* ── RESULTADO ── */
 .result-success {
-    background: linear-gradient(135deg, #0a1f10, #0d2416);
-    border: 1px solid #1a5c30; border-radius: 12px;
+    background: #1E293B;
+    border: 1px solid #334155; border-left: 4px solid #10B981;
+    border-radius: 12px;
     padding: 18px 22px; margin: 16px 0 12px;
     display: flex; align-items: center; gap: 16px;
 }
 .result-success-icon { font-size: 2rem; flex-shrink: 0; }
-.result-success-title { color: #3fb950; font-weight: 700; font-size: .95rem; }
-.result-success-meta  { color: #484f58; font-size: .78rem; margin-top: 4px; }
+.result-success-title { color: #10B981; font-weight: 700; font-size: .95rem; }
+.result-success-meta  { color: #475569; font-size: .78rem; margin-top: 4px; }
 
-/* ── BOTÕES ── */
+/* ── BOTÕES PRIMÁRIOS ── */
 div.stButton > button {
-    background: linear-gradient(135deg, #1d6fdb, #1558b8) !important;
+    background: #10B981 !important;
     color: #fff !important; border: none !important; border-radius: 8px !important;
     font-weight: 600 !important; font-size: .88rem !important;
     padding: .65rem .9rem !important; letter-spacing: .2px !important;
-    box-shadow: 0 2px 8px #1558b840 !important; transition: all .2s !important;
+    box-shadow: 0 2px 8px #10B98130 !important; transition: all .25s !important;
+    width: 100% !important;
 }
 div.stButton > button:hover {
-    background: linear-gradient(135deg, #2279ec, #1865cc) !important;
-    transform: translateY(-1px) !important; box-shadow: 0 4px 14px #1558b860 !important;
+    background: #D97706 !important;
+    transform: translateY(-1px) !important; box-shadow: 0 4px 14px #D9770640 !important;
 }
+
+/* ── BOTÃO DOWNLOAD ── */
 div.stDownloadButton > button {
-    background: linear-gradient(135deg, #1a7a40, #15632f) !important;
+    background: #10B981 !important;
     color: #fff !important; border: none !important; border-radius: 8px !important;
     font-weight: 700 !important; font-size: .95rem !important;
     padding: .75rem 1.3rem !important;
-    box-shadow: 0 2px 10px #1a7a4050 !important; transition: all .2s !important;
+    box-shadow: 0 2px 10px #10B98130 !important; transition: all .25s !important;
 }
 div.stDownloadButton > button:hover {
-    background: linear-gradient(135deg, #1f8f4a, #197039) !important;
-    transform: translateY(-1px) !important; box-shadow: 0 4px 16px #1a7a4070 !important;
+    background: #D97706 !important;
+    transform: translateY(-1px) !important; box-shadow: 0 4px 16px #D9770650 !important;
 }
 
 /* ── INPUTS ── */
 [data-testid="stTextInput"] input {
-    background: #0d1117 !important; color: #e6edf3 !important;
-    border: 1px solid #30363d !important; border-radius: 8px !important;
+    background: #1E293B !important; color: #F8FAFC !important;
+    border: 1px solid #334155 !important; border-radius: 8px !important;
     font-size: .88rem !important; padding: .55rem .85rem !important;
-    transition: border-color .2s !important;
+    transition: border-color .2s, box-shadow .2s !important;
 }
 [data-testid="stTextInput"] input:focus {
-    border-color: #58a6ff !important; box-shadow: 0 0 0 3px #58a6ff1a !important;
+    border-color: #D97706 !important; box-shadow: 0 0 0 2px #D9770630 !important;
 }
-[data-testid="stTextInput"] input::placeholder { color: #484f58 !important; }
+[data-testid="stTextInput"] input::placeholder { color: #475569 !important; }
 
 /* ── FILE UPLOADER ── */
 [data-testid="stFileUploader"] {
-    background: #0d1117 !important; border: 2px dashed #2a3a5e !important;
+    background: #0F172A !important; border: 2px dashed #334155 !important;
     border-radius: 10px !important; padding: .6rem !important; transition: border-color .2s !important;
 }
-[data-testid="stFileUploader"]:hover { border-color: #4078c8 !important; }
-[data-testid="stFileUploader"] * { color: #7d8fa8 !important; }
+[data-testid="stFileUploader"]:hover { border-color: #10B981 !important; }
+[data-testid="stFileUploader"] * { color: #64748B !important; }
 
 /* ── LOG / CODE ── */
 [data-testid="stCode"], pre {
-    background: #0a0e17 !important; border: 1px solid #21273a !important;
-    border-radius: 8px !important; color: #a8b5c8 !important;
+    background: #0F172A !important; border: 1px solid #334155 !important;
+    border-radius: 8px !important; color: #94A3B8 !important;
     font-size: .78rem !important; line-height: 1.6 !important;
 }
 
 /* ── EXPANDER ── */
 [data-testid="stExpander"] {
-    background: #161b27 !important; border: 1px solid #21273a !important;
+    background: #1E293B !important; border: 1px solid #334155 !important;
     border-radius: 8px !important;
 }
 
 /* ── SIDEBAR ── */
-[data-testid="stSidebar"] * { color: #8b949e !important; }
-[data-testid="stSidebar"] strong { color: #e6edf3 !important; }
+[data-testid="stSidebar"] * { color: #94A3B8 !important; }
+[data-testid="stSidebar"] strong { color: #F8FAFC !important; }
 .user-info-card {
-    background: #0d1117; border: 1px solid #21273a;
+    background: #0F172A; border: 1px solid #334155;
     border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
 }
 .user-avatar {
     width: 38px; height: 38px;
-    background: linear-gradient(135deg, #1d6fdb, #1558b8);
+    background: #10B981;
     border-radius: 50%; display: flex; align-items: center;
     justify-content: center; font-size: 1rem; margin-bottom: 10px;
 }
-.user-name  { color: #e6edf3 !important; font-weight: 700; font-size: .9rem; }
-.user-login { color: #484f58 !important; font-size: .75rem; margin-top: 2px; }
-
-/* ── NAV ── */
-.nav-btn {
-    display: block; width: 100%;
-    background: transparent; border: 1px solid #21273a;
-    border-radius: 8px; padding: 9px 14px; margin-bottom: 6px;
-    color: #8b949e; font-size: .82rem; font-weight: 500;
-    cursor: pointer; text-align: left; transition: all .18s;
-}
-.nav-btn:hover  { background: #1a2035; color: #c9d1d9; border-color: #2d3a5e; }
-.nav-btn.active { background: #0d2040; color: #58a6ff; border-color: #2d5fa8; font-weight: 700; }
+.user-name  { color: #F8FAFC !important; font-weight: 700; font-size: .9rem; }
+.user-login { color: #475569 !important; font-size: .75rem; margin-top: 2px; }
 
 /* ── FOOTER ── */
 .footer {
-    text-align: center; color: #2d333b; font-size: .72rem;
-    margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #161b27;
+    text-align: center; color: #334155; font-size: .72rem;
+    margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #1E293B;
 }
 
 /* ── LOGIN FORM ── */
 [data-testid="stForm"] {
-    background: #161b27; border: 1px solid #21273a;
+    background: #1E293B; border: 1px solid #334155;
     border-radius: 14px; padding: 24px 28px !important;
 }
-[data-testid="stCaptionContainer"] { color: #8b949e !important; font-size: .78rem !important; }
-hr { border-color: #21273a !important; margin: 1rem 0 !important; }
+[data-testid="stCaptionContainer"] { color: #94A3B8 !important; font-size: .78rem !important; }
+hr { border-color: #334155 !important; margin: 1rem 0 !important; }
+
+/* ── SELECT BOX ── */
+[data-testid="stSelectbox"] > div > div {
+    background: #1E293B !important; border: 1px solid #334155 !important;
+    border-radius: 8px !important; color: #F8FAFC !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -341,13 +342,14 @@ auth = _carregar_auth()
 
 if st.session_state.get("authentication_status") is not True:
     st.markdown("""
-    <div style="text-align:center; padding: 2.5rem 0 1rem;">
-        <div style="font-size:3.5rem; margin-bottom:.6rem;">📄</div>
-        <div style="color:#f0f6ff; font-size:1.35rem; font-weight:800; letter-spacing:-.3px;">
-            Conversor NFSe
+    <div style="text-align:center; padding: 2.5rem 0 1.5rem;">
+        <div style="font-size:3.2rem; margin-bottom:.5rem;">📊</div>
+        <span class="badge">Autenticação</span>
+        <div style="color:#F8FAFC; font-size:1.5rem; font-weight:800; letter-spacing:-.3px; margin-top:.4rem;">
+            🛡️ Acesso Restrito
         </div>
-        <div style="color:#484f58; font-size:.88rem; margin-top:.4rem;">
-            ISS Fortaleza &nbsp;·&nbsp; SPED GOV &nbsp;·&nbsp; Modelo Nacional 2026
+        <div style="color:#475569; font-size:.88rem; margin-top:.4rem;">
+            Identifique-se para acessar o sistema.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -362,8 +364,8 @@ if _status is False:
 
 if _status is None:
     st.markdown("""
-    <div style="text-align:center; color:#2d333b; font-size:.75rem; margin-top:2rem;">
-        Acesso restrito · Entre com suas credenciais acima
+    <div style="text-align:center; color:#334155; font-size:.75rem; margin-top:1.5rem;">
+        🔒 Acesso restrito · Entre com suas credenciais acima
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -402,7 +404,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown('<div style="color:#484f58;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Sistema</div>', unsafe_allow_html=True)
-    st.caption("Conversor NFSe  v1.3")
+    st.caption("Conversor NFS-e  v1.4")
     st.caption("Modelo Nacional 2026")
     st.caption("ISS Fortaleza / SPED GOV")
 
@@ -829,7 +831,7 @@ def pagina_usuarios():
 
     st.markdown("""
     <div class="footer">
-        Conversor NFSe v1.3 &nbsp;·&nbsp; Painel Administrativo
+        Conversor NFS-e v1.4&nbsp;·&nbsp; Painel Administrativo
     </div>
     """, unsafe_allow_html=True)
 
@@ -837,15 +839,23 @@ def pagina_usuarios():
 # ── PÁGINA: CONVERSOR ─────────────────────────────────────────────────────────
 def pagina_conversor():
     st.markdown("""
+    <div style="text-align:center; padding: 1rem 0 .5rem;">
+        <span class="badge">✦ NFS-e · Modelo Nacional 2026</span>
+        <div style="color:#F8FAFC; font-size:1.65rem; font-weight:800; letter-spacing:-.3px; margin:.4rem 0 .3rem;">
+            📊 Conversor Inteligente NFS-e
+        </div>
+        <div style="color:#475569; font-size:.88rem; margin-bottom:1.4rem;">
+            Processamento e Estruturação de Lotes XML
+        </div>
+    </div>
     <div class="hero">
-        <div class="hero-badge">✦ NFSe · Modelo Nacional 2026</div>
-        <div class="hero-title">Conversor de Notas Fiscais</div>
-        <p class="hero-sub">Transforme XMLs de NFSe no layout do portal ISS Fortaleza ou na planilha SPED GOV — direto do navegador, sem instalar nada.</p>
+        <div class="hero-title" style="font-size:1rem; margin-bottom:6px;">Sobre o sistema</div>
+        <p class="hero-sub">Transforme XMLs de NFS-e no layout do portal ISS Fortaleza ou na planilha SPED GOV — direto do navegador, sem instalar nada.</p>
         <div class="hero-chips">
             <span class="chip">📄 ISS Fortaleza</span>
             <span class="chip">📊 SPED GOV</span>
             <span class="chip">🔒 Acesso seguro</span>
-            <span class="chip">⚡ Segundos</span>
+            <span class="chip">⚡ Processamento rápido</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -981,7 +991,7 @@ def pagina_conversor():
 
     st.markdown("""
     <div class="footer">
-        Conversor NFSe v1.3 &nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
+        Conversor NFS-e v1.4&nbsp;·&nbsp; Modelo Nacional 2026 &nbsp;·&nbsp; ISS Fortaleza / SPED GOV
     </div>
     """, unsafe_allow_html=True)
 
