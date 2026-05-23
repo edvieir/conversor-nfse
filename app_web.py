@@ -166,8 +166,8 @@ div[data-testid="stFormSubmitButton"] > button:hover,
 
 /* ── ETAPAS ── */
 .step-header {
-    display: flex; align-items: flex-start; gap: 14px;
-    margin: 24px 0 12px;
+    display: flex; align-items: center; gap: 14px;
+    margin: 6px 0 12px;
 }
 .step-num {
     min-width: 32px; height: 32px;
@@ -940,6 +940,10 @@ def pagina_conversor():
     </div>
     """, unsafe_allow_html=True)
 
+    # Chave dinâmica para permitir limpeza total do uploader
+    if "upload_key" not in st.session_state:
+        st.session_state["upload_key"] = 0
+
     # ── ETAPA 1 ────────────────────────────────────────────────────────────────
     with st.container(border=True):
         st.markdown("""
@@ -955,6 +959,7 @@ def pagina_conversor():
             "xml_upload", type=["xml"],
             accept_multiple_files=True,
             label_visibility="collapsed",
+            key=f"uploader_{st.session_state['upload_key']}",
         )
 
         # Toast dinâmico ao detectar novos arquivos
@@ -969,17 +974,20 @@ def pagina_conversor():
 
         if uploaded:
             total = len(uploaded)
-            chips = "".join(
-                f'<span class="file-chip">📄 {u.name}</span>'
-                for u in uploaded[:8]
-            )
-            extra = f'<span class="file-chip-more">+{total - 8} mais</span>' if total > 8 else ""
-            st.markdown(f"""
-            <div class="file-list">
-                <div class="file-list-header">✅ {total} arquivo{'s' if total > 1 else ''} selecionado{'s' if total > 1 else ''}</div>
-                <div class="file-chips">{chips}{extra}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            col_status, col_limpar = st.columns([5, 1])
+            with col_status:
+                st.markdown(
+                    f'<div style="color:#10B981; font-size:.82rem; font-weight:600; padding:4px 0;">'
+                    f'✅&nbsp; {total} arquivo{"s" if total > 1 else ""} selecionado{"s" if total > 1 else ""}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with col_limpar:
+                if st.button("✕ Limpar", key="btn_clear", use_container_width=True,
+                             help="Remover todos os arquivos"):
+                    st.session_state["upload_key"] += 1
+                    st.session_state["_n_xml_prev"] = 0
+                    st.rerun()
 
     # ── ETAPA 2 ────────────────────────────────────────────────────────────────
     with st.container(border=True):
