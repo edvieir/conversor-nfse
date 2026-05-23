@@ -639,21 +639,40 @@ def processar_xlsx_sped(uploaded_files, im: str):
         desc = getattr(C, "CNAE9_TO_DESC", {}).get(cnae9, "")
         return f"{cnae9} - {desc}" if desc else cnae9
 
-    def _irrf_csll(xml_path):
-        """Extrai vRetIRRF e vRetCSLL do XML — parse_nfse não retorna esses campos."""
+    def _extrair_fed(xml_path):
+        """
+        Extrai todas as retenções federais diretamente do XML.
+
+        parse_nfse() tenta vPIS/vCOFINS como filhos diretos de tribFed,
+        mas no modelo nacional eles ficam em piscofins/vPis e piscofins/vCofins.
+        vRetIRRF e vRetCSLL também não são mapeados por parse_nfse().
+
+        Retorna: (vPIS, vCOFINS, vIRRF, vCSLL, vINSS)
+        """
         import xml.etree.ElementTree as ET
+
+        def _v(root, *tags):
+            """Busca o primeiro elemento cujo tag termina com qualquer um dos nomes."""
+            for tag in tags:
+                el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
+                if el is not None and el.text:
+                    try:
+                        return float(el.text.strip())
+                    except (ValueError, AttributeError):
+                        pass
+            return 0.0
+
         try:
             root = ET.parse(xml_path).getroot()
-            vals = []
-            for tag in ("vRetIRRF", "vRetCSLL"):
-                el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
-                try:
-                    vals.append(float(el.text.strip()) if el is not None and el.text else 0.0)
-                except (ValueError, AttributeError):
-                    vals.append(0.0)
-            return vals[0], vals[1]
+            return (
+                _v(root, "vPis",    "vPIS"),     # PIS   (piscofins/vPis ou tribFed/vPIS)
+                _v(root, "vCofins", "vCOFINS"),  # COFINS
+                _v(root, "vRetIRRF"),             # IRRF  (imposto de renda — coluna separada)
+                _v(root, "vRetCSLL"),             # CSLL  (contribuição social)
+                _v(root, "vINSS"),                # INSS  (se presente)
+            )
         except Exception:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0, 0.0
 
     with tempfile.TemporaryDirectory() as tmp:
         for uf_file in uploaded_files:
@@ -698,20 +717,19 @@ def processar_xlsx_sped(uploaded_files, im: str):
                     tipo_doc = "NFS-e de Outro Município"
                     natureza = "Tributação Fora do Município"
 
-                    vS      = _float(d.get("vS"))
-                    vISS    = _float(d.get("vISS"))
-                    vPIS    = _float(d.get("vPIS"))
-                    vCOFINS = _float(d.get("vCOFINS"))
-                    vINSS   = _float(d.get("vINSS"))
-                    # IRRF e CSLL: parse_nfse não os extrai — lidos diretamente do XML
-                    vIRRF, vCSLL = _irrf_csll(xml_path)
+                    vS   = _float(d.get("vS"))
+                    vISS = _float(d.get("vISS"))
+                    # parse_nfse() não extrai corretamente PIS/COFINS/IRRF/CSLL no modelo nacional
+                    # (nomes e caminhos divergem do XML real) — usamos _extrair_fed() diretamente
+                    vPIS, vCOFINS, vIRRF, vCSLL, vINSS = _extrair_fed(xml_path)
                     # Alíquota: usa o valor do XML; se vazio/zero, usa sugerido pela tabela CNAE
-                    aliq    = _float(d.get("aliq")) or float(aliq_cnae or 0)
-                    tpRet   = _str(d.get("tpRet", "1"))
+                    aliq   = _float(d.get("aliq")) or float(aliq_cnae or 0)
+                    tpRet  = _str(d.get("tpRet", "1"))
                     iss_retido = (tpRet == "2")
 
-                    # Retenções federais: PIS + COFINS + INSS + IRRF + CSLL
-                    ret_federais = vPIS + vCOFINS + vINSS + vIRRF + vCSLL
+                    # Contribuições Sociais Retidas = PIS + COFINS + CSLL
+                    # IRRF é imposto de renda (não é contribuição social) — vai só na coluna AB
+                    ret_federais = vPIS + vCOFINS + vCSLL
 
                     # Valor do ISS: só mostra se o tomador retém (tpRet=2), senão 0
                     valor_iss_col = vISS if iss_retido else 0
