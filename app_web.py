@@ -644,6 +644,13 @@ def processar_xlsx_sped(uploaded_files, im: str):
                         "Prestador",                       # AP Origem
                         "Não informada",                   # AQ Status Aceite
                     ])
+
+                    # Formatação numérica com 2 casas decimais nas colunas monetárias
+                    r = ws.max_row
+                    for col_mon in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
+                        ws.cell(row=r, column=col_mon).number_format = '#,##0.00'
+                    ws.cell(row=r, column=32).number_format = '0.00'  # Alíquota
+
                     total += 1
                     print(f"  OK   {nome_arq}")
                     print(f"       NFSe {d.get('nDFSe','')} | {d.get('nome','')[:35]}")
@@ -788,6 +795,28 @@ def pagina_usuarios():
                 _salvar_cfg(cfg)
                 st.markdown(f'<div class="success-box">✅ Usuário <strong>{login_remover}</strong> removido com sucesso.</div>', unsafe_allow_html=True)
                 st.rerun()
+
+    st.divider()
+
+    # ── Salvar logins permanentemente ──
+    st.markdown("#### 💾 Salvar logins permanentemente")
+    st.markdown("""
+    <div class="warn-box">
+        ⚠️ <strong>Importante:</strong> Logins criados aqui ficam salvos enquanto o servidor estiver rodando.
+        Para que não se percam após atualizações do sistema, baixe o arquivo abaixo e envie para o administrador técnico commitar no repositório.
+    </div>
+    """, unsafe_allow_html=True)
+
+    with open(_CFG_PATH, "rb") as f_cfg:
+        cfg_bytes = f_cfg.read()
+
+    st.download_button(
+        label="⬇  Baixar config.yaml atualizado",
+        data=cfg_bytes,
+        file_name="config.yaml",
+        mime="text/plain",
+        use_container_width=True,
+    )
 
     st.markdown("""
     <div class="footer">
