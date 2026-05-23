@@ -508,6 +508,8 @@ if not _CONVERSOR_OK and st.session_state.pagina == "conversor":
 # ── HELPER ────────────────────────────────────────────────────────────────────
 def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: str = ""):
     import xml.etree.ElementTree as _ET
+    import unicodedata as _ud
+    import re as _re
 
     def _comp_bytes(b):
         """Extrai competência MM/AAAA do conteúdo do XML."""
@@ -520,6 +522,54 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         except Exception:
             pass
         return ""
+
+    # ── Pré-leitura: monta lookup de retenção a partir dos XMLs originais ──────
+    # Necessário porque nfse_xml_to_txt.py tem dois bugs que precisamos corrigir:
+    #   BUG 1 – Campo 21 (tpRetISSQN): o script passa o valor da NFS-e nacional
+    #           diretamente, mas os significados são invertidos:
+    #           NFS-e tpRetISSQN=2 = "retido pelo tomador"
+    #           ISS Fortaleza campo 21=1 = "retido" (campo 21=2 = "a recolher")
+    #           → notas com tpRetISSQN=2 ficam com campo 21=2 ("a recolher") — ERRADO.
+    #   BUG 2 – Campos 39/40 (PIS/COFINS): o script busca tags 'vPIS'/'vCOFINS'
+    #           (maiúsculas), mas o XML usa 'vPis'/'vCofins' (misto). Case-sensitive
+    #           no ElementTree → valores nunca são encontrados → ficam vazios.
+    _ret_lookup = {}   # {numero_nota: {tpRet, vPis, vCofins}}
+    if modo == "txt":
+        for _uf in uploaded_files:
+            try:
+                _uf.seek(0)
+                _root = _ET.fromstring(_uf.read())
+                # Identificadores da nota (campo 18 do TXT pode ser nDFSe ou nNFSe)
+                _nDFSe = next((e.text or "" for e in _root.iter()
+                               if e.tag.endswith("nDFSe")), "").strip()
+                _nNFSe = next((e.text or "" for e in _root.iter()
+                               if e.tag.endswith("nNFSe")), "").strip()
+                # Tipo retenção ISS (1=não retido, 2=retido pelo tomador)
+                _tpRet = next((e.text or "1" for e in _root.iter()
+                               if e.tag.endswith("tpRetISSQN")), "1")
+                # Tipo retenção PIS/COFINS (1=só PIS, 2=só COFINS, 3=ambos)
+                _tpRetPC = next((e.text or "0" for e in _root.iter()
+                                 if e.tag.endswith("tpRetPisCofins")), "0")
+                # Valores de PIS e COFINS (busca case-insensitive via endswith)
+                _vPis    = next((e.text or "" for e in _root.iter()
+                                 if e.tag.lower().endswith("vpis")), "")
+                _vCofins = next((e.text or "" for e in _root.iter()
+                                 if e.tag.lower().endswith("vcofins")), "")
+                _rinfo = {
+                    "tpRet":   _tpRet,
+                    "vPis":    _vPis    if _tpRetPC in ("1", "3") else "",
+                    "vCofins": _vCofins if _tpRetPC in ("2", "3") else "",
+                }
+                for _nk in [_nDFSe, _nNFSe]:
+                    if _nk:
+                        _ret_lookup[_nk] = _rinfo
+            except Exception:
+                pass
+            finally:
+                try:
+                    _uf.seek(0)
+                except Exception:
+                    pass
 
     with tempfile.TemporaryDirectory() as tmp:
         ignorados = 0
@@ -551,32 +601,47 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         if os.path.exists(saida):
             with open(saida, "rb") as fh:
                 data = fh.read()
-            # ── Pós-processamento do TXT (padrão ISS Fortaleza) ──────────────
-            # Corrige dois problemas que nfse_xml_to_txt.py não resolve:
-            #   1. Natureza (campo 30): quando o local de prestação (campo 29)
-            #      é Fortaleza (2304400), deve ser "1" (tributação no município),
-            #      não "2" (fora do município).
-            #   2. Descrição (campo 26): remove acentos e caracteres não-ASCII
-            #      que causam erro de importação no portal ISS Fortaleza.
-            if modo == "txt" and data:
-                import unicodedata as _ud
 
+            if modo == "txt" and data:
                 def _fix_linha(linha: str) -> str:
                     cs = linha.split(";")
                     if len(cs) != 46:
                         return linha
+
                     # Campo 26 (índice 25) – descrição: remove acentos E pontuações
-                    # Mantém apenas letras, dígitos e espaço simples
-                    import re as _re
                     _desc = "".join(
-                        c for c in _ud.normalize("NFD", cs[25])
-                        if ord(c) < 128
+                        c for c in _ud.normalize("NFD", cs[25]) if ord(c) < 128
                     )
                     _desc = _re.sub(r"[^A-Za-z0-9 ]", " ", _desc)
                     cs[25] = _re.sub(r" {2,}", " ", _desc).strip()
+
                     # Campo 30 (índice 29) – natureza: prestação em Fortaleza → "1"
                     if cs[28] == "2304400":
                         cs[29] = "1"
+
+                    # Lookup pelo número da nota (campo 18 = índice 17)
+                    _rinfo = _ret_lookup.get(cs[17].strip(), {})
+
+                    # Campo 21 (índice 20) – tipo recolhimento
+                    # tpRetISSQN=2 → ISS retido pelo tomador
+                    # ISS Fortaleza: campo 21=1 significa "retido" (não "2"!)
+                    if _rinfo.get("tpRet") == "2" and cs[20] == "2":
+                        cs[20] = "1"
+
+                    # Campo 39 (índice 38) – PIS em centavos (quando retido)
+                    if _rinfo.get("vPis") and not cs[38].strip():
+                        try:
+                            cs[38] = str(int(round(float(_rinfo["vPis"]) * 100)))
+                        except Exception:
+                            pass
+
+                    # Campo 40 (índice 39) – COFINS em centavos (quando retido)
+                    if _rinfo.get("vCofins") and not cs[39].strip():
+                        try:
+                            cs[39] = str(int(round(float(_rinfo["vCofins"]) * 100)))
+                        except Exception:
+                            pass
+
                     return ";".join(cs)
 
                 texto  = data.decode("utf-8")
