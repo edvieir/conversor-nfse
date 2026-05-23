@@ -544,11 +544,15 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # Buscar em todo o iter() pode capturar tags homônimas aninhadas.
                 _infNFSe = next((e for e in _root.iter()
                                  if e.tag.endswith("infNFSe")), _root)
+                # nNFSe = número oficial da nota (exibido no DANFSe e usado pelo portal)
+                _nNFSe_val = next((c.text.strip() for c in _infNFSe
+                                   if c.tag.endswith("nNFSe") and c.text), "")
+                # chave do lookup = mesma lógica do nfse_xml_to_txt.py:
+                # nDFSe primeiro (filho direto de infNFSe), depois nNFSe
                 _nota_num = (
                     next((c.text.strip() for c in _infNFSe
                           if c.tag.endswith("nDFSe") and c.text), "")
-                    or next((c.text.strip() for c in _infNFSe
-                             if c.tag.endswith("nNFSe") and c.text), "")
+                    or _nNFSe_val
                 )
                 # Tipo retenção ISS (1=não retido, 2=retido pelo tomador)
                 _tpRet = next((e.text or "1" for e in _root.iter()
@@ -576,10 +580,11 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 _vBC  = next((e.text or "" for e in _root.iter()
                               if e.tag.endswith("vBC")), "")
                 _rinfo = {
-                    "tpRet": _tpRet,
-                    "aliq":  _aliq,
-                    "vISS":  _vISS,
-                    "vBC":   _vBC,
+                    "tpRet":  _tpRet,
+                    "aliq":   _aliq,
+                    "vISS":   _vISS,
+                    "vBC":    _vBC,
+                    "nNFSe":  _nNFSe_val,   # número oficial (DANFSe)
                     # PIS/COFINS não entram nos campos 39/40:
                     # quando são "Débito Apuração Própria" o emitente os recolhe
                     # por conta própria — não são retidos pelo tomador em Fortaleza.
@@ -647,6 +652,13 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
 
                     # Lookup pelo número da nota (campo 18 = índice 17)
                     _rinfo = _ret_lookup.get(cs[17].strip(), {})
+
+                    # Campo 18 (índice 17) – número da nota
+                    # nfse_xml_to_txt.py pode usar nDFSe (número interno),
+                    # mas o número oficial exibido no DANFSe e reconhecido
+                    # pelo portal é sempre o nNFSe. Substitui sempre por ele.
+                    if _rinfo.get("nNFSe"):
+                        cs[17] = _rinfo["nNFSe"]
 
                     # Campo 21 (índice 20) – tipo recolhimento
                     # tpRetISSQN=2 → ISS retido pelo tomador
