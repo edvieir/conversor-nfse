@@ -452,43 +452,118 @@ def _hash_senha(senha: str) -> str:
 
 
 def processar_xlsx_sped(uploaded_files, im: str):
-    """Gera XLSX SPED GOV usando parse_nfse() diretamente — processa TODOS os XMLs."""
+    """Gera XLSX no layout exato do SPED GOV — aba 'Serviços Tomados', 43 colunas."""
     import glob as _glob
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    # Cabeçalhos e larguras exatas do SPED GOV
+    COLUNAS = [
+        ("Tipo Doc.",                       24.14),
+        ("Número",                          10.28),
+        ("Código de Verificação",           23.57),
+        ("Competência",                     14.57),
+        ("Data",                            11.42),
+        ("Vencimento",                      13.42),
+        ("Número RPS",                      18.42),
+        ("Série RPS",                       11.14),
+        ("Tipo RPS",                        10.28),
+        ("Natureza da Operação",            27.71),
+        ("Regime Especial Tributação",      52.14),
+        ("Operação Simples Nacional",       29.28),
+        ("Incentivador Cultural",           22.85),
+        ("Item da Lista",                   14.57),
+        ("CNAE",                           123.14),
+        ("ART",                              5.28),
+        ("Código Obra",                     13.85),
+        ("Número Empenho",                  19.42),
+        ("Discriminação dos Serviços",     141.14),
+        ("Valor dos Serviços",              20.28),
+        ("Deduções Permitidas em Lei",      30.42),
+        ("Desconto Condicionado",           25.28),
+        ("Desconto Incondicionado",         27.00),
+        ("Retenções Federais",              21.28),
+        ("Outras Retenções",               19.42),
+        ("PIS",                              4.42),
+        ("COFINS",                           8.85),
+        ("IRRF",                             5.71),
+        ("CSLL",                             6.14),
+        ("INSS",                             5.85),
+        ("Base de Cálculo",                 17.28),
+        ("Alíquota",                         9.85),
+        ("Local da Prestação",              22.14),
+        ("ISS Retido",                      11.71),
+        ("Valor do ISS",                    13.85),
+        ("Valor Líquido",                   14.85),
+        ("Status Doc.",                     13.00),
+        ("Inscrição Prestador",             21.14),
+        ("CPF/CNPJ Prestador",              21.42),
+        ("Razão Social/Nome do Prestador",  58.57),
+        ("Escrituração",                    13.85),
+        ("Origem",                           9.71),
+        ("Status Aceite",                   14.85),
+    ]
+
+    IBGE_FORTALEZA = "2304400"
+
+    def _float(v):
+        try:
+            return float(v) if v else 0.0
+        except Exception:
+            return 0.0
+
+    def _str(v):
+        return str(v).strip() if v else ""
+
+    def _data_fmt(iso, fmt):
+        """Converte ISO date para DD/MM/YYYY ou MM/YYYY."""
+        if not iso:
+            return ""
+        data_part = iso[:10]  # YYYY-MM-DD
+        try:
+            partes = data_part.split("-")
+            if fmt == "mes":
+                return f"{partes[1]}/{partes[0]}"
+            else:
+                return f"{partes[2]}/{partes[1]}/{partes[0]}"
+        except Exception:
+            return iso
+
+    def _local_prestacao(d):
+        xLP = _str(d.get("xLP", ""))
+        uf  = _str(d.get("uf", ""))
+        if xLP and uf:
+            return f"{xLP.upper()} - {uf.upper()}"
+        xMun = _str(d.get("xMun", ""))
+        return f"{xMun.upper()} - {uf.upper()}" if xMun and uf else xLP or xMun
+
+    def _cnae_desc(cnae9):
+        desc = getattr(C, "CNAE9_TO_DESC", {}).get(cnae9, "")
+        return f"{cnae9} - {desc}" if desc else cnae9
 
     with tempfile.TemporaryDirectory() as tmp:
-        for uf in uploaded_files:
-            uf.seek(0)
-            with open(os.path.join(tmp, uf.name), "wb") as fh:
-                fh.write(uf.read())
+        for uf_file in uploaded_files:
+            uf_file.seek(0)
+            with open(os.path.join(tmp, uf_file.name), "wb") as fh:
+                fh.write(uf_file.read())
 
         arquivos = sorted(_glob.glob(os.path.join(tmp, "*.xml")))
 
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "NFSe SPED GOV"
+        ws.title = "Serviços Tomados"
 
-        colunas = [
-            "Nº NFSe", "Data Emissão", "CNPJ Prestador", "Razão Social",
-            "Município Prestador", "UF", "Cód. Tributação Nacional",
-            "CNAE", "Item LC 116", "Descrição Serviço",
-            "Município Prestação", "Valor Serviço (R$)",
-            "Alíquota ISS (%)", "Valor ISS (R$)", "Tipo Retenção ISS",
-            "PIS (R$)", "COFINS (R$)", "INSS (R$)",
-        ]
+        # Cabeçalho — bold, tamanho 11, fill indexado 55 (igual ao original)
+        header_fill = PatternFill(fill_type="solid", fgColor="C0C0C0")  # cinza prata próximo ao original
+        header_font = Font(bold=True, size=11)
 
-        header_fill = PatternFill(start_color="1558B8", end_color="1558B8", fill_type="solid")
-        header_font = Font(bold=True, color="FFFFFF", size=10)
-
-        for col, titulo in enumerate(colunas, 1):
-            cell = ws.cell(row=1, column=col, value=titulo)
+        for col_idx, (titulo, largura) in enumerate(COLUNAS, 1):
+            cell = ws.cell(row=1, column=col_idx, value=titulo)
+            cell.font = header_fill and header_font
             cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-        ws.row_dimensions[1].height = 30
-        ws.freeze_panes = "A2"
+            letra = get_column_letter(col_idx)
+            ws.column_dimensions[letra].width = largura
 
         buf   = io.StringIO()
         total = 0
@@ -496,50 +571,85 @@ def processar_xlsx_sped(uploaded_files, im: str):
 
         with contextlib.redirect_stdout(buf):
             for xml_path in arquivos:
-                nome = os.path.basename(xml_path)
+                nome_arq = os.path.basename(xml_path)
                 try:
-                    dados = C.parse_nfse(xml_path)
+                    d = C.parse_nfse(xml_path)
 
                     if im:
-                        dados["im"] = im
+                        d["im"] = im
 
-                    cnae9, item, _ = C.resolver_cnae9(dados)
+                    cnae9, item, _ = C.resolver_cnae9(d)
+                    dhEmi = _str(d.get("dhEmi", ""))
 
-                    dhEmi = dados.get("dhEmi", "")
-                    if dhEmi and "T" in dhEmi:
-                        dhEmi = dhEmi[:10]
+                    # Tipo Doc. e Natureza da Operação dependem do município emitente
+                    cmun = _str(d.get("cmun", ""))
+                    cLP  = _str(d.get("cLP", ""))
+                    eh_fortaleza = (cmun == IBGE_FORTALEZA or cLP == IBGE_FORTALEZA)
+
+                    tipo_doc   = "NFS-e" if eh_fortaleza else "NFS-e de Outro Município"
+                    natureza   = "Tributação no Município" if eh_fortaleza else "Tributação Fora do Município"
+
+                    vS     = _float(d.get("vS"))
+                    vISS   = _float(d.get("vISS"))
+                    vPIS   = _float(d.get("vPIS"))
+                    vCOFINS= _float(d.get("vCOFINS"))
+                    vINSS  = _float(d.get("vINSS"))
+                    aliq   = _float(d.get("aliq"))
+                    tpRet  = _str(d.get("tpRet", "1"))
+
+                    ret_federais = vPIS + vCOFINS + vINSS
 
                     ws.append([
-                        dados.get("nDFSe", ""),
-                        dhEmi,
-                        dados.get("cnpj", ""),
-                        dados.get("nome", ""),
-                        dados.get("xMun", ""),
-                        dados.get("uf", ""),
-                        dados.get("cTN", ""),
-                        cnae9,
-                        item,
-                        dados.get("desc", ""),
-                        dados.get("xLP", "") or dados.get("cLP", ""),
-                        dados.get("vS", ""),
-                        dados.get("aliq", ""),
-                        dados.get("vISS", ""),
-                        dados.get("tpRet", ""),
-                        dados.get("vPIS", ""),
-                        dados.get("vCOFINS", ""),
-                        dados.get("vINSS", ""),
+                        tipo_doc,                          # A  Tipo Doc.
+                        _str(d.get("nDFSe")),             # B  Número
+                        None,                              # C  Código de Verificação
+                        _data_fmt(dhEmi, "mes"),           # D  Competência
+                        _data_fmt(dhEmi, "dia"),           # E  Data
+                        "",                                # F  Vencimento
+                        "",                                # G  Número RPS
+                        "",                                # H  Série RPS
+                        "",                                # I  Tipo RPS
+                        natureza,                          # J  Natureza da Operação
+                        "",                                # K  Regime Especial Tributação
+                        "Não",                             # L  Operação Simples Nacional
+                        None,                              # M  Incentivador Cultural
+                        item,                              # N  Item da Lista
+                        _cnae_desc(cnae9),                 # O  CNAE
+                        "",                                # P  ART
+                        "",                                # Q  Código Obra
+                        "",                                # R  Número Empenho
+                        _str(d.get("desc")),               # S  Discriminação dos Serviços
+                        vS,                                # T  Valor dos Serviços
+                        "",                                # U  Deduções Permitidas em Lei
+                        "",                                # V  Desconto Condicionado
+                        "",                                # W  Desconto Incondicionado
+                        ret_federais if ret_federais else 0, # X Retenções Federais
+                        "",                                # Y  Outras Retenções
+                        vPIS if vPIS else "",              # Z  PIS
+                        vCOFINS if vCOFINS else "",        # AA COFINS
+                        "",                                # AB IRRF
+                        "",                                # AC CSLL
+                        vINSS if vINSS else "",            # AD INSS
+                        vS,                                # AE Base de Cálculo
+                        aliq,                              # AF Alíquota
+                        _local_prestacao(d),               # AG Local da Prestação
+                        "Sim" if tpRet == "2" else "Não",  # AH ISS Retido
+                        vISS,                              # AI Valor do ISS
+                        vS,                                # AJ Valor Líquido
+                        "NORMAL",                          # AK Status Doc.
+                        _str(d.get("im")),                 # AL Inscrição Prestador
+                        _str(d.get("cnpj")),               # AM CPF/CNPJ Prestador
+                        _str(d.get("nome")),               # AN Razão Social/Nome do Prestador
+                        "Atual",                           # AO Escrituração
+                        "Prestador",                       # AP Origem
+                        "Não informada",                   # AQ Status Aceite
                     ])
                     total += 1
-                    print(f"  OK   {nome}")
-                    print(f"       NFSe {dados.get('nDFSe','')} | {dados.get('nome','')[:30]}")
+                    print(f"  OK   {nome_arq}")
+                    print(f"       NFSe {d.get('nDFSe','')} | {d.get('nome','')[:35]}")
                 except Exception as exc:
-                    erros.append((nome, str(exc)))
-                    print(f"  ERRO {nome}: {exc}")
-
-        # Largura automática das colunas
-        for col in ws.columns:
-            max_len = max((len(str(cell.value or "")) for cell in col), default=0)
-            ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 2, 12), 45)
+                    erros.append((nome_arq, str(exc)))
+                    print(f"  ERRO {nome_arq}: {exc}")
 
         print(f"\n  Processadas: {total} nota(s)")
         if erros:
@@ -547,7 +657,7 @@ def processar_xlsx_sped(uploaded_files, im: str):
             for n, e in erros:
                 print(f"    - {n}: {e}")
 
-        log  = buf.getvalue()
+        log   = buf.getvalue()
         saida = os.path.join(tmp, "resultado.xlsx")
         wb.save(saida)
 
