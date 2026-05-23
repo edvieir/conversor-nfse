@@ -10,3 +10,9 @@ credentials:
       logged_in: false
       name: Administrador
       password: $2b$12$tCnaY8JbpA77fYT3nUJuO.9udU9WkljpP/xMZ0lj2op37oStfeZ02
+    calebe:
+      name: Calebe
+      email: calebe@exemplo.com
+      password: $2b$12$ZpQGsSex3iHn2tb1IjRpPedH8akyA5ekSgB/B.zSg5GXcLsUwQmH6
+      failed_login_attempts: 0
+      logged_in: false
