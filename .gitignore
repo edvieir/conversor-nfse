@@ -1,0 +1,44 @@
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Arquivos de saída gerados
+notas_servicos_*.txt
+sped_servicos_*.xlsx
+resultado_*.txt
+resultado_*.xlsx
+
+# Pasta com XMLs de teste (dados sensíveis)
+NFE/
+
+# Imagens grandes desnecessárias
+Gemini_Generated_Image_*.png
+
+# Claude Code
+.claude/
+
+# Secrets locais do Streamlit
+.streamlit/secrets.toml
+
+# VS Code / IDEs
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Arquivos temporários
+*.tmp
+*.log
