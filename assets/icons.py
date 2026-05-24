@@ -52,90 +52,147 @@ def icon(name: str, size: int = 16, color: str = "currentColor", extra_style: st
 
 SVG_LOGIN_GRAPHIC = """
 <div style="margin-bottom:1.8rem;">
-<svg viewBox="0 0 480 155" xmlns="http://www.w3.org/2000/svg"
-     style="width:100%;border-radius:14px;display:block;">
+<svg viewBox="0 0 520 168" xmlns="http://www.w3.org/2000/svg"
+     style="width:100%;border-radius:16px;display:block;">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
       <stop offset="0%"   stop-color="#0D1117"/>
-      <stop offset="50%"  stop-color="#0A1828"/>
-      <stop offset="100%" stop-color="#0D1117"/>
+      <stop offset="100%" stop-color="#091420"/>
     </linearGradient>
-    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="tealG" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%"   stop-color="#00CED1"/>
-      <stop offset="100%" stop-color="#008C8C"/>
+      <stop offset="100%" stop-color="#007A80"/>
     </linearGradient>
-    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <linearGradient id="cardL" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#131C28"/>
+      <stop offset="100%" stop-color="#0D1520"/>
+    </linearGradient>
+    <linearGradient id="cardC" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#071E22"/>
+      <stop offset="100%" stop-color="#041318"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="softglow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="g4" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
   <!-- Fundo -->
-  <rect width="480" height="155" rx="14" fill="url(#bg)"/>
+  <rect width="520" height="168" rx="16" fill="url(#bg)"/>
 
-  <!-- Brilho difuso atrás do nó central -->
-  <circle cx="240" cy="77" r="60" fill="#00CED1" opacity="0.05"/>
-  <circle cx="240" cy="77" r="42" fill="#00CED1" opacity="0.05"/>
-
-  <!-- ── Linhas de conexão ── -->
-  <!-- Esquerda → Centro -->
-  <line x1="129" y1="77" x2="193" y2="77"
-        stroke="#1C3A44" stroke-width="1.5" stroke-dasharray="5,5"
-        stroke-linecap="round"/>
-  <polygon points="191,72 202,77 191,82" fill="#1C4050"/>
-  <!-- Centro → Direita -->
-  <line x1="283" y1="77" x2="345" y2="77"
-        stroke="#1C3A44" stroke-width="1.5" stroke-dasharray="5,5"
-        stroke-linecap="round"/>
-  <polygon points="343,72 354,77 343,82" fill="#1C4050"/>
-
-  <!-- ── NÓ ESQUERDO — XML ── -->
-  <circle cx="96" cy="77" r="33" fill="#0A1520" stroke="#1E3D54" stroke-width="1.8"/>
-  <!-- Ícone documento -->
-  <g transform="translate(83,62)"
-     fill="none" stroke="#3A7090" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M2 0 L15 0 L22 7 L22 26 L2 26 Z" stroke-width="1.5"/>
-    <path d="M15 0 L15 7 L22 7"               stroke-width="1.5"/>
-    <line x1="6" y1="13" x2="18" y2="13"      stroke-width="1.3"/>
-    <line x1="6" y1="17" x2="18" y2="17"      stroke-width="1.3"/>
-    <line x1="6" y1="21" x2="14" y2="21"      stroke-width="1.3"/>
+  <!-- Grade de pontos sutil -->
+  <g opacity="0.22">
+    <rect x="0" y="0" width="520" height="168" rx="16" fill="none"/>
+    <!-- linha de pontos horizontal -->
+    <circle cx="40"  cy="28"  r="1" fill="#1E3040"/>
+    <circle cx="80"  cy="28"  r="1" fill="#1E3040"/>
+    <circle cx="440" cy="28"  r="1" fill="#1E3040"/>
+    <circle cx="480" cy="28"  r="1" fill="#1E3040"/>
+    <circle cx="40"  cy="140" r="1" fill="#1E3040"/>
+    <circle cx="80"  cy="140" r="1" fill="#1E3040"/>
+    <circle cx="440" cy="140" r="1" fill="#1E3040"/>
+    <circle cx="480" cy="140" r="1" fill="#1E3040"/>
   </g>
-  <text x="96" y="123" text-anchor="middle"
-        fill="#3A5570" font-size="9" font-family="Inter,sans-serif"
-        font-weight="700" letter-spacing="1.5">XML</text>
 
-  <!-- ── NÓ CENTRAL — CONVERSOR ── -->
-  <circle cx="240" cy="77" r="42" fill="#071E22"
-          stroke="url(#teal)" stroke-width="2.5" filter="url(#glow)"/>
-  <!-- Anel interno sutil -->
-  <circle cx="240" cy="77" r="33" fill="none"
-          stroke="#00CED1" stroke-width="0.6" opacity="0.2"/>
-  <!-- Seta play (mais refinada) -->
-  <polygon points="229,63 256,77 229,91"
-           fill="url(#teal)" filter="url(#softglow)"/>
-  <text x="240" y="135" text-anchor="middle"
-        fill="#00CED1" font-size="9" font-family="Inter,sans-serif"
-        font-weight="700" letter-spacing="1.5">CONVERSOR</text>
+  <!-- Brilho teal difuso atrás do card central -->
+  <rect x="170" y="18" width="180" height="132" rx="24"
+        fill="#00CED1" opacity="0.07" filter="url(#glow)"/>
 
-  <!-- ── NÓ DIREITO — TXT / XLSX ── -->
-  <circle cx="384" cy="77" r="33" fill="#0A1520" stroke="#1E3D54" stroke-width="1.8"/>
-  <!-- Ícone planilha -->
-  <g transform="translate(370,63)"
-     fill="none" stroke="#3A7090" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="0" y="0" width="28" height="24" rx="2" stroke-width="1.5"/>
-    <path d="M0 0 L28 0 L28 8 L0 8 Z" fill="#193040" opacity="0.7" stroke="none"/>
-    <line x1="0"  y1="8"  x2="28" y2="8"  stroke-width="0.9"/>
-    <line x1="0"  y1="16" x2="28" y2="16" stroke-width="0.9"/>
-    <line x1="9"  y1="8"  x2="9"  y2="24" stroke-width="0.9"/>
-    <line x1="19" y1="8"  x2="19" y2="24" stroke-width="0.9"/>
+  <!-- ══ CARD ESQUERDO — XML ══ -->
+  <rect x="28" y="28" width="128" height="112" rx="14"
+        fill="url(#cardL)" stroke="#1C3044" stroke-width="1.4"/>
+
+  <!-- Ícone: documento com dobra no canto -->
+  <g transform="translate(64, 46)" fill="none"
+     stroke="#3E7090" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6">
+    <path d="M4 0 L32 0 L32 4 L36 4 L36 44 L4 44 Z"/>
+    <path d="M32 0 L32 8 L40 8"/>
+    <path d="M0 4 L32 4 L32 8 L40 8 L40 48 L0 48 Z"
+          fill="#0E1E2E" stroke="#2A5070" stroke-width="1.4"/>
+    <line x1="8"  y1="20" x2="32" y2="20" stroke-width="1.3"/>
+    <line x1="8"  y1="27" x2="32" y2="27" stroke-width="1.3"/>
+    <line x1="8"  y1="34" x2="22" y2="34" stroke-width="1.3"/>
   </g>
-  <text x="384" y="123" text-anchor="middle"
-        fill="#3A5570" font-size="9" font-family="Inter,sans-serif"
-        font-weight="700" letter-spacing="1.5">TXT / XLSX</text>
+
+  <!-- Badge XML -->
+  <rect x="44" y="104" width="40" height="16" rx="5"
+        fill="#0E1E30" stroke="#1C3850" stroke-width="1"/>
+  <text x="64" y="115.5" text-anchor="middle"
+        fill="#3E7090" font-size="8" font-family="'Courier New',monospace"
+        font-weight="700">&lt;/&gt;</text>
+
+  <!-- Label -->
+  <text x="92" y="152" text-anchor="middle"
+        fill="#3A5570" font-size="10" font-family="Inter,sans-serif"
+        font-weight="700" letter-spacing="2">XML</text>
+
+  <!-- ══ SETA ESQUERDA ══ -->
+  <line x1="160" y1="84" x2="196" y2="84"
+        stroke="#1C3A44" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
+  <path d="M193,79 L203,84 L193,89"
+        fill="none" stroke="#265060" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ══ CARD CENTRAL — CONVERSOR ══ -->
+  <!-- Borda brilhante externa -->
+  <rect x="204" y="16" width="112" height="104" rx="18"
+        fill="none" stroke="#00CED1" stroke-width="2.5" opacity="0.9"
+        filter="url(#glow)"/>
+  <!-- Card principal -->
+  <rect x="204" y="16" width="112" height="104" rx="18"
+        fill="url(#cardC)" stroke="#00CED1" stroke-width="2"/>
+  <!-- Anel interno -->
+  <rect x="216" y="28" width="88" height="80" rx="12"
+        fill="none" stroke="#00CED1" stroke-width="0.5" opacity="0.18"/>
+
+  <!-- Ícone raio (zap) — grande, centralizado -->
+  <g transform="translate(234, 34)" filter="url(#g4)">
+    <polygon points="22,0 8,28 20,28 14,52 42,20 26,20 34,0"
+             fill="url(#tealG)"/>
+  </g>
+
+  <!-- Label -->
+  <text x="260" y="138" text-anchor="middle"
+        fill="#00CED1" font-size="10" font-family="Inter,sans-serif"
+        font-weight="700" letter-spacing="2">CONVERSOR</text>
+
+  <!-- ══ SETA DIREITA ══ -->
+  <line x1="320" y1="84" x2="356" y2="84"
+        stroke="#1C3A44" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
+  <path d="M353,79 L363,84 L353,89"
+        fill="none" stroke="#265060" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ══ CARD DIREITO — TXT / XLSX ══ -->
+  <rect x="364" y="28" width="128" height="112" rx="14"
+        fill="url(#cardL)" stroke="#1C3044" stroke-width="1.4"/>
+
+  <!-- Ícone: planilha/tabela -->
+  <g transform="translate(380, 46)" fill="none"
+     stroke="#3E7090" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="0" y="0" width="56" height="48" rx="5" stroke-width="1.6"/>
+    <!-- Header -->
+    <rect x="0" y="0" width="56" height="14" rx="5" fill="#162838" stroke="none"/>
+    <rect x="1" y="1" width="54" height="12" rx="4" fill="#162838" stroke="none"/>
+    <line x1="0"  y1="14" x2="56" y2="14" stroke-width="1"/>
+    <line x1="0"  y1="28" x2="56" y2="28" stroke-width="1"/>
+    <line x1="0"  y1="38" x2="56" y2="38" stroke-width="1"/>
+    <line x1="18" y1="14" x2="18" y2="48" stroke-width="1"/>
+    <line x1="37" y1="14" x2="37" y2="48" stroke-width="1"/>
+    <!-- Dados simulados nas células -->
+    <rect x="4"  y="17" width="10" height="7" rx="1" fill="#1A3040" stroke="none"/>
+    <rect x="21" y="17" width="12" height="7" rx="1" fill="#142830" stroke="none"/>
+    <rect x="40" y="17" width="12" height="7" rx="1" fill="#1A3040" stroke="none"/>
+  </g>
+
+  <!-- Label -->
+  <text x="428" y="152" text-anchor="middle"
+        fill="#3A5570" font-size="10" font-family="Inter,sans-serif"
+        font-weight="700" letter-spacing="2">TXT / XLSX</text>
 </svg>
 </div>
 """
