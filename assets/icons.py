@@ -51,87 +51,47 @@ def icon(name: str, size: int = 16, color: str = "currentColor", extra_style: st
 # ── ILUSTRAÇÃO SVG DA TELA DE LOGIN ─────────────────────────────────────────────
 
 SVG_LOGIN_GRAPHIC = """
-<div style="margin-bottom:1.8rem;">
-<svg viewBox="0 0 480 128" xmlns="http://www.w3.org/2000/svg"
-     style="width:100%;border-radius:14px;display:block;overflow:hidden;">
+<div style="margin-bottom:1.6rem;">
+<svg viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg"
+     style="width:100%;border-radius:12px;display:block;">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0D1117"/>
-      <stop offset="100%" stop-color="#091420"/>
+    <linearGradient id="bg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   style="stop-color:#0A192F"/>
+      <stop offset="100%" style="stop-color:#112240"/>
     </linearGradient>
-    <linearGradient id="tG" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00CED1"/>
-      <stop offset="100%" stop-color="#008080"/>
+    <linearGradient id="ga" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#00CED1"/>
+      <stop offset="100%" style="stop-color:#20B2AA"/>
     </linearGradient>
   </defs>
-
-  <!-- Fundo -->
-  <rect width="480" height="128" rx="14" fill="url(#bg)"/>
-
-  <!-- Brilho teal sem filter — simples opacidade -->
-  <rect x="188" y="8" width="104" height="98" rx="16" fill="#00CED1" opacity="0.08"/>
-  <rect x="194" y="12" width="92"  height="90" rx="13" fill="#00CED1" opacity="0.05"/>
-
-  <!-- ═══ CARD ESQUERDO — XML ═══ -->
-  <rect x="20" y="20" width="100" height="76" rx="12"
-        fill="#0C1824" stroke="#1C3550" stroke-width="1.5"/>
-  <!-- Ícone documento -->
-  <path d="M52 34 L70 34 L78 42 L78 58 L52 58 Z"
-        fill="#0E1E2E" stroke="#2A5878" stroke-width="1.5"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M70 34 L70 42 L78 42"
-        fill="none" stroke="#2A5878" stroke-width="1.5"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="57" y1="47" x2="73" y2="47" stroke="#2A5878" stroke-width="1.2"/>
-  <line x1="57" y1="51" x2="73" y2="51" stroke="#2A5878" stroke-width="1.2"/>
-  <line x1="57" y1="55" x2="65" y2="55" stroke="#2A5878" stroke-width="1.2"/>
-  <!-- Label XML -->
-  <text x="70" y="109" text-anchor="middle" fill="#2A4A65"
-        font-size="9" font-family="Inter,sans-serif" font-weight="700"
-        letter-spacing="2">XML</text>
-
-  <!-- ═══ SETA ESQUERDA ═══ -->
-  <line x1="122" y1="58" x2="180" y2="58"
-        stroke="#182C3A" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
-  <path d="M177,54 L187,58 L177,62"
-        fill="none" stroke="#234050" stroke-width="1.8"
-        stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- ═══ CARD CENTRAL — CONVERSOR ═══ -->
-  <rect x="190" y="10" width="100" height="96" rx="14"
-        fill="#071C20" stroke="#00CED1" stroke-width="2"/>
-  <!-- Raio zap centrado em (240, 58) — sem filter -->
-  <polygon points="243,26 221,60 240,60 238,90 261,54 240,54 243,26"
-           fill="url(#tG)"/>
-  <!-- Label CONVERSOR -->
-  <text x="240" y="120" text-anchor="middle" fill="#00CED1"
-        font-size="9" font-family="Inter,sans-serif" font-weight="700"
-        letter-spacing="2">CONVERSOR</text>
-
-  <!-- ═══ SETA DIREITA ═══ -->
-  <line x1="292" y1="58" x2="350" y2="58"
-        stroke="#182C3A" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
-  <path d="M347,54 L357,58 L347,62"
-        fill="none" stroke="#234050" stroke-width="1.8"
-        stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- ═══ CARD DIREITO — TXT / XLSX ═══ -->
-  <rect x="360" y="20" width="100" height="76" rx="12"
-        fill="#0C1824" stroke="#1C3550" stroke-width="1.5"/>
-  <!-- Ícone planilha -->
-  <rect x="374" y="30" width="58" height="48" rx="4"
-        fill="none" stroke="#2A5878" stroke-width="1.5"/>
-  <rect x="374" y="30" width="58" height="13"
-        fill="#112030" stroke="none"/>
-  <line x1="374" y1="43" x2="432" y2="43" stroke="#2A5878" stroke-width="1"/>
-  <line x1="374" y1="56" x2="432" y2="56" stroke="#2A5878" stroke-width="1"/>
-  <line x1="374" y1="67" x2="432" y2="67" stroke="#2A5878" stroke-width="1"/>
-  <line x1="393" y1="43" x2="393" y2="78" stroke="#2A5878" stroke-width="1"/>
-  <line x1="413" y1="43" x2="413" y2="78" stroke="#2A5878" stroke-width="1"/>
-  <!-- Label TXT/XLSX -->
-  <text x="410" y="109" text-anchor="middle" fill="#2A4A65"
-        font-size="9" font-family="Inter,sans-serif" font-weight="700"
-        letter-spacing="2">TXT / XLSX</text>
+  <rect width="100%" height="100%" rx="12" fill="url(#bg1)"/>
+  <!-- nós -->
+  <circle cx="80"  cy="60" r="22" fill="none" stroke="#2F6FEB" stroke-width="2.5"/>
+  <circle cx="200" cy="60" r="30" fill="none" stroke="url(#ga)" stroke-width="3.5"/>
+  <circle cx="320" cy="60" r="22" fill="none" stroke="#2F6FEB" stroke-width="2.5"/>
+  <!-- linhas tracejadas -->
+  <path d="M102 60 L170 60" stroke="#2A3A50" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <path d="M230 60 L298 60" stroke="#2A3A50" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <!-- ícone XML (doc) -->
+  <rect x="71" y="50" width="18" height="22" rx="2" fill="#2F6FEB" opacity="0.85"/>
+  <line x1="75" y1="57" x2="85" y2="57" stroke="#fff" stroke-width="1.3"/>
+  <line x1="75" y1="61" x2="85" y2="61" stroke="#fff" stroke-width="1.3"/>
+  <line x1="75" y1="65" x2="82" y2="65" stroke="#fff" stroke-width="1.3"/>
+  <!-- seta central (conversor) -->
+  <polygon points="188,51 210,60 188,69" fill="#00CED1"/>
+  <!-- ícone TXT/XLSX (tabela) -->
+  <rect x="310" y="50" width="20" height="20" rx="2" fill="#2F6FEB" opacity="0.85"/>
+  <line x1="315" y1="55" x2="325" y2="55" stroke="#fff" stroke-width="1.3"/>
+  <line x1="315" y1="60" x2="325" y2="60" stroke="#fff" stroke-width="1.3"/>
+  <line x1="315" y1="65" x2="325" y2="65" stroke="#fff" stroke-width="1.3"/>
+  <line x1="320" y1="50" x2="320" y2="70" stroke="#fff" stroke-width="0.7" opacity="0.5"/>
+  <!-- labels -->
+  <text x="80"  y="96" text-anchor="middle" fill="#3A4455"
+        font-size="9" font-family="Inter,sans-serif">XML</text>
+  <text x="200" y="103" text-anchor="middle" fill="#00CED1"
+        font-size="9" font-family="Inter,sans-serif" font-weight="600">CONVERSOR</text>
+  <text x="320" y="96" text-anchor="middle" fill="#3A4455"
+        font-size="9" font-family="Inter,sans-serif">TXT / XLSX</text>
 </svg>
 </div>
 """
