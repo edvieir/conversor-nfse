@@ -311,6 +311,15 @@ div[data-testid="stButton"] > button[kind="primary"]:hover {
     box-shadow: 0 4px 16px rgba(0,158,160,.45) !important;
     transform: translateY(-1px) !important;
 }
+div[data-testid="stButton"] > button[kind="primary"]:disabled {
+    background: #111825 !important;
+    color: #2F3E55 !important;
+    border: 1px solid #1C2333 !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    text-shadow: none !important;
+}
 
 /* ── DOWNLOAD ──────────────────────────────────────────────── */
 div[data-testid="stDownloadButton"] > button {
