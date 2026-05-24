@@ -8,9 +8,10 @@ Uso: streamlit run app_web.py
 import sys
 import os
 import io
+import json as _json
 import tempfile
 import contextlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -413,12 +414,100 @@ hr { border-color: #1C2333 !important; margin: 1rem 0 !important; }
     background: #0A0E1A !important; border: 1px solid #2F3E55 !important;
     border-radius: 8px !important; color: #E6EDF3 !important;
 }
+
+/* ── DASHBOARD ── */
+@keyframes pulse-glow {
+    0%,100% { box-shadow: 0 0 14px rgba(47,111,235,.18); }
+    50%      { box-shadow: 0 0 28px rgba(47,111,235,.38); }
+}
+.dash-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 6px 0 20px;
+}
+.dash-card {
+    background: #0D1117;
+    border: 1px solid #1C2333;
+    border-radius: 14px;
+    padding: 18px 16px 14px;
+    text-align: center;
+    transition: border-color .25s, transform .25s;
+    animation: pulse-glow 3.5s ease-in-out infinite;
+}
+.dash-card:hover {
+    border-color: #2F6FEB;
+    transform: translateY(-3px);
+}
+.dash-card-icon { font-size: 1.55rem; margin-bottom: 6px; }
+.dash-value {
+    font-size: 2rem; font-weight: 800;
+    background: linear-gradient(135deg, #2F6FEB 0%, #7B3FE4 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1.1; letter-spacing: -.5px;
+}
+.dash-label { color: #484F58; font-size: .72rem; font-weight: 600;
+    letter-spacing: .4px; text-transform: uppercase; margin-top: 4px; }
+.dash-section-title {
+    color: #8B949E; font-size: .78rem; font-weight: 700;
+    letter-spacing: .5px; text-transform: uppercase;
+    margin: 0 0 10px; display: flex; align-items: center; gap: 7px;
+}
+.dash-section-title::after {
+    content: ''; flex: 1; height: 1px; background: #1C2333;
+}
+.activity-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid #0F1624;
+}
+.activity-row:last-child { border-bottom: none; }
+.activity-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.activity-dot-ok  { background: #1AB87A; }
+.activity-dot-err { background: #D93025; }
+.activity-meta { color: #484F58; font-size: .72rem; margin-left: auto; white-space: nowrap; }
+.activity-label { color: #C9D1D9; font-size: .8rem; font-weight: 500; }
+.activity-badge {
+    font-size: .62rem; font-weight: 700; padding: 2px 7px;
+    border-radius: 10px; text-transform: uppercase; letter-spacing: .3px;
+}
+.ab-txt  { background: #0B1525; color: #2F6FEB; border: 1px solid #1A2E50; }
+.ab-xlsx { background: #0B1A10; color: #1AB87A; border: 1px solid #0D3020; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── AUTENTICAÇÃO ──────────────────────────────────────────────────────────────
-_CFG_PATH = Path(__file__).parent / "config.yaml"
+_CFG_PATH   = Path(__file__).parent / "config.yaml"
+_STATS_PATH = Path(__file__).parent / "stats.json"
+
+
+def _carregar_stats() -> dict:
+    if _STATS_PATH.exists():
+        try:
+            with open(_STATS_PATH, encoding="utf-8") as _f:
+                return _json.load(_f)
+        except Exception:
+            pass
+    return {"conversoes": []}
+
+
+def _registrar_conversao(usuario: str, modo: str, n_arquivos: int, sucesso: bool):
+    try:
+        stats = _carregar_stats()
+        stats.setdefault("conversoes", []).append({
+            "ts":      datetime.now().isoformat(),
+            "usuario": usuario,
+            "modo":    modo.upper(),
+            "arquivos": n_arquivos,
+            "sucesso": sucesso,
+        })
+        stats["conversoes"] = stats["conversoes"][-2000:]
+        with open(_STATS_PATH, "w", encoding="utf-8") as _f:
+            _json.dump(stats, _f, ensure_ascii=False)
+    except Exception:
+        pass
 
 
 def _carregar_auth():
@@ -1022,6 +1111,180 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
     return data, log
 
 
+# ── PÁGINA: DASHBOARD ─────────────────────────────────────────────────────────
+def pagina_dashboard():
+    # ── Top bar ──
+    st.markdown("""
+    <div class="topbar">
+        <div class="topbar-logo">📊</div>
+        <span class="topbar-name">Conversor NFS-e</span>
+        <div class="topbar-divider"></div>
+        <span class="topbar-tag">Dashboard &amp; Estatísticas</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Navbar ──
+    inicial = _nome_atual[0].upper() if _nome_atual else "U"
+    if _is_admin:
+        _da1, _da2, _da3, _da4 = st.columns([4, 1.8, 1.8, 1.2])
+    else:
+        _da1, _da2, _da4 = st.columns([5, 1.8, 1.2])
+
+    with _da1:
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+            <div style="width:26px;height:26px;background:linear-gradient(135deg,#2F6FEB,#7B3FE4);
+                border-radius:6px;display:flex;align-items:center;justify-content:center;
+                font-size:.72rem;font-weight:800;color:#fff;">{inicial}</div>
+            <span style="color:#8B949E;font-size:.78rem;font-weight:500;">{_nome_atual}</span>
+        </div>""", unsafe_allow_html=True)
+
+    with _da2:
+        if st.button("📄 Conversor", key="nav_conv_dash", use_container_width=True):
+            st.session_state.pagina = "conversor"
+            st.rerun()
+
+    if _is_admin:
+        with _da3:
+            if st.button("👥 Usuários", key="nav_users_dash", use_container_width=True):
+                st.session_state.pagina = "usuarios"
+                st.rerun()
+
+    with _da4:
+        auth.logout("↩ Sair", key="logout_dash")
+
+    st.markdown('<div style="height:.4rem;"></div>', unsafe_allow_html=True)
+
+    # ── Carrega estatísticas ──
+    stats = _carregar_stats()
+    conversoes = stats.get("conversoes", [])
+
+    agora = datetime.now()
+    hoje  = agora.date()
+    mes   = (agora.year, agora.month)
+
+    total_all  = len(conversoes)
+    total_hoje = sum(1 for c in conversoes if c.get("ts", "")[:10] == str(hoje))
+    total_mes  = sum(1 for c in conversoes
+                     if c.get("ts", "")[:7] == f"{mes[0]}-{mes[1]:02d}")
+    total_xml  = sum(c.get("arquivos", 0) for c in conversoes if c.get("sucesso"))
+    total_txt  = sum(1 for c in conversoes if c.get("modo") == "TXT" and c.get("sucesso"))
+    total_xlsx = sum(1 for c in conversoes if c.get("modo") == "XLSX" and c.get("sucesso"))
+
+    # ── Métrica cards ──
+    st.markdown('<div class="dash-section-title">📈 Visão Geral</div>', unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="dash-grid">
+        <div class="dash-card">
+            <div class="dash-card-icon">🔄</div>
+            <div class="dash-value">{total_all}</div>
+            <div class="dash-label">Conversões totais</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">📅</div>
+            <div class="dash-value">{total_hoje}</div>
+            <div class="dash-label">Hoje</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">🗓️</div>
+            <div class="dash-value">{total_mes}</div>
+            <div class="dash-label">Este mês</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">📂</div>
+            <div class="dash-value">{total_xml}</div>
+            <div class="dash-label">XMLs processados</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">📄</div>
+            <div class="dash-value">{total_txt}</div>
+            <div class="dash-label">TXT gerados</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">📊</div>
+            <div class="dash-value">{total_xlsx}</div>
+            <div class="dash-label">XLSX gerados</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Gráfico de barras — últimos 14 dias ──
+    if conversoes:
+        import pandas as _pd
+
+        st.markdown('<div class="dash-section-title">📆 Conversões nos últimos 14 dias</div>', unsafe_allow_html=True)
+
+        dias = [(agora - timedelta(days=i)).date() for i in range(13, -1, -1)]
+        contagem = {d: 0 for d in dias}
+        for c in conversoes:
+            try:
+                d = datetime.fromisoformat(c["ts"]).date()
+                if d in contagem:
+                    contagem[d] += 1
+            except Exception:
+                pass
+
+        df_dias = _pd.DataFrame({
+            "Dia":        [str(d)[5:] for d in dias],   # MM-DD
+            "Conversões": [contagem[d] for d in dias],
+        }).set_index("Dia")
+
+        st.bar_chart(df_dias, color="#2F6FEB", height=220)
+
+        # ── Por usuário (somente admin vê todos) ──
+        if _is_admin and conversoes:
+            st.markdown('<div class="dash-section-title" style="margin-top:14px;">👤 Uso por usuário</div>', unsafe_allow_html=True)
+            from collections import Counter as _Counter
+            user_counts = _Counter(c.get("usuario", "?") for c in conversoes)
+            df_usr = _pd.DataFrame(
+                {"Conversões": list(user_counts.values())},
+                index=list(user_counts.keys()),
+            )
+            st.bar_chart(df_usr, color="#7B3FE4", height=180)
+
+    # ── Atividade recente ──
+    st.markdown('<div class="dash-section-title" style="margin-top:14px;">🕑 Atividade recente</div>', unsafe_allow_html=True)
+
+    recentes = list(reversed(conversoes[-20:]))
+
+    if not recentes:
+        st.markdown('<div class="info-box">💡 Nenhuma conversão registrada ainda. Use o conversor para ver o histórico aqui.</div>', unsafe_allow_html=True)
+    else:
+        linhas_html = ""
+        for c in recentes:
+            dot_cls   = "activity-dot-ok" if c.get("sucesso") else "activity-dot-err"
+            badge_cls = "ab-txt" if c.get("modo") == "TXT" else "ab-xlsx"
+            modo_str  = c.get("modo", "—")
+            n_arq     = c.get("arquivos", 0)
+            usuario   = c.get("usuario", "?")
+            label     = f"{usuario} — {n_arq} XML{'s' if n_arq != 1 else ''}"
+            try:
+                ts_dt  = datetime.fromisoformat(c["ts"])
+                ts_str = ts_dt.strftime("%d/%m %H:%M")
+            except Exception:
+                ts_str = c.get("ts", "")[:16].replace("T", " ")
+            linhas_html += f"""
+            <div class="activity-row">
+                <div class="activity-dot {dot_cls}"></div>
+                <span class="activity-label">{label}</span>
+                <span class="activity-badge {badge_cls}">{modo_str}</span>
+                <span class="activity-meta">{ts_str}</span>
+            </div>"""
+
+        st.markdown(f"""
+        <div style="background:#0D1117;border:1px solid #1C2333;border-radius:12px;padding:12px 16px 4px;">
+            {linhas_html}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="footer">
+        Conversor NFS-e &nbsp;v1.5 &nbsp;·&nbsp; Dashboard
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # ── PÁGINA: GERENCIAR USUÁRIOS ─────────────────────────────────────────────────
 def pagina_usuarios():
     if not _is_admin:
@@ -1040,7 +1303,7 @@ def pagina_usuarios():
     """, unsafe_allow_html=True)
 
     # ── Navbar: usuário + botões ──
-    _ua1, _ua2, _ua3 = st.columns([5, 1.8, 1.2])
+    _ua1, _ua2, _ua3, _ua4 = st.columns([4, 1.8, 1.8, 1.2])
     with _ua1:
         st.markdown(f"""
         <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
@@ -1054,6 +1317,10 @@ def pagina_usuarios():
             st.session_state.pagina = "conversor"
             st.rerun()
     with _ua3:
+        if st.button("📊 Dashboard", key="nav_dash_admin", use_container_width=True):
+            st.session_state.pagina = "dashboard"
+            st.rerun()
+    with _ua4:
         auth.logout("↩ Sair", key="logout_admin")
 
     st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
@@ -1216,9 +1483,9 @@ def pagina_conversor():
     # ── Navbar: usuário + botões ──
     inicial = _nome_atual[0].upper() if _nome_atual else "U"
     if _is_admin:
-        _nc1, _nc2, _nc3 = st.columns([5, 1.8, 1.2])
+        _nc1, _nc2, _nc3, _nc4 = st.columns([4, 1.8, 1.8, 1.2])
     else:
-        _nc1, _nc3 = st.columns([7, 1.2])
+        _nc1, _nc2, _nc4 = st.columns([5, 1.8, 1.2])
 
     with _nc1:
         st.markdown(f"""
@@ -1229,13 +1496,18 @@ def pagina_conversor():
             <span style="color:#8B949E;font-size:.78rem;font-weight:500;">{_nome_atual}</span>
         </div>""", unsafe_allow_html=True)
 
+    with _nc2:
+        if st.button("📊 Dashboard", key="nav_dash_main", use_container_width=True):
+            st.session_state.pagina = "dashboard"
+            st.rerun()
+
     if _is_admin:
-        with _nc2:
+        with _nc3:
             if st.button("👥 Usuários", key="nav_usuarios_main", use_container_width=True):
                 st.session_state.pagina = "usuarios"
                 st.rerun()
 
-    with _nc3:
+    with _nc4:
         auth.logout("↩ Sair", key="logout_main")
 
     st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
@@ -1399,6 +1671,13 @@ def pagina_conversor():
                     im = im_input.strip()
                     dados_saida, log = processar_uploads(uploaded, im, modo, comp_filtro)
 
+            _registrar_conversao(
+                usuario=_usuario_atual,
+                modo=modo,
+                n_arquivos=len(uploaded),
+                sucesso=bool(dados_saida),
+            )
+
             if dados_saida:
                 ext        = "txt" if modo == "txt" else "xlsx"
                 mime       = "text/plain" if modo == "txt" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1445,5 +1724,7 @@ pagina = st.session_state.get("pagina", "conversor")
 
 if pagina == "usuarios":
     pagina_usuarios()
+elif pagina == "dashboard":
+    pagina_dashboard()
 else:
     pagina_conversor()
