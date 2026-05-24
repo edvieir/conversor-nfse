@@ -163,8 +163,9 @@ label {
 
 div[data-testid="stFormSubmitButton"] > button,
 [data-testid="stFormSubmitButton"] > button {
-    background: linear-gradient(135deg, #00CED1, #009999) !important;
-    color: #0D1117 !important; border: none !important;
+    background: linear-gradient(135deg, #009EA0, #007A7A) !important;
+    color: #ffffff !important; border: none !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,.3) !important;
     border-radius: 8px !important; width: 100% !important;
     height: 3em !important; font-weight: 700 !important;
     font-size: .92rem !important;
@@ -173,7 +174,7 @@ div[data-testid="stFormSubmitButton"] > button,
 }
 div[data-testid="stFormSubmitButton"] > button:hover,
 [data-testid="stFormSubmitButton"] > button:hover {
-    background: linear-gradient(135deg, #20E0E3, #00AEAE) !important;
+    background: linear-gradient(135deg, #00B4B6, #008C8C) !important;
     box-shadow: 0 4px 18px rgba(0,206,209,.4) !important;
     transform: translateY(-1px) !important;
 }
@@ -299,14 +300,15 @@ div[data-testid="stButton"] > button:disabled {
 
 /* ── BOTÕES PRIMÁRIOS ──────────────────────────────────────── */
 div[data-testid="stButton"] > button[kind="primary"] {
-    background: linear-gradient(135deg, #00CED1, #009999) !important;
-    color: #0D1117 !important; border: none !important;
+    background: linear-gradient(135deg, #009EA0, #007A7A) !important;
+    color: #ffffff !important; border: none !important;
     font-weight: 700 !important; font-size: .9rem !important; height: 3em !important;
-    box-shadow: 0 2px 8px rgba(0,206,209,.25) !important;
+    box-shadow: 0 2px 8px rgba(0,158,160,.3) !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,.3) !important;
 }
 div[data-testid="stButton"] > button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #20E0E3, #00AEAE) !important;
-    box-shadow: 0 4px 16px rgba(0,206,209,.38) !important;
+    background: linear-gradient(135deg, #00B4B6, #008C8C) !important;
+    box-shadow: 0 4px 16px rgba(0,158,160,.45) !important;
     transform: translateY(-1px) !important;
 }
 

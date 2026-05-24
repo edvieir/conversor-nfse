@@ -2,3 +2,6 @@
 headless = true
 enableCORS = false
 enableXsrfProtection = false
+
+[ui]
+hideSidebarNav = true
