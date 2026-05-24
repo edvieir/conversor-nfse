@@ -52,147 +52,86 @@ def icon(name: str, size: int = 16, color: str = "currentColor", extra_style: st
 
 SVG_LOGIN_GRAPHIC = """
 <div style="margin-bottom:1.8rem;">
-<svg viewBox="0 0 520 168" xmlns="http://www.w3.org/2000/svg"
-     style="width:100%;border-radius:16px;display:block;">
+<svg viewBox="0 0 480 128" xmlns="http://www.w3.org/2000/svg"
+     style="width:100%;border-radius:14px;display:block;overflow:hidden;">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
-      <stop offset="0%"   stop-color="#0D1117"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0D1117"/>
       <stop offset="100%" stop-color="#091420"/>
     </linearGradient>
-    <linearGradient id="tealG" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#00CED1"/>
-      <stop offset="100%" stop-color="#007A80"/>
+    <linearGradient id="tG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00CED1"/>
+      <stop offset="100%" stop-color="#008080"/>
     </linearGradient>
-    <linearGradient id="cardL" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#131C28"/>
-      <stop offset="100%" stop-color="#0D1520"/>
-    </linearGradient>
-    <linearGradient id="cardC" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#071E22"/>
-      <stop offset="100%" stop-color="#041318"/>
-    </linearGradient>
-    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="g4" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
   </defs>
 
   <!-- Fundo -->
-  <rect width="520" height="168" rx="16" fill="url(#bg)"/>
+  <rect width="480" height="128" rx="14" fill="url(#bg)"/>
 
-  <!-- Grade de pontos sutil -->
-  <g opacity="0.22">
-    <rect x="0" y="0" width="520" height="168" rx="16" fill="none"/>
-    <!-- linha de pontos horizontal -->
-    <circle cx="40"  cy="28"  r="1" fill="#1E3040"/>
-    <circle cx="80"  cy="28"  r="1" fill="#1E3040"/>
-    <circle cx="440" cy="28"  r="1" fill="#1E3040"/>
-    <circle cx="480" cy="28"  r="1" fill="#1E3040"/>
-    <circle cx="40"  cy="140" r="1" fill="#1E3040"/>
-    <circle cx="80"  cy="140" r="1" fill="#1E3040"/>
-    <circle cx="440" cy="140" r="1" fill="#1E3040"/>
-    <circle cx="480" cy="140" r="1" fill="#1E3040"/>
-  </g>
+  <!-- Brilho teal sem filter — simples opacidade -->
+  <rect x="188" y="8" width="104" height="98" rx="16" fill="#00CED1" opacity="0.08"/>
+  <rect x="194" y="12" width="92"  height="90" rx="13" fill="#00CED1" opacity="0.05"/>
 
-  <!-- Brilho teal difuso atrás do card central -->
-  <rect x="170" y="18" width="180" height="132" rx="24"
-        fill="#00CED1" opacity="0.07" filter="url(#glow)"/>
+  <!-- ═══ CARD ESQUERDO — XML ═══ -->
+  <rect x="20" y="20" width="100" height="76" rx="12"
+        fill="#0C1824" stroke="#1C3550" stroke-width="1.5"/>
+  <!-- Ícone documento -->
+  <path d="M52 34 L70 34 L78 42 L78 58 L52 58 Z"
+        fill="#0E1E2E" stroke="#2A5878" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M70 34 L70 42 L78 42"
+        fill="none" stroke="#2A5878" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="57" y1="47" x2="73" y2="47" stroke="#2A5878" stroke-width="1.2"/>
+  <line x1="57" y1="51" x2="73" y2="51" stroke="#2A5878" stroke-width="1.2"/>
+  <line x1="57" y1="55" x2="65" y2="55" stroke="#2A5878" stroke-width="1.2"/>
+  <!-- Label XML -->
+  <text x="70" y="109" text-anchor="middle" fill="#2A4A65"
+        font-size="9" font-family="Inter,sans-serif" font-weight="700"
+        letter-spacing="2">XML</text>
 
-  <!-- ══ CARD ESQUERDO — XML ══ -->
-  <rect x="28" y="28" width="128" height="112" rx="14"
-        fill="url(#cardL)" stroke="#1C3044" stroke-width="1.4"/>
-
-  <!-- Ícone: documento com dobra no canto -->
-  <g transform="translate(64, 46)" fill="none"
-     stroke="#3E7090" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6">
-    <path d="M4 0 L32 0 L32 4 L36 4 L36 44 L4 44 Z"/>
-    <path d="M32 0 L32 8 L40 8"/>
-    <path d="M0 4 L32 4 L32 8 L40 8 L40 48 L0 48 Z"
-          fill="#0E1E2E" stroke="#2A5070" stroke-width="1.4"/>
-    <line x1="8"  y1="20" x2="32" y2="20" stroke-width="1.3"/>
-    <line x1="8"  y1="27" x2="32" y2="27" stroke-width="1.3"/>
-    <line x1="8"  y1="34" x2="22" y2="34" stroke-width="1.3"/>
-  </g>
-
-  <!-- Badge XML -->
-  <rect x="44" y="104" width="40" height="16" rx="5"
-        fill="#0E1E30" stroke="#1C3850" stroke-width="1"/>
-  <text x="64" y="115.5" text-anchor="middle"
-        fill="#3E7090" font-size="8" font-family="'Courier New',monospace"
-        font-weight="700">&lt;/&gt;</text>
-
-  <!-- Label -->
-  <text x="92" y="152" text-anchor="middle"
-        fill="#3A5570" font-size="10" font-family="Inter,sans-serif"
-        font-weight="700" letter-spacing="2">XML</text>
-
-  <!-- ══ SETA ESQUERDA ══ -->
-  <line x1="160" y1="84" x2="196" y2="84"
-        stroke="#1C3A44" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
-  <path d="M193,79 L203,84 L193,89"
-        fill="none" stroke="#265060" stroke-width="1.8"
+  <!-- ═══ SETA ESQUERDA ═══ -->
+  <line x1="122" y1="58" x2="180" y2="58"
+        stroke="#182C3A" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
+  <path d="M177,54 L187,58 L177,62"
+        fill="none" stroke="#234050" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- ══ CARD CENTRAL — CONVERSOR ══ -->
-  <!-- Borda brilhante externa -->
-  <rect x="204" y="16" width="112" height="104" rx="18"
-        fill="none" stroke="#00CED1" stroke-width="2.5" opacity="0.9"
-        filter="url(#glow)"/>
-  <!-- Card principal -->
-  <rect x="204" y="16" width="112" height="104" rx="18"
-        fill="url(#cardC)" stroke="#00CED1" stroke-width="2"/>
-  <!-- Anel interno -->
-  <rect x="216" y="28" width="88" height="80" rx="12"
-        fill="none" stroke="#00CED1" stroke-width="0.5" opacity="0.18"/>
+  <!-- ═══ CARD CENTRAL — CONVERSOR ═══ -->
+  <rect x="190" y="10" width="100" height="96" rx="14"
+        fill="#071C20" stroke="#00CED1" stroke-width="2"/>
+  <!-- Raio zap centrado em (240, 58) — sem filter -->
+  <polygon points="243,26 221,60 240,60 238,90 261,54 240,54 243,26"
+           fill="url(#tG)"/>
+  <!-- Label CONVERSOR -->
+  <text x="240" y="120" text-anchor="middle" fill="#00CED1"
+        font-size="9" font-family="Inter,sans-serif" font-weight="700"
+        letter-spacing="2">CONVERSOR</text>
 
-  <!-- Ícone raio (zap) — grande, centralizado -->
-  <g transform="translate(234, 34)" filter="url(#g4)">
-    <polygon points="22,0 8,28 20,28 14,52 42,20 26,20 34,0"
-             fill="url(#tealG)"/>
-  </g>
-
-  <!-- Label -->
-  <text x="260" y="138" text-anchor="middle"
-        fill="#00CED1" font-size="10" font-family="Inter,sans-serif"
-        font-weight="700" letter-spacing="2">CONVERSOR</text>
-
-  <!-- ══ SETA DIREITA ══ -->
-  <line x1="320" y1="84" x2="356" y2="84"
-        stroke="#1C3A44" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
-  <path d="M353,79 L363,84 L353,89"
-        fill="none" stroke="#265060" stroke-width="1.8"
+  <!-- ═══ SETA DIREITA ═══ -->
+  <line x1="292" y1="58" x2="350" y2="58"
+        stroke="#182C3A" stroke-width="1.5" stroke-dasharray="4,4" stroke-linecap="round"/>
+  <path d="M347,54 L357,58 L347,62"
+        fill="none" stroke="#234050" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- ══ CARD DIREITO — TXT / XLSX ══ -->
-  <rect x="364" y="28" width="128" height="112" rx="14"
-        fill="url(#cardL)" stroke="#1C3044" stroke-width="1.4"/>
-
-  <!-- Ícone: planilha/tabela -->
-  <g transform="translate(380, 46)" fill="none"
-     stroke="#3E7090" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="0" y="0" width="56" height="48" rx="5" stroke-width="1.6"/>
-    <!-- Header -->
-    <rect x="0" y="0" width="56" height="14" rx="5" fill="#162838" stroke="none"/>
-    <rect x="1" y="1" width="54" height="12" rx="4" fill="#162838" stroke="none"/>
-    <line x1="0"  y1="14" x2="56" y2="14" stroke-width="1"/>
-    <line x1="0"  y1="28" x2="56" y2="28" stroke-width="1"/>
-    <line x1="0"  y1="38" x2="56" y2="38" stroke-width="1"/>
-    <line x1="18" y1="14" x2="18" y2="48" stroke-width="1"/>
-    <line x1="37" y1="14" x2="37" y2="48" stroke-width="1"/>
-    <!-- Dados simulados nas células -->
-    <rect x="4"  y="17" width="10" height="7" rx="1" fill="#1A3040" stroke="none"/>
-    <rect x="21" y="17" width="12" height="7" rx="1" fill="#142830" stroke="none"/>
-    <rect x="40" y="17" width="12" height="7" rx="1" fill="#1A3040" stroke="none"/>
-  </g>
-
-  <!-- Label -->
-  <text x="428" y="152" text-anchor="middle"
-        fill="#3A5570" font-size="10" font-family="Inter,sans-serif"
-        font-weight="700" letter-spacing="2">TXT / XLSX</text>
+  <!-- ═══ CARD DIREITO — TXT / XLSX ═══ -->
+  <rect x="360" y="20" width="100" height="76" rx="12"
+        fill="#0C1824" stroke="#1C3550" stroke-width="1.5"/>
+  <!-- Ícone planilha -->
+  <rect x="374" y="30" width="58" height="48" rx="4"
+        fill="none" stroke="#2A5878" stroke-width="1.5"/>
+  <rect x="374" y="30" width="58" height="13"
+        fill="#112030" stroke="none"/>
+  <line x1="374" y1="43" x2="432" y2="43" stroke="#2A5878" stroke-width="1"/>
+  <line x1="374" y1="56" x2="432" y2="56" stroke="#2A5878" stroke-width="1"/>
+  <line x1="374" y1="67" x2="432" y2="67" stroke="#2A5878" stroke-width="1"/>
+  <line x1="393" y1="43" x2="393" y2="78" stroke="#2A5878" stroke-width="1"/>
+  <line x1="413" y1="43" x2="413" y2="78" stroke="#2A5878" stroke-width="1"/>
+  <!-- Label TXT/XLSX -->
+  <text x="410" y="109" text-anchor="middle" fill="#2A4A65"
+        font-size="9" font-family="Inter,sans-serif" font-weight="700"
+        letter-spacing="2">TXT / XLSX</text>
 </svg>
 </div>
 """
