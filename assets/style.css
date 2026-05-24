@@ -7,6 +7,14 @@
 
 /* ── RESET / BASE ─────────────────────────────────────────── */
 #MainMenu, footer, header { visibility: hidden; }
+
+/* Oculta sidebar automático do Streamlit (multi-page nav) */
+[data-testid="stSidebar"],
+[data-testid="stSidebarNav"],
+section[data-testid="stSidebar"],
+button[data-testid="collapsedControl"] {
+    display: none !important;
+}
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, [data-testid="stAppViewContainer"] {
