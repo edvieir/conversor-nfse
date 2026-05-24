@@ -20,6 +20,7 @@ def render():
             {icon("bar-chart", 16, "#fff")}
         </div>
         <span class="topbar-name">Conversor NFS-e</span>
+        <div class="topbar-spacer"></div>
         <div class="topbar-divider"></div>
         <span class="topbar-tag">Dashboard &amp; Estatísticas</span>
     </div>
@@ -27,9 +28,9 @@ def render():
 
     # ── Navbar ───────────────────────────────────────────────────────────────
     if is_admin():
-        _nc1, _nc2, _nc3, _nc4 = st.columns([4, 1.8, 1.8, 1.2])
+        _nc1, _nc2, _nc3, _nc4 = st.columns([3, 1.6, 1.6, 1.1])
     else:
-        _nc1, _nc2, _nc4 = st.columns([5, 1.8, 1.2])
+        _nc1, _nc2, _nc4 = st.columns([4, 1.8, 1.1])
 
     with _nc1:
         st.markdown(f"""

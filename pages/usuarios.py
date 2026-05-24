@@ -23,13 +23,14 @@ def render():
             {icon("shield", 16, "#fff")}
         </div>
         <span class="topbar-name">Conversor NFS-e</span>
+        <div class="topbar-spacer"></div>
         <div class="topbar-divider"></div>
         <span class="topbar-tag">Painel Administrativo</span>
     </div>
     """, unsafe_allow_html=True)
 
     # ── Navbar ───────────────────────────────────────────────────────────────
-    _ua1, _ua2, _ua3, _ua4 = st.columns([4, 1.8, 1.8, 1.2])
+    _ua1, _ua2, _ua3, _ua4 = st.columns([3, 1.6, 1.6, 1.1])
 
     with _ua1:
         st.markdown(f"""
