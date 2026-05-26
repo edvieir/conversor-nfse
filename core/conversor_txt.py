@@ -160,6 +160,11 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     if len(cs) != 46:
                         return linha
 
+                    # Campo 3 (índice 2) – tipo de pessoa: 1=Física, 2=Jurídica
+                    # Quando CNPJ (índice 3) está vazio, o tomador é CPF (Pessoa Física)
+                    if not cs[3].strip():
+                        cs[2] = "1"
+
                     # Campo 26 (índice 25) – descrição: remove acentos E pontuações
                     _desc = "".join(
                         c for c in _ud.normalize("NFD", cs[25]) if ord(c) < 128
