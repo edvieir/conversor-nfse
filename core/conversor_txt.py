@@ -50,6 +50,39 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
             pass
         return ""
 
+    def _emit_pj_nao_mei(content: bytes) -> bool:
+        """
+        Retorna True quando o emitente é Pessoa Jurídica com CNPJ e NÃO é MEI.
+        Esses XMLs devem ser ignorados no TXT ISS Fortaleza:
+          - Pessoa Física (CPF)  → sempre incluir   → retorna False
+          - MEI (regEspTrib 5/6) → incluir          → retorna False
+          - PJ comum (CNPJ)      → ignorar          → retorna True
+        """
+        try:
+            root = _ET.fromstring(content)
+            emit = next((e for e in root.iter() if e.tag.endswith("emit")), None)
+            if emit is None:
+                return False
+            # CPF → Pessoa Física → incluir
+            cpf = next((c.text or "" for c in emit if c.tag.endswith("CPF")), "")
+            if cpf.strip():
+                return False
+            # Sem CNPJ e sem CPF → incluir por cautela
+            cnpj = next((c.text or "" for c in emit if c.tag.endswith("CNPJ")), "")
+            if not cnpj.strip():
+                return False
+            # CNPJ presente → verificar se é MEI (regEspTrib 5 ou 6)
+            prest = next((e for e in root.iter() if e.tag.endswith("prest")), None)
+            if prest is not None:
+                reg_esp = next((e.text or "0" for e in prest.iter()
+                               if e.tag.endswith("regEspTrib")), "0")
+                if reg_esp.strip() in ("5", "6"):  # 5=MEI, 6=ME/EPP
+                    return False  # MEI → incluir
+            # PJ não-MEI → ignorar
+            return True
+        except Exception:
+            return False
+
     # ── Pré-leitura: monta lookup de retenção a partir dos XMLs originais ──────
     # Necessário porque nfse_xml_to_txt.py tem dois bugs que precisamos corrigir:
     #   BUG 1 – Campo 21 (tpRetISSQN): o script passa o valor da NFS-e nacional
@@ -124,7 +157,8 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     pass
 
     with tempfile.TemporaryDirectory() as tmp:
-        ignorados = 0
+        ignorados    = 0
+        pj_ignorados = 0
         for uf in uploaded_files:
             uf.seek(0)
             content = uf.read()
@@ -133,6 +167,10 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 if comp and comp != competencia_filtro:
                     ignorados += 1
                     continue
+            # TXT Fortaleza: ignora emitentes PJ que não sejam MEI ou Pessoa Física
+            if modo == "txt" and _emit_pj_nao_mei(content):
+                pj_ignorados += 1
+                continue
             with open(os.path.join(tmp, uf.name), "wb") as fh:
                 fh.write(content)
         ext   = "txt" if modo == "txt" else "xlsx"
@@ -140,6 +178,11 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         buf   = io.StringIO()
         if ignorados:
             buf.write(f"  FILTRO  {ignorados} arquivo(s) ignorado(s) — competência ≠ {competencia_filtro}\n\n")
+        if pj_ignorados:
+            buf.write(
+                f"  FILTRO  {pj_ignorados} arquivo(s) ignorado(s) "
+                f"— emitente PJ não-MEI (TXT Fortaleza: apenas CPF e MEI)\n\n"
+            )
         with contextlib.redirect_stdout(buf):
             try:
                 if modo == "txt":

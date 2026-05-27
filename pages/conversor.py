@@ -197,7 +197,7 @@ def render():
             <div class="format-card">
                 <div class="format-svg">{ic_xlsx}</div>
                 <div class="format-name">SPED GOV</div>
-                <div class="format-desc">Planilha XLSX no layout oficial SPED GOV</div>
+                <div class="format-desc">Planilha XLSX — Servicos Tomados (layout SPED)</div>
             </div>
             """, unsafe_allow_html=True)
             btn_xlsx = st.button(
