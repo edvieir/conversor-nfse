@@ -82,12 +82,18 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                            if e.tag.endswith("cLocEmi")), "")
             if loc_emi.strip() != "2304400":
                 return False  # PJ de outro município → incluir
-            # CNPJ + Fortaleza → verificar se é MEI (regEspTrib 5 ou 6)
+            # CNPJ + Fortaleza → verificar se é MEI
+            # NFS-e Nacional: opSimpNac=2 indica MEI
+            # Outros formatos: regEspTrib=5 ou 6 também pode indicar MEI
             prest = next((e for e in root.iter() if e.tag.endswith("prest")), None)
             if prest is not None:
+                op_simp = next((e.text or "0" for e in prest.iter()
+                               if e.tag.endswith("opSimpNac")), "0")
                 reg_esp = next((e.text or "0" for e in prest.iter()
                                if e.tag.endswith("regEspTrib")), "0")
-                if reg_esp.strip() in ("5", "6"):  # 5=MEI, 6=ME/EPP
+                # opSimpNac=2 → MEI (padrão NFS-e Nacional SPED)
+                # regEspTrib 5 ou 6 → MEI/EPP (formatos municipais antigos)
+                if op_simp.strip() == "2" or reg_esp.strip() in ("5", "6"):
                     return False  # MEI de Fortaleza → incluir
             # PJ de Fortaleza, não-MEI → ignorar
             return True
