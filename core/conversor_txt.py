@@ -52,18 +52,23 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
 
     def _emit_pj_nao_mei(content: bytes) -> bool:
         """
-        Retorna True quando o emitente é Pessoa Jurídica com CNPJ e NÃO é MEI.
-        Esses XMLs devem ser ignorados no TXT ISS Fortaleza:
-          - Pessoa Física (CPF)  → sempre incluir   → retorna False
-          - MEI (regEspTrib 5/6) → incluir          → retorna False
-          - PJ comum (CNPJ)      → ignorar          → retorna True
+        Retorna True SOMENTE quando todas as condições forem verdadeiras:
+          1. Emitente tem CNPJ (não é Pessoa Física com CPF)
+          2. Emitente é de Fortaleza (cLocEmi == "2304400")
+          3. Não é MEI (regEspTrib != "5" e != "6")
+        Nesses casos o XML é ignorado no TXT ISS Fortaleza.
+
+        Regras de inclusão (retorna False → mantém no TXT):
+          - CPF / Pessoa Física       → incluir sempre
+          - PJ de outro município     → incluir sempre
+          - MEI de Fortaleza          → incluir (regEspTrib 5 ou 6)
         """
         try:
             root = _ET.fromstring(content)
             emit = next((e for e in root.iter() if e.tag.endswith("emit")), None)
             if emit is None:
                 return False
-            # CPF → Pessoa Física → incluir
+            # CPF → Pessoa Física → incluir sempre
             cpf = next((c.text or "" for c in emit if c.tag.endswith("CPF")), "")
             if cpf.strip():
                 return False
@@ -71,14 +76,20 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
             cnpj = next((c.text or "" for c in emit if c.tag.endswith("CNPJ")), "")
             if not cnpj.strip():
                 return False
-            # CNPJ presente → verificar se é MEI (regEspTrib 5 ou 6)
+            # Verifica se o emitente é de Fortaleza (cLocEmi == "2304400")
+            # cLocEmi fica em <infDPS><cLocEmi> ou <prest><cLocEmi>
+            loc_emi = next((e.text or "" for e in root.iter()
+                           if e.tag.endswith("cLocEmi")), "")
+            if loc_emi.strip() != "2304400":
+                return False  # PJ de outro município → incluir
+            # CNPJ + Fortaleza → verificar se é MEI (regEspTrib 5 ou 6)
             prest = next((e for e in root.iter() if e.tag.endswith("prest")), None)
             if prest is not None:
                 reg_esp = next((e.text or "0" for e in prest.iter()
                                if e.tag.endswith("regEspTrib")), "0")
                 if reg_esp.strip() in ("5", "6"):  # 5=MEI, 6=ME/EPP
-                    return False  # MEI → incluir
-            # PJ não-MEI → ignorar
+                    return False  # MEI de Fortaleza → incluir
+            # PJ de Fortaleza, não-MEI → ignorar
             return True
         except Exception:
             return False
@@ -181,7 +192,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         if pj_ignorados:
             buf.write(
                 f"  FILTRO  {pj_ignorados} arquivo(s) ignorado(s) "
-                f"— emitente PJ não-MEI (TXT Fortaleza: apenas CPF e MEI)\n\n"
+                f"— emitente PJ de Fortaleza não-MEI (TXT: só CPF e MEI de Fortaleza)\n\n"
             )
         with contextlib.redirect_stdout(buf):
             try:
