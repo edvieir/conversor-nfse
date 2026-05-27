@@ -26,6 +26,40 @@ def conversor_disponivel() -> tuple[bool, str]:
     return _CONVERSOR_OK, _CONVERSOR_ERR
 
 
+# ── CACHE MEI (persiste durante todo o processo Streamlit) ────────────────────
+# Evita consultar o mesmo CNPJ mais de uma vez por sessão do servidor.
+_cnpj_mei_cache: dict = {}
+
+
+def _consulta_cnpj_mei(cnpj: str):
+    """
+    Consulta BrasilAPI para verificar se um CNPJ é MEI.
+    Retorna True (é MEI), False (não é MEI) ou None (erro / sem resposta).
+    Usa cache em memória — o mesmo CNPJ nunca é consultado duas vezes.
+    """
+    import urllib.request as _ureq
+    import json as _json
+
+    cnpj_limpo = "".join(c for c in (cnpj or "") if c.isdigit())
+    if len(cnpj_limpo) != 14:
+        return None
+
+    if cnpj_limpo in _cnpj_mei_cache:
+        return _cnpj_mei_cache[cnpj_limpo]
+
+    try:
+        url = f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}"
+        req = _ureq.Request(url, headers={"User-Agent": "ConversorNFSe/2.0"})
+        with _ureq.urlopen(req, timeout=5) as resp:
+            data = _json.loads(resp.read())
+        porte   = str(data.get("porte") or "").upper()
+        is_mei  = (porte == "MEI") or (data.get("opcao_pelo_mei") is True)
+        _cnpj_mei_cache[cnpj_limpo] = is_mei
+        return is_mei
+    except Exception:
+        return None   # API indisponível — resultado inconclusivo
+
+
 # ── PROCESSAMENTO TXT ─────────────────────────────────────────────────────────
 
 def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: str = ""):
@@ -52,39 +86,43 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
 
     def _emit_pj_nao_mei(content: bytes) -> bool:
         """
-        Retorna True SOMENTE quando todas as condições forem verdadeiras:
-          1. Emitente tem CNPJ (não é Pessoa Física com CPF)
-          2. Emitente é de Fortaleza (cLocEmi == "2304400")
-          3. Não é MEI (regEspTrib != "5" e != "6")
-        Nesses casos o XML é ignorado no TXT ISS Fortaleza.
+        Retorna True SOMENTE quando o emitente é PJ de Fortaleza comprovadamente
+        não-MEI. Nesse caso o XML é ignorado no TXT ISS Fortaleza.
+
+        Três camadas de detecção MEI (qualquer uma basta para incluir):
+          1. Campos XML: opSimpNac=2 (NFS-e Nacional) ou regEspTrib=5/6
+          2. Razão social: nome termina com 11 dígitos (CPF embutido — padrão MEI)
+          3. BrasilAPI:   consulta Receita Federal (com cache — 1 req por CNPJ)
 
         Regras de inclusão (retorna False → mantém no TXT):
-          - CPF / Pessoa Física       → incluir sempre
-          - PJ de outro município     → incluir sempre
-          - MEI de Fortaleza          → incluir (regEspTrib 5 ou 6)
+          - Pessoa Física (CPF)        → incluir sempre
+          - PJ de outro município      → incluir sempre
+          - MEI de Fortaleza           → incluir (qualquer camada confirma)
+          - CNPJ não confirmado (API fora) → incluir por cautela
         """
         try:
             root = _ET.fromstring(content)
             emit = next((e for e in root.iter() if e.tag.endswith("emit")), None)
             if emit is None:
                 return False
-            # CPF → Pessoa Física → incluir sempre
+
+            # ── Camada 0: CPF → Pessoa Física → incluir sempre ───────────────
             cpf = next((c.text or "" for c in emit if c.tag.endswith("CPF")), "")
             if cpf.strip():
                 return False
+
             # Sem CNPJ e sem CPF → incluir por cautela
             cnpj = next((c.text or "" for c in emit if c.tag.endswith("CNPJ")), "")
             if not cnpj.strip():
                 return False
-            # Verifica se o emitente é de Fortaleza (cLocEmi == "2304400")
-            # cLocEmi fica em <infDPS><cLocEmi> ou <prest><cLocEmi>
+
+            # ── Município: só filtra emitentes de Fortaleza ───────────────────
             loc_emi = next((e.text or "" for e in root.iter()
                            if e.tag.endswith("cLocEmi")), "")
             if loc_emi.strip() != "2304400":
                 return False  # PJ de outro município → incluir
-            # CNPJ + Fortaleza → verificar se é MEI
-            # NFS-e Nacional: opSimpNac=2 indica MEI
-            # Outros formatos: regEspTrib=5 ou 6 também pode indicar MEI
+
+            # ── Camada 1: Campos XML (opSimpNac / regEspTrib) ────────────────
             prest = next((e for e in root.iter() if e.tag.endswith("prest")), None)
             if prest is not None:
                 op_simp = next((e.text or "0" for e in prest.iter()
@@ -94,9 +132,23 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # opSimpNac=2 → MEI (padrão NFS-e Nacional SPED)
                 # regEspTrib 5 ou 6 → MEI/EPP (formatos municipais antigos)
                 if op_simp.strip() == "2" or reg_esp.strip() in ("5", "6"):
-                    return False  # MEI de Fortaleza → incluir
-            # PJ de Fortaleza, não-MEI → ignorar
-            return True
+                    return False  # MEI confirmado pelo XML → incluir
+
+            # ── Camada 2: Razão social com CPF embutido (padrão de nome MEI) ─
+            # MEIs registram como "NOME SOBRENOME CPFNUMERO" (11 dígitos no fim)
+            nome = next((c.text or "" for c in emit if c.tag.endswith("xNome")), "")
+            if _re.search(r"\s\d{11}$", nome.strip()):
+                return False  # Nome com CPF → MEI → incluir
+
+            # ── Camada 3: BrasilAPI — consulta Receita Federal ───────────────
+            api_mei = _consulta_cnpj_mei(cnpj.strip())
+            if api_mei is True:
+                return False  # API confirma MEI → incluir
+            if api_mei is False:
+                return True   # API confirma não-MEI → ignorar
+
+            # API indisponível / inconclusivo → incluir por cautela
+            return False
         except Exception:
             return False
 
