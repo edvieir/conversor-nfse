@@ -114,21 +114,35 @@ def _bootstrap_admin():
 
 def _bootstrap_users():
     """
-    Garante que usuários comuns definidos via variável de ambiente existam.
-    Variável: USERS_BOOTSTRAP
-    Formato:  login:senha:nome[:email]
-    Múltiplos usuários separados por '|'
-
-    Exemplos (painel Render → Environment Variables):
-      USERS_BOOTSTRAP=p&p:minhasenha:P&P Contabilidade:pp@empresa.com
-      USERS_BOOTSTRAP=calebe:senha123:Calebe|p&p:senha456:P&P Contabilidade
-
-    Só cria o usuário se ele NÃO existir (INSERT OR IGNORE).
+    Garante que os usuários padrão existam a cada inicialização.
+    Usa INSERT OR IGNORE — não sobrescreve senhas já alteradas pelo admin.
+    Variável opcional USERS_BOOTSTRAP=login:senha:nome[:email] (separados por '|')
+    permite adicionar usuários extras via painel do Render.
     """
+    import bcrypt
+
+    # ── Usuários fixos — criados automaticamente se não existirem ────────────
+    _FIXOS = [
+        # (username,  senha_inicial,  nome,               email)
+        ("p&p",    "123456",    "P&P Contabilidade", "pp@empresa.com"),
+        ("calebe", "calebe123", "Calebe",             "calebe@exemplo.com"),
+    ]
+
+    for username, senha, nome, email in _FIXOS:
+        pw_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
+        with _conn() as con:
+            con.execute(
+                "INSERT OR IGNORE INTO users "
+                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)",
+                (username, nome, email, pw_hash, "user"),
+            )
+        print(f"[db] Bootstrap: '{username}' verificado/criado.")
+
+    # ── Usuários extras via variável de ambiente (opcional) ──────────────────
+    # Formato: USERS_BOOTSTRAP=login:senha:nome[:email]|login2:senha2:nome2
     raw = os.environ.get("USERS_BOOTSTRAP", "").strip()
     if not raw:
         return
-    import bcrypt
     for entrada in raw.split("|"):
         partes = entrada.strip().split(":", 3)
         if len(partes) < 3:
@@ -144,9 +158,9 @@ def _bootstrap_users():
             con.execute(
                 "INSERT OR IGNORE INTO users "
                 "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)",
-                (username.lower(), nome, email, pw_hash, "user"),
+                (username, nome, email, pw_hash, "user"),
             )
-        print(f"[db] Users bootstrap: '{username}' verificado/criado.")
+        print(f"[db] Bootstrap extra: '{username}' verificado/criado.")
 
 
 # ── CRUD — USUÁRIOS ──────────────────────────────────────────────────────────────
