@@ -49,6 +49,7 @@ def init_db():
         """)
     _migrate_from_yaml()
     _bootstrap_admin()
+    _bootstrap_users()
 
 
 def _migrate_from_yaml():
@@ -109,6 +110,43 @@ def _bootstrap_admin():
             (username, username.title(), f"{username}@empresa.com", pw_hash, "admin"),
         )
     print(f"[db] Admin bootstrap: usuário '{username}' criado.")
+
+
+def _bootstrap_users():
+    """
+    Garante que usuários comuns definidos via variável de ambiente existam.
+    Variável: USERS_BOOTSTRAP
+    Formato:  login:senha:nome[:email]
+    Múltiplos usuários separados por '|'
+
+    Exemplos (painel Render → Environment Variables):
+      USERS_BOOTSTRAP=p&p:minhasenha:P&P Contabilidade:pp@empresa.com
+      USERS_BOOTSTRAP=calebe:senha123:Calebe|p&p:senha456:P&P Contabilidade
+
+    Só cria o usuário se ele NÃO existir (INSERT OR IGNORE).
+    """
+    raw = os.environ.get("USERS_BOOTSTRAP", "").strip()
+    if not raw:
+        return
+    import bcrypt
+    for entrada in raw.split("|"):
+        partes = entrada.strip().split(":", 3)
+        if len(partes) < 3:
+            continue
+        username = partes[0].strip()
+        senha    = partes[1].strip()
+        nome     = partes[2].strip()
+        email    = partes[3].strip() if len(partes) == 4 else f"{username}@empresa.com"
+        if not username or not senha:
+            continue
+        pw_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
+        with _conn() as con:
+            con.execute(
+                "INSERT OR IGNORE INTO users "
+                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)",
+                (username.lower(), nome, email, pw_hash, "user"),
+            )
+        print(f"[db] Users bootstrap: '{username}' verificado/criado.")
 
 
 # ── CRUD — USUÁRIOS ──────────────────────────────────────────────────────────────

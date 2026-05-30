@@ -30,7 +30,7 @@ def render():
     """, unsafe_allow_html=True)
 
     # ── Navbar ───────────────────────────────────────────────────────────────
-    _ua1, _ua2, _ua3, _ua4 = st.columns([3, 1.6, 1.6, 1.1])
+    _ua1, _ua2, _ua3, _ua4, _ua5 = st.columns([2.5, 1.5, 1.9, 1.5, 1.0])
 
     with _ua1:
         st.markdown(f"""
@@ -45,11 +45,16 @@ def render():
             st.rerun()
 
     with _ua3:
+        if st.button("Notas do Milhao", key="nav_milhao_admin", use_container_width=True):
+            st.session_state.pagina = "milhao"
+            st.rerun()
+
+    with _ua4:
         if st.button("Dashboard", key="nav_dash_admin", use_container_width=True):
             st.session_state.pagina = "dashboard"
             st.rerun()
 
-    with _ua4:
+    with _ua5:
         if st.button("Sair", key="logout_admin", use_container_width=True):
             logout()
 
@@ -83,11 +88,15 @@ def render():
                 if u["role"] == "admin"
                 else '<span class="user-badge">usuario</span>'
             )
+            # Escapa & para evitar HTML inválido em logins como "p&p"
+            _login = u["username"].replace("&", "&amp;")
+            _nome  = u["name"].replace("&", "&amp;")
+            _email = (u["email"] or "—").replace("&", "&amp;")
             linhas += f"""
             <tr>
-                <td>{badge} <strong style="color:#e6edf3">{u["username"]}</strong></td>
-                <td>{u["name"]}</td>
-                <td>{u["email"] or "—"}</td>
+                <td>{badge} <strong style="color:#e6edf3">{_login}</strong></td>
+                <td>{_nome}</td>
+                <td>{_email}</td>
             </tr>"""
         st.markdown(f"""
         <table class="user-table">
