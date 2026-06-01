@@ -19,46 +19,132 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import nfse_xml_to_txt as C
 
 
-# ── Conversor ZIP: SharedStrings → InlineStr ──────────────────────────────────
+# ── Conversor ZIP: SharedStrings → InlineStr + Formatos Numéricos ────────────
+# Colunas com formato #,##0.00 (1-based): monetárias
+_COLS_MONEY = frozenset([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36])
+_COL_ALIQ   = 32   # Alíquota → formato 0.00
+
+
+def _col_num(letters: str) -> int:
+    """'T' → 20,  'AF' → 32"""
+    n = 0
+    for c in letters.upper():
+        n = n * 26 + (ord(c) - 64)
+    return n
+
+
 def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
     """
-    Pós-processa o XLSX gerado pelo openpyxl para garantir que TODAS as células
-    string usem formato inlineStr (<is><t>texto</t></is>), conforme esperado pelo
-    portal ISS Fortaleza (construído com Apache POI).
+    Pós-processa o XLSX gerado pelo openpyxl para:
 
-    openpyxl gera por padrão:
-      • strings não-vazias → t="s" + índice em sharedStrings.xml
-      • strings vazias     → t="inlineStr" self-closing  (<c ... />)
-      • ambas com <v>      → quando data_type='inlineStr' é forçado manualmente
+    A) Converter todas as células string para inlineStr (<is><t>texto</t></is>)
+       conforme esperado pelo portal ISS Fortaleza (Apache POI).
 
-    Apache POI espera:
-      • t="inlineStr" + <is><t>texto</t></is>  para qualquer string (vazia ou não)
+    B) Garantir que células monetárias e de alíquota usem os formatos corretos
+       com applyNumberFormat="1" — sem isso o portal exibe '2' em vez de '2,00'.
 
-    Processo:
+    Etapas inlineStr:
       1. Lê sharedStrings.xml → tabela índice→texto
-      2. Converte <c t="s"><v>N</v></c>  →  <c t="inlineStr"><is><t>TEXT</t></is></c>
-      3. Converte <c t="inlineStr"><v>T</v></c>  →  <c t="inlineStr"><is><t>T</t></is></c>
-      4. Converte <c t="inlineStr"/>  →  <c t="inlineStr"><is><t/></is></c>
-      5. Remove sharedStrings.xml e suas referências do ZIP
+      2. <c t="s"><v>N</v></c>     → <c t="inlineStr"><is><t>TEXT</t></is></c>
+      3. <c t="inlineStr"><v>T</v></c> → <c t="inlineStr"><is><t>T</t></is></c>
+      4. <c t="inlineStr"/>        → <c t="inlineStr"><is><t/></is></c>
+      5. Remove sharedStrings.xml e suas referências
+
+    Etapas de formato numérico:
+      6. Lê styles.xml → encontra índices para numFmtId=4 (#,##0.00) e 2 (0.00)
+      7. Adiciona applyNumberFormat="1" onde falta
+      8. Atualiza atributo s= das células monetárias e de alíquota nas linhas de dados
     """
     _NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 
-    src = zipfile.ZipFile(io.BytesIO(xlsx_bytes), 'r')
+    src   = zipfile.ZipFile(io.BytesIO(xlsx_bytes), 'r')
     nomes = src.namelist()
 
-    # ── Passo 1: monta tabela de shared strings ───────────────────────────────
-    tabela: list[str] = []
+    # ── Passo 1: shared strings ───────────────────────────────────────────────
+    tabela: list = []
     if 'xl/sharedStrings.xml' in nomes:
         ss_root = _ET.fromstring(src.read('xl/sharedStrings.xml').decode('utf-8'))
         for si in ss_root.iter(f'{{{_NS}}}si'):
             parts = [t.text or '' for t in si.iter(f'{{{_NS}}}t')]
             tabela.append(''.join(parts))
 
+    # ── Passos 6-7: prepara correção de styles.xml ────────────────────────────
+    idx_money  = -1   # índice cellXf para #,##0.00
+    idx_aliq   = -1   # índice cellXf para 0.00
+    styles_fix = None
+
+    if 'xl/styles.xml' in nomes:
+        sx = src.read('xl/styles.xml').decode('utf-8')
+
+        def _ai(pat, s, d=0):
+            m = re.search(pat, s)
+            return int(m.group(1)) if m else d
+
+        xfs = re.findall(r'<xf [^>]+/>', sx)
+        for i, xf in enumerate(xfs):
+            nfid = _ai(r'numFmtId="(\d+)"', xf)
+            fnt  = _ai(r'fontId="(\d+)"',   xf)
+            fll  = _ai(r'fillId="(\d+)"',   xf)
+            if fnt == 0 and fll == 0:
+                if nfid == 4 and idx_money < 0: idx_money = i
+                if nfid == 2 and idx_aliq  < 0: idx_aliq  = i
+
+        # Cria estilos ausentes
+        for nfid_needed, attr in [(4, 'idx_money'), (2, 'idx_aliq')]:
+            if locals()[attr] < 0:
+                cur = len(re.findall(r'<xf [^>]+/>', sx))
+                locals()[attr] = cur  # não funciona com locals(); usar variáveis direto
+                entry = (f'<xf numFmtId="{nfid_needed}" fontId="0" fillId="0"'
+                         f' borderId="0" xfId="0" applyNumberFormat="1"/>')
+                sx = sx.replace('</cellXfs>', entry + '</cellXfs>')
+                if nfid_needed == 4:
+                    idx_money = cur
+                else:
+                    idx_aliq  = cur
+
+        # Adiciona applyNumberFormat="1" onde falta
+        def _fix_apply(m):
+            xf = m.group(0)
+            nm = re.search(r'numFmtId="(\d+)"', xf)
+            if nm and int(nm.group(1)) > 0 and 'applyNumberFormat' not in xf:
+                xf = xf[:-2] + ' applyNumberFormat="1"/>'
+            return xf
+
+        sx = re.sub(r'<xf [^>]+/>', _fix_apply, sx)
+        styles_fix = sx.encode('utf-8')
+
+    # ── Passo 8: corrige s= nas células de dados ──────────────────────────────
+    def _fix_cell_s(xml_str: str) -> str:
+        if idx_money < 0 and idx_aliq < 0:
+            return xml_str
+
+        def _upd(m):
+            coord = m.group(1)
+            rest  = m.group(2)
+            lm = re.match(r'([A-Z]+)(\d+)', coord)
+            if not lm:
+                return m.group(0)
+            col = _col_num(lm.group(1))
+            row = int(lm.group(2))
+            if row < 2:
+                return m.group(0)   # cabeçalho — não mexe
+            if col in _COLS_MONEY and idx_money >= 0:
+                target = idx_money
+            elif col == _COL_ALIQ and idx_aliq >= 0:
+                target = idx_aliq
+            else:
+                return m.group(0)
+            rest2 = re.sub(r'\s*s="\d+"', '', rest)
+            return f'<c r="{coord}" s="{target}"{rest2}>'
+
+        return re.sub(r'<c r="([A-Z]+\d+)"([^>]*)>', _upd, xml_str)
+
+    # ── Helpers inlineStr ─────────────────────────────────────────────────────
     def _esc(s: str) -> str:
         return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
     def _processar_sheet(xml_str: str) -> str:
-        # Passo 2: shared strings → inlineStr  (<c t="s"><v>N</v></c>)
+        # Passo 2: shared strings → inlineStr
         def _rep_shared(m):
             pre, post, idx_str = m.group(1), m.group(2), m.group(3)
             idx  = int(idx_str)
@@ -72,7 +158,7 @@ def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
             _rep_shared, xml_str
         )
 
-        # Passo 3: inlineStr com <v>TEXTO</v> → <is><t>TEXTO</t></is>
+        # Passo 3: inlineStr com <v>TEXTO</v>
         def _rep_v(m):
             attrs, text = m.group(1), m.group(2)
             body = f'<is><t>{_esc(text)}</t></is>' if text else '<is><t/></is>'
@@ -83,7 +169,7 @@ def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
             _rep_v, xml_str
         )
 
-        # Passo 4: self-closing inlineStr → <is><t/></is>
+        # Passo 4: self-closing inlineStr
         xml_str = re.sub(
             r'<c ([^>]*t="inlineStr"[^/]*?)\s*/>',
             r'<c \1><is><t/></is></c>',
@@ -92,6 +178,7 @@ def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
 
         return xml_str
 
+    # ── Grava ZIP de saída ────────────────────────────────────────────────────
     buf_out = io.BytesIO()
     with zipfile.ZipFile(buf_out, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
         for item in src.infolist():
@@ -99,20 +186,25 @@ def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
             content = src.read(nome)
 
             if nome == 'xl/sharedStrings.xml':
-                continue                                       # remove do ZIP
+                continue
 
-            elif nome == 'xl/_rels/workbook.xml.rels':        # remove referência
+            elif nome == 'xl/styles.xml' and styles_fix:
+                content = styles_fix
+
+            elif nome == 'xl/_rels/workbook.xml.rels':
                 s = content.decode('utf-8')
                 s = re.sub(r'<Relationship[^>]+[Ss]hared[Ss]trings[^>]*/>\s*', '', s)
                 content = s.encode('utf-8')
 
-            elif nome == '[Content_Types].xml':                # remove Override
+            elif nome == '[Content_Types].xml':
                 s = content.decode('utf-8')
                 s = re.sub(r'<Override[^>]+[Ss]hared[Ss]trings[^>]*/>\s*', '', s)
                 content = s.encode('utf-8')
 
             elif nome.startswith('xl/worksheets/') and nome.endswith('.xml'):
-                content = _processar_sheet(content.decode('utf-8')).encode('utf-8')
+                xml = _processar_sheet(content.decode('utf-8'))
+                xml = _fix_cell_s(xml)          # corrige s= para formatos numéricos
+                content = xml.encode('utf-8')
 
             zout.writestr(item, content)
 
@@ -368,6 +460,12 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                         "Prestador",                        # [42] Origem
                         "Não informada",                    # [43] Status Aceite
                     ])
+
+                    # Formatos decimais — mesmas casas da planilha validada
+                    r = ws.max_row
+                    for _col in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
+                        ws.cell(row=r, column=_col).number_format = '#,##0.00'
+                    ws.cell(row=r, column=32).number_format = '0.00'
 
                     total += 1
                     print(f"  OK   {nome_arq}")
