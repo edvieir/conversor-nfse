@@ -80,9 +80,8 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
             return 0.0
 
     def _str(v):
-        """Retorna string limpa ou None (evita células inlineStr no XLSX)."""
-        s = str(v).strip() if v else ""
-        return s if s else None
+        """Retorna string limpa, ou '' para vazio (inlineStr via _forcar_inline)."""
+        return str(v).strip() if v else ""
 
     def _data_fmt(iso, fmt):
         if not iso:
@@ -173,8 +172,9 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
 
         for col_idx, (titulo, largura) in enumerate(COLUNAS, 1):
             cell = ws.cell(row=1, column=col_idx, value=titulo)
-            cell.font  = header_font
-            cell.fill  = header_fill
+            cell.font      = header_font
+            cell.fill      = header_fill
+            cell.data_type = 'inlineStr'   # Apache POI / portal ISS Fortaleza
             letra = get_column_letter(col_idx)
             ws.column_dimensions[letra].width = largura
 
@@ -221,52 +221,61 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                     simples_nac = "Sim" if op_simp in ("1", "2") else "Não"
 
                     ws.append([
-                        "NFS-e de Outro Município",           # [01] Tipo Doc.
-                        _str(d.get("nDFSe")),                # [02] Número
-                        None,                                 # [03] Código Verificação
-                        _data_fmt(dhEmi, "mes"),             # [04] Competência
-                        _data_fmt(dhEmi, "dia"),             # [05] Data
-                        None,                                 # [06] Vencimento
-                        None,                                 # [07] Número RPS
-                        None,                                 # [08] Série RPS
-                        None,                                 # [09] Tipo RPS
-                        "Tributação Fora do Município",      # [10] Natureza da Operação
-                        None,                                 # [11] Regime Especial Tributação
-                        simples_nac,                         # [12] Operação Simples Nacional
-                        "Não",                               # [13] Incentivador Cultural
-                        item,                                 # [14] Item da Lista
-                        _cnae_desc(cnae9),                   # [15] CNAE
-                        None,                                 # [16] ART
-                        None,                                 # [17] Código Obra
-                        None,                                 # [18] Número Empenho
-                        _str(d.get("desc")),                 # [19] Discriminação
-                        vS,                                   # [20] Valor dos Serviços
-                        None,                                 # [21] Deduções
-                        0.0,                                  # [22] Desconto Condicionado
-                        0.0,                                  # [23] Desconto Incondicionado
+                        "NFS-e de Outro Município",          # [01] Tipo Doc.
+                        _str(d.get("nDFSe")),               # [02] Número
+                        "",                                  # [03] Código Verificação
+                        _data_fmt(dhEmi, "mes"),            # [04] Competência
+                        _data_fmt(dhEmi, "dia"),            # [05] Data
+                        "",                                  # [06] Vencimento
+                        "",                                  # [07] Número RPS
+                        "",                                  # [08] Série RPS
+                        "",                                  # [09] Tipo RPS
+                        "Tributação Fora do Município",     # [10] Natureza da Operação
+                        "",                                  # [11] Regime Especial Tributação
+                        simples_nac,                        # [12] Operação Simples Nacional
+                        "Não",                              # [13] Incentivador Cultural
+                        item,                               # [14] Item da Lista
+                        _cnae_desc(cnae9),                  # [15] CNAE
+                        "",                                  # [16] ART
+                        "",                                  # [17] Código Obra
+                        "",                                  # [18] Número Empenho
+                        _str(d.get("desc")),                # [19] Discriminação
+                        vS,                                  # [20] Valor dos Serviços
+                        "",                                  # [21] Deduções
+                        0.0,                                 # [22] Desconto Condicionado
+                        0.0,                                 # [23] Desconto Incondicionado
                         ret_federais if ret_federais else 0.0, # [24] Retenções Federais
-                        None,                                 # [25] Outras Retenções
-                        vPIS    if vPIS    else None,         # [26] PIS
-                        vCOFINS if vCOFINS else None,        # [27] COFINS
-                        vIRRF   if vIRRF   else None,        # [28] IRRF
-                        vCSLL   if vCSLL   else None,        # [29] CSLL
-                        vINSS   if vINSS   else None,        # [30] INSS
-                        vS,                                   # [31] Base de Cálculo
-                        aliq,                                 # [32] Alíquota
-                        _local_prestacao(d) or None,         # [33] Local da Prestação
-                        "Sim" if iss_retido else "Não",      # [34] ISS Retido
-                        vISS,                                 # [35] Valor do ISS (sempre)
-                        vS,                                   # [36] Valor Líquido
-                        "NORMAL",                            # [37] Status Doc.
-                        None,                                 # [38] Inscrição Prestador
-                        _str(d.get("cnpj")),                 # [39] CPF/CNPJ Prestador
-                        _str(d.get("nome")),                 # [40] Razão Social
-                        "Atual",                             # [41] Escrituração
-                        "Prestador",                         # [42] Origem
-                        "Não informada",                     # [43] Status Aceite
+                        "",                                  # [25] Outras Retenções
+                        vPIS    if vPIS    else "",          # [26] PIS
+                        vCOFINS if vCOFINS else "",         # [27] COFINS
+                        vIRRF   if vIRRF   else "",         # [28] IRRF
+                        vCSLL   if vCSLL   else "",         # [29] CSLL
+                        vINSS   if vINSS   else "",         # [30] INSS
+                        vS,                                  # [31] Base de Cálculo
+                        aliq,                               # [32] Alíquota
+                        _local_prestacao(d),                # [33] Local da Prestação
+                        "Sim" if iss_retido else "Não",     # [34] ISS Retido
+                        vISS,                               # [35] Valor do ISS (sempre)
+                        vS,                                  # [36] Valor Líquido
+                        "NORMAL",                           # [37] Status Doc.
+                        "",                                  # [38] Inscrição Prestador
+                        _str(d.get("cnpj")),                # [39] CPF/CNPJ Prestador
+                        _str(d.get("nome")),                # [40] Razão Social
+                        "Atual",                            # [41] Escrituração
+                        "Prestador",                        # [42] Origem
+                        "Não informada",                    # [43] Status Aceite
                     ])
-                    # Sem formatação especial — portal exige formato General
+
+                    # ── Forçar inlineStr em toda a linha ──────────────────────
+                    # O portal ISS Fortaleza foi construído com Apache POI, que
+                    # grava strings como inlineStr (t="inlineStr"). openpyxl usa
+                    # shared strings (t="s") por padrão — o portal rejeita o arquivo.
+                    # Forçar data_type='inlineStr' em todas as células string garante
+                    # compatibilidade.
                     r = ws.max_row
+                    for _cell in ws[r]:
+                        if isinstance(_cell.value, str):
+                            _cell.data_type = 'inlineStr'
 
                     total += 1
                     print(f"  OK   {nome_arq}")
