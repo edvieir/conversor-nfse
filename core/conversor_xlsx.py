@@ -7,13 +7,117 @@ Adicionado: st.progress() no loop principal para feedback visual.
 import sys
 import io
 import os
+import re
 import tempfile
 import contextlib
+import zipfile
+import xml.etree.ElementTree as _ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import nfse_xml_to_txt as C
+
+
+# ── Conversor ZIP: SharedStrings → InlineStr ──────────────────────────────────
+def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
+    """
+    Pós-processa o XLSX gerado pelo openpyxl para garantir que TODAS as células
+    string usem formato inlineStr (<is><t>texto</t></is>), conforme esperado pelo
+    portal ISS Fortaleza (construído com Apache POI).
+
+    openpyxl gera por padrão:
+      • strings não-vazias → t="s" + índice em sharedStrings.xml
+      • strings vazias     → t="inlineStr" self-closing  (<c ... />)
+      • ambas com <v>      → quando data_type='inlineStr' é forçado manualmente
+
+    Apache POI espera:
+      • t="inlineStr" + <is><t>texto</t></is>  para qualquer string (vazia ou não)
+
+    Processo:
+      1. Lê sharedStrings.xml → tabela índice→texto
+      2. Converte <c t="s"><v>N</v></c>  →  <c t="inlineStr"><is><t>TEXT</t></is></c>
+      3. Converte <c t="inlineStr"><v>T</v></c>  →  <c t="inlineStr"><is><t>T</t></is></c>
+      4. Converte <c t="inlineStr"/>  →  <c t="inlineStr"><is><t/></is></c>
+      5. Remove sharedStrings.xml e suas referências do ZIP
+    """
+    _NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+
+    src = zipfile.ZipFile(io.BytesIO(xlsx_bytes), 'r')
+    nomes = src.namelist()
+
+    # ── Passo 1: monta tabela de shared strings ───────────────────────────────
+    tabela: list[str] = []
+    if 'xl/sharedStrings.xml' in nomes:
+        ss_root = _ET.fromstring(src.read('xl/sharedStrings.xml').decode('utf-8'))
+        for si in ss_root.iter(f'{{{_NS}}}si'):
+            parts = [t.text or '' for t in si.iter(f'{{{_NS}}}t')]
+            tabela.append(''.join(parts))
+
+    def _esc(s: str) -> str:
+        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    def _processar_sheet(xml_str: str) -> str:
+        # Passo 2: shared strings → inlineStr  (<c t="s"><v>N</v></c>)
+        def _rep_shared(m):
+            pre, post, idx_str = m.group(1), m.group(2), m.group(3)
+            idx  = int(idx_str)
+            text = tabela[idx] if 0 <= idx < len(tabela) else ''
+            tag  = f'<c {pre}t="inlineStr"{post}>'
+            body = f'<is><t>{_esc(text)}</t></is>' if text else '<is><t/></is>'
+            return f'{tag}{body}</c>'
+
+        xml_str = re.sub(
+            r'<c ((?:[^\S\n]*\S[^>]*?\s+)?)t="s"(\s*(?:[^>]*?)?)><v>(\d+)</v></c>',
+            _rep_shared, xml_str
+        )
+
+        # Passo 3: inlineStr com <v>TEXTO</v> → <is><t>TEXTO</t></is>
+        def _rep_v(m):
+            attrs, text = m.group(1), m.group(2)
+            body = f'<is><t>{_esc(text)}</t></is>' if text else '<is><t/></is>'
+            return f'<c {attrs}>{body}</c>'
+
+        xml_str = re.sub(
+            r'<c ([^>]*t="inlineStr"[^>]*)><v>([^<]*)</v></c>',
+            _rep_v, xml_str
+        )
+
+        # Passo 4: self-closing inlineStr → <is><t/></is>
+        xml_str = re.sub(
+            r'<c ([^>]*t="inlineStr"[^/]*?)\s*/>',
+            r'<c \1><is><t/></is></c>',
+            xml_str
+        )
+
+        return xml_str
+
+    buf_out = io.BytesIO()
+    with zipfile.ZipFile(buf_out, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+        for item in src.infolist():
+            nome    = item.filename
+            content = src.read(nome)
+
+            if nome == 'xl/sharedStrings.xml':
+                continue                                       # remove do ZIP
+
+            elif nome == 'xl/_rels/workbook.xml.rels':        # remove referência
+                s = content.decode('utf-8')
+                s = re.sub(r'<Relationship[^>]+[Ss]hared[Ss]trings[^>]*/>\s*', '', s)
+                content = s.encode('utf-8')
+
+            elif nome == '[Content_Types].xml':                # remove Override
+                s = content.decode('utf-8')
+                s = re.sub(r'<Override[^>]+[Ss]hared[Ss]trings[^>]*/>\s*', '', s)
+                content = s.encode('utf-8')
+
+            elif nome.startswith('xl/worksheets/') and nome.endswith('.xml'):
+                content = _processar_sheet(content.decode('utf-8')).encode('utf-8')
+
+            zout.writestr(item, content)
+
+    src.close()
+    return buf_out.getvalue()
 
 
 def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
@@ -172,9 +276,8 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
 
         for col_idx, (titulo, largura) in enumerate(COLUNAS, 1):
             cell = ws.cell(row=1, column=col_idx, value=titulo)
-            cell.font      = header_font
-            cell.fill      = header_fill
-            cell.data_type = 'inlineStr'   # Apache POI / portal ISS Fortaleza
+            cell.font  = header_font
+            cell.fill  = header_fill
             letra = get_column_letter(col_idx)
             ws.column_dimensions[letra].width = largura
 
@@ -266,17 +369,6 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                         "Não informada",                    # [43] Status Aceite
                     ])
 
-                    # ── Forçar inlineStr em toda a linha ──────────────────────
-                    # O portal ISS Fortaleza foi construído com Apache POI, que
-                    # grava strings como inlineStr (t="inlineStr"). openpyxl usa
-                    # shared strings (t="s") por padrão — o portal rejeita o arquivo.
-                    # Forçar data_type='inlineStr' em todas as células string garante
-                    # compatibilidade.
-                    r = ws.max_row
-                    for _cell in ws[r]:
-                        if isinstance(_cell.value, str):
-                            _cell.data_type = 'inlineStr'
-
                     total += 1
                     print(f"  OK   {nome_arq}")
                     print(f"       NFSe {d.get('nDFSe','')} | {d.get('nome','')[:35]}")
@@ -301,5 +393,7 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
         if os.path.exists(saida):
             with open(saida, "rb") as fh:
                 data = fh.read()
+            # Converte SharedStrings → InlineStr (compatibilidade Apache POI)
+            data = _xlsx_para_inlinestr(data)
 
     return data, log
