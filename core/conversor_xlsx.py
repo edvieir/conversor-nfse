@@ -80,7 +80,9 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
             return 0.0
 
     def _str(v):
-        return str(v).strip() if v else ""
+        """Retorna string limpa ou None (evita células inlineStr no XLSX)."""
+        s = str(v).strip() if v else ""
+        return s if s else None
 
     def _data_fmt(iso, fmt):
         if not iso:
@@ -213,58 +215,58 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                     iss_retido = (tpRet == "2")
 
                     ret_federais  = vPIS + vCOFINS + vCSLL
-                    valor_iss_col = vISS if iss_retido else 0
+
+                    # Operação Simples Nacional — lê do XML
+                    op_simp = _str(d.get("opSimpNac")) or ""
+                    simples_nac = "Sim" if op_simp in ("1", "2") else "Não"
 
                     ws.append([
-                        "NFS-e de Outro Município",
-                        _str(d.get("nDFSe")),
-                        None,
-                        _data_fmt(dhEmi, "mes"),
-                        _data_fmt(dhEmi, "dia"),
-                        "",
-                        "",
-                        "",
-                        "",
-                        "Tributação Fora do Município",
-                        "",
-                        "Não",
-                        None,
-                        item,
-                        _cnae_desc(cnae9),
-                        "",
-                        "",
-                        "",
-                        _str(d.get("desc")),
-                        vS,
-                        "",
-                        "",
-                        "",
-                        ret_federais,
-                        "",
-                        vPIS    if vPIS    else "",
-                        vCOFINS if vCOFINS else "",
-                        vIRRF   if vIRRF   else "",
-                        vCSLL   if vCSLL   else "",
-                        vINSS   if vINSS   else "",
-                        vS,
-                        aliq,
-                        _local_prestacao(d),
-                        "Sim" if iss_retido else "Não",
-                        valor_iss_col,
-                        vS,
-                        "NORMAL",
-                        "",
-                        _str(d.get("cnpj")),
-                        _str(d.get("nome")),
-                        "Atual",
-                        "Prestador",
-                        "Não informada",
+                        "NFS-e de Outro Município",           # [01] Tipo Doc.
+                        _str(d.get("nDFSe")),                # [02] Número
+                        None,                                 # [03] Código Verificação
+                        _data_fmt(dhEmi, "mes"),             # [04] Competência
+                        _data_fmt(dhEmi, "dia"),             # [05] Data
+                        None,                                 # [06] Vencimento
+                        None,                                 # [07] Número RPS
+                        None,                                 # [08] Série RPS
+                        None,                                 # [09] Tipo RPS
+                        "Tributação Fora do Município",      # [10] Natureza da Operação
+                        None,                                 # [11] Regime Especial Tributação
+                        simples_nac,                         # [12] Operação Simples Nacional
+                        "Não",                               # [13] Incentivador Cultural
+                        item,                                 # [14] Item da Lista
+                        _cnae_desc(cnae9),                   # [15] CNAE
+                        None,                                 # [16] ART
+                        None,                                 # [17] Código Obra
+                        None,                                 # [18] Número Empenho
+                        _str(d.get("desc")),                 # [19] Discriminação
+                        vS,                                   # [20] Valor dos Serviços
+                        None,                                 # [21] Deduções
+                        0.0,                                  # [22] Desconto Condicionado
+                        0.0,                                  # [23] Desconto Incondicionado
+                        ret_federais if ret_federais else 0.0, # [24] Retenções Federais
+                        None,                                 # [25] Outras Retenções
+                        vPIS    if vPIS    else None,         # [26] PIS
+                        vCOFINS if vCOFINS else None,        # [27] COFINS
+                        vIRRF   if vIRRF   else None,        # [28] IRRF
+                        vCSLL   if vCSLL   else None,        # [29] CSLL
+                        vINSS   if vINSS   else None,        # [30] INSS
+                        vS,                                   # [31] Base de Cálculo
+                        aliq,                                 # [32] Alíquota
+                        _local_prestacao(d) or None,         # [33] Local da Prestação
+                        "Sim" if iss_retido else "Não",      # [34] ISS Retido
+                        vISS,                                 # [35] Valor do ISS (sempre)
+                        vS,                                   # [36] Valor Líquido
+                        "NORMAL",                            # [37] Status Doc.
+                        None,                                 # [38] Inscrição Prestador
+                        _str(d.get("cnpj")),                 # [39] CPF/CNPJ Prestador
+                        _str(d.get("nome")),                 # [40] Razão Social
+                        "Atual",                             # [41] Escrituração
+                        "Prestador",                         # [42] Origem
+                        "Não informada",                     # [43] Status Aceite
                     ])
-
+                    # Sem formatação especial — portal exige formato General
                     r = ws.max_row
-                    for col_mon in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
-                        ws.cell(row=r, column=col_mon).number_format = '#,##0.00'
-                    ws.cell(row=r, column=32).number_format = '0.00'
 
                     total += 1
                     print(f"  OK   {nome_arq}")
