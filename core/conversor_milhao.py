@@ -513,21 +513,21 @@ def processar_csv_xlsx(conteudo: bytes) -> tuple:
                 "",                             # Número Empenho
                 c[72],                          # Discriminação dos Serviços
                 vS,                             # Valor dos Serviços
-                vDed if vDed else "",           # Deduções Permitidas em Lei
-                "",                             # Desconto Condicionado
-                "",                             # Desconto Incondicionado
-                ret_fed if ret_fed else "",     # Retenções Federais
-                "",                             # Outras Retenções
-                vPIS    if vPIS    else "",     # PIS
-                vCOFINS if vCOFINS else "",     # COFINS
-                vIRRF   if vIRRF   else "",     # IRRF
-                vCSLL   if vCSLL   else "",     # CSLL
-                vINSS   if vINSS   else "",     # INSS
+                vDed if vDed else None,         # Deduções Permitidas em Lei
+                None,                           # Desconto Condicionado
+                None,                           # Desconto Incondicionado
+                ret_fed if ret_fed else 0.0,    # Retenções Federais
+                None,                           # Outras Retenções
+                vPIS    if vPIS    else None,   # PIS
+                vCOFINS if vCOFINS else None,   # COFINS
+                vIRRF   if vIRRF   else None,   # IRRF
+                vCSLL   if vCSLL   else None,   # CSLL
+                vINSS   if vINSS   else None,   # INSS
                 vS,                             # Base de Cálculo
                 aliq,                           # Alíquota (%)
-                local_pr,                       # Local da Prestação
+                local_pr if local_pr else None, # Local da Prestação
                 "Sim" if iss_retido else "Não", # ISS Retido
-                vISS if iss_retido else "",     # Valor do ISS
+                vISS if iss_retido else 0,      # Valor do ISS (0 se não retido)
                 vS,                             # Valor Líquido
                 status_doc,                     # Status Doc.
                 c[8],                           # Inscrição Prestador
@@ -542,7 +542,7 @@ def processar_csv_xlsx(conteudo: bytes) -> tuple:
             row_num = ws.max_row
             for col_mon in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
                 ws.cell(row=row_num, column=col_mon).number_format = '#,##0.00'
-            ws.cell(row=row_num, column=32).number_format = '0.00'
+            ws.cell(row=row_num, column=32).number_format = '#,##0.00'
 
             ok += 1
             log.write(f"  OK   NFS-e {nota} | {prest}\n")
