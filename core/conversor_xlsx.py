@@ -20,9 +20,10 @@ import nfse_xml_to_txt as C
 
 
 # ── Conversor ZIP: SharedStrings → InlineStr + Formatos Numéricos ────────────
-# Colunas com formato #,##0.00 (1-based): monetárias
-_COLS_MONEY = frozenset([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36])
-_COL_ALIQ   = 32   # Alíquota → formato 0.00
+# Colunas com formato #,##0.00 (1-based): monetárias + alíquota
+# Col 32 (Alíquota) usa o mesmo formato do "deu certo" — numFmtId=4 (#,##0.00)
+_COLS_MONEY = frozenset([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36])
+_COL_ALIQ   = -1   # não usado — alíquota já está em _COLS_MONEY
 
 
 def _col_num(letters: str) -> int:
@@ -461,11 +462,10 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                         "Não informada",                    # [43] Status Aceite
                     ])
 
-                    # Formatos decimais — mesmas casas da planilha validada
+                    # Formatos decimais — #,##0.00 em todos (igual ao "deu certo")
                     r = ws.max_row
-                    for _col in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
+                    for _col in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36]:
                         ws.cell(row=r, column=_col).number_format = '#,##0.00'
-                    ws.cell(row=r, column=32).number_format = '0.00'
 
                     total += 1
                     print(f"  OK   {nome_arq}")
