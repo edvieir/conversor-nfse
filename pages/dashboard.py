@@ -115,135 +115,40 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Gráficos ──────────────────────────────────────────────────────────────
+    # ── Gráfico últimos 14 dias ───────────────────────────────────────────────
     if s["total"] > 0:
-        try:
-            import plotly.graph_objects as go
-            _plotly_ok = True
-        except ImportError:
-            _plotly_ok = False
+        import pandas as _pd
 
-        agora   = datetime.now()
-        dias    = [(agora - timedelta(days=i)).date() for i in range(13, -1, -1)]
-        por_dia = s.get("por_dia", {})
-        labels  = [str(d)[5:] for d in dias]
-        values  = [por_dia.get(str(d), 0) for d in dias]
-
-        # ── Gráfico de linha — últimos 14 dias ───────────────────────────────
         st.markdown(
             f'<div class="dash-section-title">{icon("activity", 13, "#8B949E")} '
             f'Conversões nos últimos 14 dias</div>',
             unsafe_allow_html=True,
         )
 
-        fig_linha = go.Figure()
-        fig_linha.add_trace(go.Scatter(
-            x=labels, y=values,
-            mode="lines+markers",
-            line=dict(color="#00CED1", width=2.5, shape="spline"),
-            marker=dict(color="#00CED1", size=7, line=dict(color="#0A0E1A", width=2)),
-            fill="tozeroy",
-            fillcolor="rgba(0,206,209,0.08)",
-            hovertemplate="<b>%{x}</b><br>%{y} conversão(ões)<extra></extra>",
-        ))
-        fig_linha.update_layout(
-            height=220, margin=dict(l=0, r=0, t=10, b=0),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False, color="#484F58", tickfont=dict(size=11)),
-            yaxis=dict(showgrid=True, gridcolor="#1C2333", color="#484F58",
-                       tickfont=dict(size=11), rangemode="tozero"),
-            font=dict(family="Inter, sans-serif"),
-            hoverlabel=dict(bgcolor="#161B27", bordercolor="#2F3E55",
-                            font=dict(color="#E6EDF3", size=12)),
-        )
-        st.plotly_chart(fig_linha, use_container_width=True, config={"displayModeBar": False})
+        agora = datetime.now()
+        dias  = [(agora - timedelta(days=i)).date() for i in range(13, -1, -1)]
+        por_dia = s.get("por_dia", {})
+        contagem = {str(d): por_dia.get(str(d), 0) for d in dias}
 
-        # ── Linha 2: barras TXT vs XLSX + pizza por formato ──────────────────
-        col_bar, col_pie = st.columns([3, 2])
+        df_dias = _pd.DataFrame({
+            "Dia":        [str(d)[5:] for d in dias],
+            "Conversoes": [contagem[str(d)] for d in dias],
+        }).set_index("Dia")
 
-        with col_bar:
-            txt_v  = s.get("txt",  0)
-            xlsx_v = s.get("xlsx", 0)
-            st.markdown(
-                f'<div class="dash-section-title">{icon("bar-chart-2", 13, "#8B949E")} '
-                f'TXT vs XLSX gerados</div>',
-                unsafe_allow_html=True,
-            )
-            fig_bar = go.Figure(data=[
-                go.Bar(name="TXT",  x=["TXT"],  y=[txt_v],
-                       marker_color="#00CED1", width=0.4,
-                       hovertemplate="<b>TXT</b><br>%{y}<extra></extra>"),
-                go.Bar(name="XLSX", x=["XLSX"], y=[xlsx_v],
-                       marker_color="#7B3FE4", width=0.4,
-                       hovertemplate="<b>XLSX</b><br>%{y}<extra></extra>"),
-            ])
-            fig_bar.update_layout(
-                height=200, margin=dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                showlegend=False, barmode="group",
-                xaxis=dict(showgrid=False, color="#484F58"),
-                yaxis=dict(showgrid=True, gridcolor="#1C2333", color="#484F58",
-                           rangemode="tozero"),
-                font=dict(family="Inter, sans-serif"),
-                hoverlabel=dict(bgcolor="#161B27", bordercolor="#2F3E55",
-                                font=dict(color="#E6EDF3", size=12)),
-            )
-            st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
+        st.bar_chart(df_dias, color="#00CED1", height=210)
 
-        with col_pie:
-            st.markdown(
-                f'<div class="dash-section-title">{icon("pie-chart", 13, "#8B949E")} '
-                f'Distribuição</div>',
-                unsafe_allow_html=True,
-            )
-            pie_labels = ["TXT", "XLSX"]
-            pie_values = [txt_v, xlsx_v]
-            fig_pie = go.Figure(data=[go.Pie(
-                labels=pie_labels, values=pie_values,
-                hole=0.55,
-                marker=dict(colors=["#00CED1", "#7B3FE4"],
-                            line=dict(color="#0A0E1A", width=2)),
-                textfont=dict(color="#E6EDF3", size=12),
-                hovertemplate="<b>%{label}</b><br>%{value} (%{percent})<extra></extra>",
-            )])
-            fig_pie.update_layout(
-                height=200, margin=dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor="rgba(0,0,0,0)",
-                legend=dict(font=dict(color="#8B949E", size=11),
-                            bgcolor="rgba(0,0,0,0)"),
-                font=dict(family="Inter, sans-serif"),
-                hoverlabel=dict(bgcolor="#161B27", bordercolor="#2F3E55",
-                                font=dict(color="#E6EDF3", size=12)),
-            )
-            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
-
-        # ── Por usuário — só admin vê ─────────────────────────────────────────
+        # Por usuário — só admin vê
         if is_admin() and s["por_usuario"]:
             st.markdown(
-                f'<div class="dash-section-title" style="margin-top:6px;">'
+                f'<div class="dash-section-title" style="margin-top:14px;">'
                 f'{icon("users", 13, "#8B949E")} Uso por usuário</div>',
                 unsafe_allow_html=True,
             )
-            usr_nomes  = list(s["por_usuario"].keys())
-            usr_counts = list(s["por_usuario"].values())
-            cores = ["#7B3FE4", "#00CED1", "#2F6FEB", "#F59E0B", "#10B981",
-                     "#EF4444", "#8B5CF6", "#06B6D4"]
-            fig_usr = go.Figure(go.Bar(
-                x=usr_nomes, y=usr_counts,
-                marker_color=cores[:len(usr_nomes)],
-                hovertemplate="<b>%{x}</b><br>%{y} conversão(ões)<extra></extra>",
-            ))
-            fig_usr.update_layout(
-                height=200, margin=dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False, color="#484F58"),
-                yaxis=dict(showgrid=True, gridcolor="#1C2333", color="#484F58",
-                           range=[0, max(usr_counts) * 1.25 if usr_counts else 1]),
-                font=dict(family="Inter, sans-serif"),
-                hoverlabel=dict(bgcolor="#161B27", bordercolor="#2F3E55",
-                                font=dict(color="#E6EDF3", size=12)),
+            df_usr = _pd.DataFrame(
+                {"Conversoes": list(s["por_usuario"].values())},
+                index=list(s["por_usuario"].keys()),
             )
-            st.plotly_chart(fig_usr, use_container_width=True, config={"displayModeBar": False})
+            st.bar_chart(df_usr, color="#7B3FE4", height=175)
 
     # ── Atividade recente ─────────────────────────────────────────────────────
     st.markdown(
