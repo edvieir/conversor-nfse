@@ -913,7 +913,7 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
         )
         if nome_mun and uf:
             return f"{nome_mun.upper()} - {uf.upper()}"
-        return nome_mun.upper() if nome_mun else ""
+        return nome_mun.upper() if nome_mun else None
 
     def _cnae_desc(cnae9):
         desc = getattr(C, "CNAE9_TO_DESC", {}).get(cnae9, "")
