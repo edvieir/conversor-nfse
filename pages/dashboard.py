@@ -117,7 +117,11 @@ def render():
 
     # ── Gráficos ──────────────────────────────────────────────────────────────
     if s["total"] > 0:
-        import plotly.graph_objects as go
+        try:
+            import plotly.graph_objects as go
+            _plotly_ok = True
+        except ImportError:
+            _plotly_ok = False
 
         agora   = datetime.now()
         dias    = [(agora - timedelta(days=i)).date() for i in range(13, -1, -1)]
