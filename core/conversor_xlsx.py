@@ -81,7 +81,9 @@ def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
             m = re.search(pat, s)
             return int(m.group(1)) if m else d
 
-        xfs = re.findall(r'<xf [^>]+/>', sx)
+        # Busca apenas dentro de <cellXfs> (o s= das células aponta para cellXfs, não cellStyleXfs)
+        cellxfs_block = re.search(r'<cellXfs[^>]*>(.*?)</cellXfs>', sx, re.DOTALL)
+        xfs = re.findall(r'<xf [^>]+/>', cellxfs_block.group(1)) if cellxfs_block else []
         for i, xf in enumerate(xfs):
             nfid = _ai(r'numFmtId="(\d+)"', xf)
             fnt  = _ai(r'fontId="(\d+)"',   xf)
@@ -91,17 +93,16 @@ def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
                 if nfid == 2 and idx_aliq  < 0: idx_aliq  = i
 
         # Cria estilos ausentes
-        for nfid_needed, attr in [(4, 'idx_money'), (2, 'idx_aliq')]:
-            if locals()[attr] < 0:
-                cur = len(re.findall(r'<xf [^>]+/>', sx))
-                locals()[attr] = cur  # não funciona com locals(); usar variáveis direto
-                entry = (f'<xf numFmtId="{nfid_needed}" fontId="0" fillId="0"'
-                         f' borderId="0" xfId="0" applyNumberFormat="1"/>')
-                sx = sx.replace('</cellXfs>', entry + '</cellXfs>')
-                if nfid_needed == 4:
-                    idx_money = cur
-                else:
-                    idx_aliq  = cur
+        cur_count = len(xfs)
+        if idx_money < 0:
+            entry = '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+            sx = sx.replace('</cellXfs>', entry + '</cellXfs>')
+            idx_money = cur_count
+            cur_count += 1
+        if idx_aliq < 0:
+            entry = '<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+            sx = sx.replace('</cellXfs>', entry + '</cellXfs>')
+            idx_aliq = cur_count
 
         # Adiciona applyNumberFormat="1" onde falta
         def _fix_apply(m):
