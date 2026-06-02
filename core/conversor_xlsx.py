@@ -420,7 +420,7 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                     ws.append([
                         "NFS-e de Outro Município",          # [01] Tipo Doc.
                         _str(d.get("nDFSe")),               # [02] Número
-                        "",                                  # [03] Código Verificação
+                        None,                                # [03] Código Verificação
                         _data_fmt(dhEmi, "mes"),            # [04] Competência
                         _data_fmt(dhEmi, "dia"),            # [05] Data
                         None,                                # [06] Vencimento
@@ -465,8 +465,9 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
 
                     # Formatos decimais — #,##0.00 em todos (igual ao "deu certo")
                     r = ws.max_row
-                    for _col in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36]:
+                    for _col in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
                         ws.cell(row=r, column=_col).number_format = '#,##0.00'
+                    ws.cell(row=r, column=32).number_format = '0.00'  # Alíquota
 
                     total += 1
                     print(f"  OK   {nome_arq}")
