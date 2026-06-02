@@ -22,8 +22,8 @@ import nfse_xml_to_txt as C
 # ── Conversor ZIP: SharedStrings → InlineStr + Formatos Numéricos ────────────
 # Colunas com formato #,##0.00 (1-based): monetárias + alíquota
 # Col 32 (Alíquota) usa o mesmo formato do "deu certo" — numFmtId=4 (#,##0.00)
-_COLS_MONEY = frozenset([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36])
-_COL_ALIQ   = -1   # não usado — alíquota já está em _COLS_MONEY
+_COLS_MONEY = frozenset([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36])
+_COL_ALIQ   = 32   # Alíquota usa 0.00 (sem separador de milhar)
 
 
 def _col_num(letters: str) -> int:
@@ -401,6 +401,16 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                     if im:
                         d["im"] = im
 
+                    # Extrai nNFSe diretamente do XML (número correto da nota)
+                    import xml.etree.ElementTree as _ET2
+                    try:
+                        _root2 = _ET2.parse(xml_path).getroot()
+                        _nNFSe = next((e.text for e in _root2.iter() if e.tag.endswith("nNFSe")), None)
+                        if _nNFSe:
+                            d["nNFSe"] = _nNFSe.strip()
+                    except Exception:
+                        pass
+
                     cnae9, item, aliq_cnae = C.resolver_cnae9(d)
                     dhEmi = _str(d.get("dhEmi", ""))
 
@@ -419,7 +429,7 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
 
                     ws.append([
                         "NFS-e de Outro Município",          # [01] Tipo Doc.
-                        _str(d.get("nDFSe")),               # [02] Número
+                        _str(d.get("nNFSe") or d.get("nDFSe")), # [02] Número (nNFSe tem prioridade)
                         None,                                # [03] Código Verificação
                         _data_fmt(dhEmi, "mes"),            # [04] Competência
                         _data_fmt(dhEmi, "dia"),            # [05] Data
