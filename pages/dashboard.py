@@ -234,7 +234,7 @@ def render():
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(showgrid=False, color="#484F58"),
                 yaxis=dict(showgrid=True, gridcolor="#1C2333", color="#484F58",
-                           rangemode="tozero"),
+                           range=[0, max(usr_counts) * 1.25 if usr_counts else 1]),
                 font=dict(family="Inter, sans-serif"),
                 hoverlabel=dict(bgcolor="#161B27", bordercolor="#2F3E55",
                                 font=dict(color="#E6EDF3", size=12)),
