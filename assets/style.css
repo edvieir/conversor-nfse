@@ -282,7 +282,7 @@ div[data-testid="stFormSubmitButton"] > button:hover,
 div[data-testid="stButton"] > button {
     background: #161B27 !important; color: #C9D1D9 !important;
     border: 1px solid #2F3E55 !important; border-radius: 8px !important;
-    font-weight: 600 !important; font-size: .84rem !important;
+    font-weight: 600 !important; font-size: .76rem !important;
     height: 2.7em !important; width: 100% !important;
     display: flex !important; align-items: center !important;
     justify-content: center !important; padding: 0 .5em !important;
