@@ -147,12 +147,17 @@ def _consultar_lote(
     key_path: str,
     cnpj: str,
     nsu: int,
-) -> dict:
-    """GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true"""
+) -> dict | None:
+    """
+    GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true
+    Retorna None quando 404 (sem mais documentos).
+    """
     url    = f"{BASE_URL}/DFe/{nsu}"
     params = {"cnpjConsulta": cnpj, "lote": "true"}
     with _make_session(cert_path, key_path) as s:
         resp = s.get(url, params=params, timeout=TIMEOUT)
+    if resp.status_code == 404:
+        return None  # sem mais documentos
     resp.raise_for_status()
     return resp.json()
 
@@ -197,6 +202,11 @@ def baixar_xmls_nfse(
                 log.append(f"Consultando lote a partir do NSU {nsu}...")
                 resultado = _consultar_lote(cert_path, key_path, cnpj_uso, nsu)
 
+                # 404 ou status sem documentos = fim
+                if resultado is None:
+                    log.append("Sem mais documentos (fim da fila).")
+                    break
+
                 status = resultado.get("StatusProcessamento", "")
                 if status == "NENHUM_DOCUMENTO_LOCALIZADO":
                     log.append("Sem mais documentos.")
@@ -216,21 +226,27 @@ def baixar_xmls_nfse(
                         nsu_max = nsu_doc
 
                     tipo_doc = doc.get("TipoDocumento", "")
+                    data_str = (doc.get("DataHoraGeracao") or "")[:10]
+
+                    # Log todos os documentos para diagnóstico
+                    log.append(f"    NSU={nsu_doc} tipo={tipo_doc} data={data_str}")
+
                     if tipo_doc != "NFSE":
                         continue
 
-                    # Filtro por data (campo DataHoraGeracao)
-                    data_str = (doc.get("DataHoraGeracao") or "")[:10]
+                    # Filtro por data
                     if data_str:
                         try:
                             data_doc = date.fromisoformat(data_str)
                             if not (data_ini <= data_doc <= data_fim):
+                                log.append(f"    → fora do período ({data_ini}..{data_fim}), ignorado")
                                 continue
                         except ValueError:
                             pass
 
                     arquivo_b64 = doc.get("ArquivoXml")
                     if not arquivo_b64:
+                        log.append(f"    → sem ArquivoXml, ignorado")
                         continue
 
                     chave = doc.get("ChaveAcesso") or str(nsu_doc)
@@ -238,15 +254,16 @@ def baixar_xmls_nfse(
                         xml_bytes = _decodificar_xml(arquivo_b64)
                         zf.writestr(f"nfse_{chave}.xml", xml_bytes)
                         total_ok += 1
-                        log.append(f"  NFS-e {chave} ({data_str}) — OK")
+                        log.append(f"    → SALVO: nfse_{chave}.xml")
                     except Exception as e:
                         erros += 1
-                        log.append(f"  NFS-e {chave} — ERRO ao decodificar: {e}")
+                        log.append(f"    → ERRO ao decodificar: {e}")
 
-                # Avança NSU para o próximo lote
+                # Avança NSU: usa o maior NSU do lote + 1
                 if nsu_max <= nsu:
-                    break  # sem avanço, evita loop infinito
-                nsu = nsu_max
+                    log.append("NSU não avançou, encerrando.")
+                    break
+                nsu = nsu_max + 1
 
                 if progress_cb:
                     progress_cb(min(lote_num / (lote_num + 1), 0.95))
