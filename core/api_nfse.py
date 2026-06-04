@@ -38,7 +38,7 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
     from cryptography.x509.oid import NameOID
 
     senha_bytes = senha.encode() if isinstance(senha, str) else senha
-    private_key, certificate, _ = load_key_and_certificates(pfx_bytes, senha_bytes)
+    private_key, certificate, additional_certs = load_key_and_certificates(pfx_bytes, senha_bytes)
 
     # ── Extrai CNPJ do certificado ──────────────────────────────────────────
     cnpj_cert = ""
@@ -74,8 +74,11 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
         except Exception:
             pass
 
-    # ── Salva PEM ───────────────────────────────────────────────────────────
+    # ── Salva PEM (inclui cadeia intermediária ICP-Brasil) ──────────────────
     cert_pem = certificate.public_bytes(Encoding.PEM)
+    if additional_certs:
+        for ac in additional_certs:
+            cert_pem += ac.public_bytes(Encoding.PEM)
     key_pem  = private_key.private_bytes(
         Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()
     )
