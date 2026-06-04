@@ -63,11 +63,14 @@ def _render_login():
     from assets.icons import SVG_LOGIN_GRAPHIC
 
     st.markdown("""
-    <style>
-        [data-testid="stSidebar"],
-        [data-testid="stSidebarCollapsedControl"] { display: none !important; }
-        .block-container { max-width: 440px !important; }
-    </style>""", unsafe_allow_html=True)
+<style>
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="stSidebarCollapseButton"] { display: none !important; }
+    .block-container { max-width: 440px !important; padding: 0 1.5rem !important; }
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(ellipse at 30% 20%, #0d1f3a 0%, #0c1324 60%) !important;
+    }
+</style>""", unsafe_allow_html=True)
 
     st.markdown('<div style="height:44px"></div>', unsafe_allow_html=True)
 
@@ -76,15 +79,16 @@ def _render_login():
 
     # Título
     st.markdown("""
-    <div style="text-align:center; margin-bottom:1.8rem;">
-        <div style="color:#E6EDF3; font-size:1.4rem; font-weight:800; letter-spacing:-.4px;">
-            Conversor NFS-e
-        </div>
-        <div style="color:#484F58; font-size:.82rem; margin-top:.45rem; letter-spacing:.05px;">
-            ISS Fortaleza &nbsp;&middot;&nbsp; SPED GOV &nbsp;&middot;&nbsp; Modelo Nacional 2026
-        </div>
+<div style="text-align:center; margin-bottom:1.8rem;">
+    <div style="background:linear-gradient(135deg,#00b8cc,#007a8a);border-radius:14px;
+                width:56px;height:56px;display:flex;align-items:center;justify-content:center;
+                margin:0 auto 1rem;box-shadow:0 0 30px rgba(0,229,255,.35);">
+        <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='3' width='20' height='14' rx='2'/><path d='M8 21h8M12 17v4'/></svg>
     </div>
-    """, unsafe_allow_html=True)
+    <div style="color:#e2e8f0; font-size:1.6rem; font-weight:800; letter-spacing:-.5px;">Fiscal Hub</div>
+    <div style="color:#8b9ab5; font-size:.82rem; margin-top:.4rem;">Acesso Seguro ao Conversor NFS-e</div>
+</div>
+""", unsafe_allow_html=True)
 
     # Formulário
     with st.form("login_form", clear_on_submit=False):

@@ -28,8 +28,8 @@ import streamlit as st
 st.set_page_config(
     page_title="Conversor NFS-e  |  ISS Fortaleza",
     page_icon="assets/app_icon.ico" if Path("assets/app_icon.ico").exists() else None,
-    layout="centered",
-    initial_sidebar_state="collapsed",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ── BANCO DE DADOS ─────────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ def _load_css():
         st.warning("assets/style.css nao encontrado.")
 
 _load_css()
+st.markdown('<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">', unsafe_allow_html=True)
 
 # ── AUTENTICAÇÃO ───────────────────────────────────────────────────────────────
 from auth.security import require_login
