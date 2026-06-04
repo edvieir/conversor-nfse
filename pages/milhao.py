@@ -10,62 +10,11 @@ from auth.security import current_user, is_admin, logout
 from core.conversor_milhao import processar_csv_txt, processar_csv_xlsx
 from db.database import log_conversion
 from assets.icons import icon
+from pages import nav
 
 
 def render():
-    user    = current_user()
-    inicial = user["name"][0].upper() if user["name"] else "U"
-
-    # ── Top bar ──────────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="topbar">
-        <div class="topbar-logo">
-            {icon("star", 16, "#fff")}
-        </div>
-        <span class="topbar-name">Conversor NFS-e</span>
-        <div class="topbar-spacer"></div>
-        <div class="topbar-divider"></div>
-        <span class="topbar-tag">Notas do Milhão &middot; CSV ISS Fortaleza</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Navbar ───────────────────────────────────────────────────────────────
-    if is_admin():
-        _nc1, _nc2, _nc3, _nc4, _nc5 = st.columns([3, 1.3, 1.3, 1.3, 1.1])
-    else:
-        _nc1, _nc2, _nc3, _nc4 = st.columns([3.5, 1.5, 1.5, 1.1])
-
-    with _nc1:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-            <div class="navbar-avatar">{inicial}</div>
-            <span class="navbar-name">{user["name"]}</span>
-        </div>""", unsafe_allow_html=True)
-
-    with _nc2:
-        if st.button("Conversor", key="nav_conv_milhao", use_container_width=True):
-            st.session_state.pagina = "conversor"
-            st.rerun()
-
-    with _nc3:
-        if st.button("Dashboard", key="nav_dash_milhao", use_container_width=True):
-            st.session_state.pagina = "dashboard"
-            st.rerun()
-
-    if is_admin():
-        with _nc4:
-            if st.button("Usuarios", key="nav_users_milhao", use_container_width=True):
-                st.session_state.pagina = "usuarios"
-                st.rerun()
-        with _nc5:
-            if st.button("Sair", key="logout_milhao", use_container_width=True):
-                logout()
-    else:
-        with _nc4:
-            if st.button("Sair", key="logout_milhao", use_container_width=True):
-                logout()
-
-    st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
+    nav.render("milhao")
 
     # ── Chave dinâmica do uploader ────────────────────────────────────────────
     if "milhao_upload_key" not in st.session_state:

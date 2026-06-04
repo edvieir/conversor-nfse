@@ -57,6 +57,15 @@ def init_db():
                 UNIQUE(usuario, cnpj)
             );
         """)
+    # Migration: add permissoes column if not exists
+    try:
+        with _conn() as con:
+            con.execute(
+                "ALTER TABLE users ADD COLUMN permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'"
+            )
+    except Exception:
+        pass  # Column already exists
+
     _migrate_from_yaml()
     _bootstrap_admin()
     _bootstrap_users()
@@ -211,6 +220,24 @@ def create_user(username: str, name: str, email: str,
 def delete_user(username: str):
     with _conn() as con:
         con.execute("DELETE FROM users WHERE username = ?", (username,))
+
+
+def get_user_permissions(username: str) -> list[str]:
+    """Returns list of allowed pages. Empty list means all pages (admin/default)."""
+    with _conn() as con:
+        row = con.execute("SELECT permissoes, role FROM users WHERE username=?", (username,)).fetchone()
+    if not row:
+        return []
+    if row["role"] == "admin":
+        return []  # admins always see everything
+    perms = row["permissoes"] or "conversor,baixar_xmls,certificados,milhao,dashboard"
+    return [p.strip() for p in perms.split(",") if p.strip()]
+
+
+def set_user_permissions(username: str, permissoes: list[str]):
+    with _conn() as con:
+        con.execute("UPDATE users SET permissoes=? WHERE username=?",
+                    (",".join(permissoes), username))
 
 
 def update_password(username: str, new_hash: str):

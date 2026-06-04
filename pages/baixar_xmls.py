@@ -7,60 +7,11 @@ from datetime import date
 from auth.security import current_user, is_admin, logout
 from assets.icons import icon
 from db.database import listar_certificados, carregar_certificado
+from pages import nav
 
 
 def _navbar():
-    user    = current_user()
-    inicial = user["name"][0].upper() if user["name"] else "U"
-
-    st.markdown(f"""
-    <div class="topbar">
-        <div class="topbar-logo">{icon("zap", 16, "#fff")}</div>
-        <span class="topbar-name">Conversor NFS-e</span>
-        <div class="topbar-spacer"></div>
-        <div class="topbar-divider"></div>
-        <span class="topbar-tag">Baixar XMLs &middot; API NFS-e Nacional</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if is_admin():
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.4, 1.0])
-    else:
-        c1, c2, c3, c4, c5, c6 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.0])
-
-    with c1:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-            <div class="navbar-avatar">{inicial}</div>
-            <span class="navbar-name">{user["name"]}</span>
-        </div>""", unsafe_allow_html=True)
-
-    with c2:
-        if st.button("Conversor", key="nav_conv_bx", use_container_width=True):
-            st.session_state.pagina = "conversor"; st.rerun()
-    with c3:
-        if st.button("Certificados", key="nav_cert_bx", use_container_width=True):
-            st.session_state.pagina = "certificados"; st.rerun()
-    with c4:
-        if st.button("Milhão", key="nav_milhao_bx", use_container_width=True):
-            st.session_state.pagina = "milhao"; st.rerun()
-    with c5:
-        if st.button("Dashboard", key="nav_dash_bx", use_container_width=True):
-            st.session_state.pagina = "dashboard"; st.rerun()
-
-    if is_admin():
-        with c6:
-            if st.button("Usuarios", key="nav_usr_bx", use_container_width=True):
-                st.session_state.pagina = "usuarios"; st.rerun()
-        with c7:
-            if st.button("Sair", key="logout_bx", use_container_width=True):
-                logout()
-    else:
-        with c6:
-            if st.button("Sair", key="logout_bx", use_container_width=True):
-                logout()
-
-    st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
+    nav.render("baixar_xmls")
 
 
 def render():

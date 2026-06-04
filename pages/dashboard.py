@@ -7,62 +7,11 @@ from datetime import datetime, timedelta
 from auth.security import current_user, is_admin, logout
 from db.database import get_stats, get_conversions
 from assets.icons import icon
+from pages import nav
 
 
 def render():
-    user = current_user()
-    inicial = user["name"][0].upper() if user["name"] else "U"
-
-    # ── Top bar ──────────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="topbar">
-        <div class="topbar-logo">
-            {icon("bar-chart", 16, "#fff")}
-        </div>
-        <span class="topbar-name">Conversor NFS-e</span>
-        <div class="topbar-spacer"></div>
-        <div class="topbar-divider"></div>
-        <span class="topbar-tag">Dashboard &amp; Estatísticas</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Navbar ───────────────────────────────────────────────────────────────
-    if is_admin():
-        _nc1, _nc2, _nc3, _nc4, _nc5 = st.columns([2.5, 1.5, 1.9, 1.5, 1.0])
-    else:
-        _nc1, _nc2, _nc3, _nc4 = st.columns([2.8, 1.5, 1.9, 1.0])
-
-    with _nc1:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-            <div class="navbar-avatar">{inicial}</div>
-            <span class="navbar-name">{user["name"]}</span>
-        </div>""", unsafe_allow_html=True)
-
-    with _nc2:
-        if st.button("Conversor", key="nav_conv_dash", use_container_width=True):
-            st.session_state.pagina = "conversor"
-            st.rerun()
-
-    with _nc3:
-        if st.button("Milhão", key="nav_milhao_dash", use_container_width=True):
-            st.session_state.pagina = "milhao"
-            st.rerun()
-
-    if is_admin():
-        with _nc4:
-            if st.button("Usuarios", key="nav_users_dash", use_container_width=True):
-                st.session_state.pagina = "usuarios"
-                st.rerun()
-        with _nc5:
-            if st.button("Sair", key="logout_dash", use_container_width=True):
-                logout()
-    else:
-        with _nc4:
-            if st.button("Sair", key="logout_dash", use_container_width=True):
-                logout()
-
-    st.markdown('<div style="height:.4rem;"></div>', unsafe_allow_html=True)
+    nav.render("dashboard")
 
     # ── Dados ─────────────────────────────────────────────────────────────────
     s = get_stats()

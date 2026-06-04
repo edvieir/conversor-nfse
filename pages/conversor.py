@@ -5,6 +5,7 @@ pages/conversor.py — Tela principal de conversão XML → TXT / XLSX
 import streamlit as st
 from datetime import datetime
 from auth.security import current_user, is_admin, logout
+from pages import nav
 from core.conversor_txt  import processar_uploads, conversor_disponivel
 from core.conversor_xlsx import processar_xlsx_sped
 from db.database import log_conversion
@@ -17,61 +18,7 @@ def render():
         st.error(f"Nao foi possivel carregar o modulo de conversao:\n\n`{_err}`")
         st.stop()
 
-    user    = current_user()
-    inicial = user["name"][0].upper() if user["name"] else "U"
-
-    # ── Top bar ──────────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="topbar">
-        <div class="topbar-logo">
-            {icon("zap", 16, "#fff")}
-        </div>
-        <span class="topbar-name">Conversor NFS-e</span>
-        <div class="topbar-spacer"></div>
-        <div class="topbar-divider"></div>
-        <span class="topbar-tag">ISS Fortaleza &middot; SPED GOV &middot; Modelo Nacional 2026</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Navbar ───────────────────────────────────────────────────────────────
-    if is_admin():
-        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6, _nc7 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.4, 1.0])
-    else:
-        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.0])
-
-    with _nc1:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-            <div class="navbar-avatar">{inicial}</div>
-            <span class="navbar-name">{user["name"]}</span>
-        </div>""", unsafe_allow_html=True)
-
-    with _nc2:
-        if st.button("Baixar XML", key="nav_baixar_main", use_container_width=True):
-            st.session_state.pagina = "baixar_xmls"; st.rerun()
-    with _nc3:
-        if st.button("Certificados", key="nav_cert_main", use_container_width=True):
-            st.session_state.pagina = "certificados"; st.rerun()
-    with _nc4:
-        if st.button("Milhão", key="nav_milhao_main", use_container_width=True):
-            st.session_state.pagina = "milhao"; st.rerun()
-    with _nc5:
-        if st.button("Dashboard", key="nav_dash_main", use_container_width=True):
-            st.session_state.pagina = "dashboard"; st.rerun()
-
-    if is_admin():
-        with _nc6:
-            if st.button("Usuarios", key="nav_usuarios_main", use_container_width=True):
-                st.session_state.pagina = "usuarios"; st.rerun()
-        with _nc7:
-            if st.button("Sair", key="logout_main", use_container_width=True):
-                logout()
-    else:
-        with _nc6:
-            if st.button("Sair", key="logout_main", use_container_width=True):
-                logout()
-
-    st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
+    nav.render("conversor")
 
     # Chave dinâmica para limpeza do uploader
     if "upload_key" not in st.session_state:

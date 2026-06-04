@@ -6,6 +6,7 @@ import streamlit as st
 from auth.security import current_user, is_admin, logout, hash_password
 from db.database import list_users, create_user, delete_user
 from assets.icons import icon
+from pages import nav
 
 
 def render():
@@ -13,52 +14,9 @@ def render():
         st.error("Acesso restrito ao administrador.")
         return
 
-    user    = current_user()
-    inicial = user["name"][0].upper() if user["name"] else "U"
+    user = current_user()
 
-    # ── Top bar ──────────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="topbar">
-        <div class="topbar-logo">
-            {icon("shield", 16, "#fff")}
-        </div>
-        <span class="topbar-name">Conversor NFS-e</span>
-        <div class="topbar-spacer"></div>
-        <div class="topbar-divider"></div>
-        <span class="topbar-tag">Painel Administrativo</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Navbar ───────────────────────────────────────────────────────────────
-    _ua1, _ua2, _ua3, _ua4, _ua5 = st.columns([2.5, 1.5, 1.9, 1.5, 1.0])
-
-    with _ua1:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-            <div class="navbar-avatar">{inicial}</div>
-            <span class="navbar-name">{user["name"]}</span>
-        </div>""", unsafe_allow_html=True)
-
-    with _ua2:
-        if st.button("Conversor", key="nav_conv_admin", use_container_width=True):
-            st.session_state.pagina = "conversor"
-            st.rerun()
-
-    with _ua3:
-        if st.button("Milhão", key="nav_milhao_admin", use_container_width=True):
-            st.session_state.pagina = "milhao"
-            st.rerun()
-
-    with _ua4:
-        if st.button("Dashboard", key="nav_dash_admin", use_container_width=True):
-            st.session_state.pagina = "dashboard"
-            st.rerun()
-
-    with _ua5:
-        if st.button("Sair", key="logout_admin", use_container_width=True):
-            logout()
-
-    st.markdown('<div style="height:.6rem;"></div>', unsafe_allow_html=True)
+    nav.render("usuarios")
 
     # ── Hero ──────────────────────────────────────────────────────────────────
     ic_users = icon("users", 20, "#E6EDF3")
@@ -220,6 +178,46 @@ def render():
                     unsafe_allow_html=True,
                 )
                 st.rerun()
+
+    st.divider()
+
+    ic_perm = icon("sliders", 16, "#E6EDF3")
+    st.markdown(f"#### {ic_perm}&nbsp; Permissoes por usuario", unsafe_allow_html=True)
+
+    ALL_PAGES_PERMS = [
+        ("conversor",    "Conversor XML"),
+        ("baixar_xmls",  "Baixar XML"),
+        ("certificados", "Certificados"),
+        ("milhao",       "Milhão"),
+        ("dashboard",    "Dashboard"),
+    ]
+
+    usuarios_nao_admin = [u for u in usuarios if u["role"] != "admin"]
+    if not usuarios_nao_admin:
+        st.markdown('<div style="color:#475569;font-size:.85rem;">Nenhum usuario comum cadastrado.</div>', unsafe_allow_html=True)
+    else:
+        from db.database import get_user_permissions, set_user_permissions
+        usuario_sel = st.selectbox(
+            "Selecionar usuario",
+            [u["username"] for u in usuarios_nao_admin],
+            format_func=lambda u: f"{u}  —  {next((x['name'] for x in usuarios if x['username']==u), u)}",
+            key="perm_sel_usuario",
+        )
+        perms_atuais = get_user_permissions(usuario_sel)
+
+        st.markdown('<div style="color:#8B949E;font-size:.78rem;margin:6px 0 10px;">Marque as paginas que este usuario pode acessar:</div>', unsafe_allow_html=True)
+
+        novas_perms = []
+        cols_perm = st.columns(len(ALL_PAGES_PERMS))
+        for i, (key, label) in enumerate(ALL_PAGES_PERMS):
+            with cols_perm[i]:
+                if st.checkbox(label, value=(key in perms_atuais), key=f"perm_{usuario_sel}_{key}"):
+                    novas_perms.append(key)
+
+        if st.button("Salvar permissoes", type="primary", use_container_width=True, key="btn_salvar_perms"):
+            set_user_permissions(usuario_sel, novas_perms)
+            st.toast(f"Permissoes de '{usuario_sel}' atualizadas.")
+            st.rerun()
 
     st.markdown("""
     <div class="footer">

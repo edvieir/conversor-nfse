@@ -5,7 +5,7 @@ Substitui streamlit-authenticator com implementação nativa + bcrypt.
 
 import streamlit as st
 import bcrypt
-from db.database import get_user
+from db.database import get_user, get_user_permissions
 
 # ── CRYPTO ───────────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,15 @@ def current_user() -> dict:
 
 def is_admin() -> bool:
     return st.session_state.get("role") == "admin"
+
+
+def has_permission(pagina: str) -> bool:
+    """Admins always have access. Users only see their allowed pages."""
+    if is_admin():
+        return True
+    username = st.session_state.get("username", "")
+    perms = get_user_permissions(username)
+    return pagina in perms
 
 
 def logout():
