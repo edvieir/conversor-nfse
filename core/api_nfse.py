@@ -1,21 +1,22 @@
 """
-core/api_nfse.py — Cliente para a API REST NFS-e Nacional
+core/api_nfse.py — Cliente para a API NFS-e ADN Contribuinte
+Base: https://adn.nfse.gov.br/contribuintes
+Auth: mTLS (certificado A1 .pfx) — sem token, o cert é a autenticação
+Ref:  swagger.json v1 / GET /DFe/{NSU}
 """
 
 import io
 import re
+import base64
+import gzip
 import zipfile
 import tempfile
 import os
 import requests
 from datetime import date
 
-# URLs oficiais da API NFS-e Nacional (SEFIN / ABRASF)
-BASE_URL  = "https://api.nfse.gov.br"
-AUTH_URL  = f"{BASE_URL}/v1/autenticacao/certificado"
-NFSE_URL  = f"{BASE_URL}/v1"
-
-TIMEOUT = 30
+BASE_URL = "https://adn.nfse.gov.br/contribuintes"
+TIMEOUT  = 30
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -24,15 +25,14 @@ def _limpar_cnpj(cnpj: str) -> str:
 
 def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
     """
-    Extrai cert/key do .pfx, escreve em arquivos temporários e retorna
-    (cert_path, key_path, cnpj_extraido).
-    O CNPJ é lido do campo OID 2.16.76.1.3.3 ou do CN do certificado.
+    Extrai cert/key do .pfx para arquivos temporários PEM.
+    Retorna (cert_path, key_path, cnpj_extraido).
     """
     from cryptography.hazmat.primitives.serialization import (
-        Encoding, PrivateFormat, NoEncryption
+        Encoding, PrivateFormat, NoEncryption,
     )
     from cryptography.hazmat.primitives.serialization.pkcs12 import (
-        load_key_and_certificates
+        load_key_and_certificates,
     )
     from cryptography.x509 import ObjectIdentifier
     from cryptography.x509.oid import NameOID
@@ -42,13 +42,11 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
 
     # ── Extrai CNPJ do certificado ──────────────────────────────────────────
     cnpj_cert = ""
+    # Tenta SubjectAltName OID 2.16.76.1.3.3 (CNPJ ICP-Brasil)
     try:
-        # OID CNPJ PJ brasileiro: 2.16.76.1.3.3
-        OID_CNPJ = ObjectIdentifier("2.16.76.1.3.3")
-        san = certificate.extensions.get_extension_for_oid(
-            ObjectIdentifier("2.5.29.17")  # SubjectAltName
-        )
-        for gn in san.value:
+        from cryptography.x509 import SubjectAlternativeName, OtherName
+        san_ext = certificate.extensions.get_extension_for_class(SubjectAlternativeName)
+        for gn in san_ext.value:
             val = str(gn.value) if hasattr(gn, "value") else ""
             digits = re.sub(r"\D", "", val)
             if len(digits) == 14:
@@ -58,7 +56,7 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
         pass
 
     if not cnpj_cert:
-        # Tenta extrair do CN: "RAZAO SOCIAL:12345678000199" ou "12345678000199"
+        # Tenta CN: "RAZAO SOCIAL:12345678000199"
         try:
             cn = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
             digits = re.sub(r"\D", "", cn.split(":")[-1])
@@ -68,7 +66,6 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
             pass
 
     if not cnpj_cert:
-        # Tenta campo serialNumber
         try:
             sn = certificate.subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER)[0].value
             digits = re.sub(r"\D", "", sn)
@@ -77,12 +74,11 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
         except Exception:
             pass
 
-    # ── Salva PEM em arquivos temporários ───────────────────────────────────
+    # ── Salva PEM ───────────────────────────────────────────────────────────
     cert_pem = certificate.public_bytes(Encoding.PEM)
     key_pem  = private_key.private_bytes(
         Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()
     )
-
     cert_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
     key_tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
     cert_tmp.write(cert_pem); cert_tmp.flush(); cert_tmp.close()
@@ -103,57 +99,29 @@ def extrair_cnpj_do_pfx(pfx_bytes: bytes, senha: str) -> str:
         return ""
 
 
-def _obter_token(cert_path: str, key_path: str) -> str:
-    """Autentica via mTLS e retorna JWT."""
-    resp = requests.post(
-        AUTH_URL,
-        cert=(cert_path, key_path),
-        timeout=TIMEOUT,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    token = (
-        data.get("access_token")
-        or data.get("token")
-        or data.get("accessToken")
-    )
-    if not token:
-        raise ValueError(f"Token não encontrado na resposta: {data}")
-    return token
+def _decodificar_xml(arquivo_xml_b64: str) -> bytes:
+    """Decodifica ArquivoXml: base64 → gzip decompress → XML bytes."""
+    raw = base64.b64decode(arquivo_xml_b64)
+    try:
+        return gzip.decompress(raw)
+    except Exception:
+        return raw  # já era XML puro sem compressão
 
 
-def _headers(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-
-
-def _consultar_nfse(
+def _consultar_lote(
+    cert_path: str,
+    key_path: str,
     cnpj: str,
-    token: str,
-    data_ini: date,
-    data_fim: date,
-    tipo: str = "tomadas",
-    pagina: int = 1,
-    por_pagina: int = 50,
+    nsu: int,
 ) -> dict:
-    cnpj = _limpar_cnpj(cnpj)
-    url = f"{NFSE_URL}/{cnpj}/nfse/{tipo}"
-    params = {
-        "dataInicial":    data_ini.strftime("%Y-%m-%d"),
-        "dataFinal":      data_fim.strftime("%Y-%m-%d"),
-        "pagina":         pagina,
-        "quantidadeNfse": por_pagina,
-    }
-    resp = requests.get(url, headers=_headers(token), params=params, timeout=TIMEOUT)
+    """GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true"""
+    url    = f"{BASE_URL}/DFe/{nsu}"
+    params = {"cnpjConsulta": cnpj, "lote": "true"}
+    resp   = requests.get(
+        url, cert=(cert_path, key_path), params=params, timeout=TIMEOUT
+    )
     resp.raise_for_status()
     return resp.json()
-
-
-def _baixar_xml_nfse(cnpj: str, chave: str, token: str) -> bytes:
-    cnpj = _limpar_cnpj(cnpj)
-    url  = f"{NFSE_URL}/{cnpj}/nfse/{chave}/xml"
-    resp = requests.get(url, headers=_headers(token), timeout=TIMEOUT)
-    resp.raise_for_status()
-    return resp.content
 
 
 def baixar_xmls_nfse(
@@ -162,12 +130,14 @@ def baixar_xmls_nfse(
     cnpj: str,
     data_ini: date,
     data_fim: date,
-    tipo: str = "tomadas",
+    tipo: str = "tomadas",   # mantido para compatibilidade, não usado na API
     progress_cb=None,
 ) -> tuple[bytes, list[str]]:
     """
-    Retorna (zip_bytes, log).
-    zip_bytes = ZIP em memória com todos os XMLs, ou b"" se nenhum encontrado.
+    Baixa todas as NFS-e via NSU a partir do NSU 0, filtra pelo período
+    data_ini..data_fim e retorna (zip_bytes, log).
+
+    A API não tem filtro por data — iteramos os NSUs e filtramos localmente.
     """
     log: list[str] = []
     cert_path = key_path = None
@@ -176,60 +146,86 @@ def baixar_xmls_nfse(
         log.append("Extraindo certificado .pfx...")
         cert_path, key_path, cnpj_cert = _extrair_cert_pfx(pfx_bytes, senha)
 
-        # Usa CNPJ do cert se não foi passado explicitamente
-        cnpj_uso = _limpar_cnpj(cnpj) if cnpj.strip() else cnpj_cert
+        cnpj_uso = _limpar_cnpj(cnpj) if cnpj and cnpj.strip() else cnpj_cert
         if not cnpj_uso:
-            raise ValueError("CNPJ não encontrado no certificado nem informado manualmente.")
+            raise ValueError("CNPJ não encontrado no certificado nem informado.")
         log.append(f"CNPJ: {cnpj_uso}")
+        log.append("Conectando na API NFS-e (mTLS)...")
 
-        log.append("Autenticando na API NFS-e...")
-        token = _obter_token(cert_path, key_path)
-        log.append("Autenticado com sucesso.")
+        buf      = io.BytesIO()
+        nsu      = 0
+        total_ok = 0
+        erros    = 0
+        lote_num = 0
 
-        chaves: list[str] = []
-        pagina = 1
-        while True:
-            log.append(f"Consultando página {pagina}...")
-            resultado = _consultar_nfse(cnpj_uso, token, data_ini, data_fim, tipo, pagina)
-            notas = resultado.get("nfse") or resultado.get("listaNfse") or []
-            if not notas:
-                break
-            for nota in notas:
-                chave = (
-                    nota.get("chaveAcesso")
-                    or nota.get("nfseId")
-                    or nota.get("id")
-                )
-                if chave:
-                    chaves.append(str(chave))
-            total_paginas = resultado.get("totalPaginas") or 1
-            if pagina >= total_paginas:
-                break
-            pagina += 1
-
-        log.append(f"{len(chaves)} nota(s) encontrada(s).")
-        if not chaves:
-            return b"", log
-
-        buf = io.BytesIO()
-        erros = 0
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for i, chave in enumerate(chaves, 1):
-                try:
-                    xml_bytes = _baixar_xml_nfse(cnpj_uso, chave, token)
-                    zf.writestr(f"nfse_{chave}.xml", xml_bytes)
-                    log.append(f"[{i}/{len(chaves)}] {chave} — OK")
-                except Exception as e:
-                    erros += 1
-                    log.append(f"[{i}/{len(chaves)}] {chave} — ERRO: {e}")
-                if progress_cb:
-                    progress_cb(i / len(chaves))
+            while True:
+                lote_num += 1
+                log.append(f"Consultando lote a partir do NSU {nsu}...")
+                resultado = _consultar_lote(cert_path, key_path, cnpj_uso, nsu)
 
+                status = resultado.get("StatusProcessamento", "")
+                if status == "NENHUM_DOCUMENTO_LOCALIZADO":
+                    log.append("Sem mais documentos.")
+                    break
+                if status == "REJEICAO":
+                    erros_api = resultado.get("Erros") or []
+                    msgs = "; ".join(e.get("Descricao", "") for e in erros_api)
+                    raise ValueError(f"API rejeitou a consulta: {msgs}")
+
+                lote = resultado.get("LoteDFe") or []
+                log.append(f"  Lote {lote_num}: {len(lote)} documento(s)")
+
+                nsu_max = nsu
+                for doc in lote:
+                    nsu_doc = doc.get("NSU") or 0
+                    if nsu_doc > nsu_max:
+                        nsu_max = nsu_doc
+
+                    tipo_doc = doc.get("TipoDocumento", "")
+                    if tipo_doc != "NFSE":
+                        continue
+
+                    # Filtro por data (campo DataHoraGeracao)
+                    data_str = (doc.get("DataHoraGeracao") or "")[:10]
+                    if data_str:
+                        try:
+                            data_doc = date.fromisoformat(data_str)
+                            if not (data_ini <= data_doc <= data_fim):
+                                continue
+                        except ValueError:
+                            pass
+
+                    arquivo_b64 = doc.get("ArquivoXml")
+                    if not arquivo_b64:
+                        continue
+
+                    chave = doc.get("ChaveAcesso") or str(nsu_doc)
+                    try:
+                        xml_bytes = _decodificar_xml(arquivo_b64)
+                        zf.writestr(f"nfse_{chave}.xml", xml_bytes)
+                        total_ok += 1
+                        log.append(f"  NFS-e {chave} ({data_str}) — OK")
+                    except Exception as e:
+                        erros += 1
+                        log.append(f"  NFS-e {chave} — ERRO ao decodificar: {e}")
+
+                # Avança NSU para o próximo lote
+                if nsu_max <= nsu:
+                    break  # sem avanço, evita loop infinito
+                nsu = nsu_max
+
+                if progress_cb:
+                    progress_cb(min(lote_num / (lote_num + 1), 0.95))
+
+        if progress_cb:
+            progress_cb(1.0)
+
+        log.append(f"Concluído. {total_ok} NFS-e no período, {erros} erros.")
         buf.seek(0)
-        log.append(f"Concluído. {len(chaves) - erros} XMLs baixados, {erros} erros.")
-        return buf.read(), log
+        return (buf.read() if total_ok > 0 else b""), log
 
     finally:
         for p in (cert_path, key_path):
-            if p and p and os.path.exists(p):
+            if p and os.path.exists(p):
                 os.unlink(p)
