@@ -53,7 +53,7 @@ def render():
         if st.button("Certificados", key="nav_cert_main", use_container_width=True):
             st.session_state.pagina = "certificados"; st.rerun()
     with _nc4:
-        if st.button("Notas do Milhão", key="nav_milhao_main", use_container_width=True):
+        if st.button("Milhão", key="nav_milhao_main", use_container_width=True):
             st.session_state.pagina = "milhao"; st.rerun()
     with _nc5:
         if st.button("Dashboard", key="nav_dash_main", use_container_width=True):
