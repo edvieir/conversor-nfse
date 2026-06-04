@@ -56,7 +56,7 @@ if "pagina" not in st.session_state:
     st.session_state["pagina"] = "conversor"
 
 # ── ROTEADOR ───────────────────────────────────────────────────────────────────
-from pages import conversor, dashboard, usuarios, milhao, baixar_xmls
+from pages import conversor, dashboard, usuarios, milhao, baixar_xmls, certificados
 
 pagina = st.session_state.get("pagina", "conversor")
 
@@ -68,5 +68,7 @@ elif pagina == "milhao":
     milhao.render()
 elif pagina == "baixar_xmls":
     baixar_xmls.render()
+elif pagina == "certificados":
+    certificados.render()
 else:
     conversor.render()

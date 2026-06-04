@@ -46,6 +46,16 @@ def init_db():
                 qtd_arquivos INTEGER DEFAULT 0,
                 sucesso      INTEGER DEFAULT 1
             );
+            CREATE TABLE IF NOT EXISTS certificados (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario       TEXT NOT NULL,
+                cnpj          TEXT NOT NULL,
+                razao_social  TEXT DEFAULT '',
+                pfx_enc       BLOB NOT NULL,
+                senha_enc     TEXT NOT NULL,
+                criado_em     TEXT DEFAULT (datetime('now','localtime')),
+                UNIQUE(usuario, cnpj)
+            );
         """)
     _migrate_from_yaml()
     _bootstrap_admin()
@@ -231,6 +241,68 @@ def get_conversions(limit: int = 500) -> list[dict]:
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── CRUD — CERTIFICADOS ──────────────────────────────────────────────────────────
+
+def salvar_certificado(usuario: str, cnpj: str, razao_social: str,
+                       pfx_bytes: bytes, senha: str) -> bool:
+    from core.crypto import encrypt_bytes, encrypt_str
+    pfx_enc   = encrypt_bytes(pfx_bytes)
+    senha_enc = encrypt_str(senha)
+    try:
+        with _conn() as con:
+            con.execute(
+                """INSERT INTO certificados (usuario, cnpj, razao_social, pfx_enc, senha_enc)
+                   VALUES (?,?,?,?,?)
+                   ON CONFLICT(usuario, cnpj) DO UPDATE SET
+                     razao_social=excluded.razao_social,
+                     pfx_enc=excluded.pfx_enc,
+                     senha_enc=excluded.senha_enc,
+                     criado_em=datetime('now','localtime')""",
+                (usuario, cnpj, razao_social, pfx_enc, senha_enc),
+            )
+        return True
+    except Exception as e:
+        print(f"[db] salvar_certificado erro: {e}")
+        return False
+
+
+def listar_certificados(usuario: str) -> list[dict]:
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT id, cnpj, razao_social, criado_em FROM certificados "
+            "WHERE usuario = ? ORDER BY razao_social",
+            (usuario,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def carregar_certificado(usuario: str, cnpj: str) -> tuple[bytes, str] | None:
+    """Retorna (pfx_bytes, senha) descriptografados, ou None se não encontrado."""
+    from core.crypto import decrypt_bytes, decrypt_str
+    with _conn() as con:
+        row = con.execute(
+            "SELECT pfx_enc, senha_enc FROM certificados WHERE usuario=? AND cnpj=?",
+            (usuario, cnpj),
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        pfx   = decrypt_bytes(bytes(row["pfx_enc"]))
+        senha = decrypt_str(row["senha_enc"])
+        return pfx, senha
+    except Exception as e:
+        print(f"[db] carregar_certificado erro: {e}")
+        return None
+
+
+def remover_certificado(usuario: str, cnpj: str):
+    with _conn() as con:
+        con.execute(
+            "DELETE FROM certificados WHERE usuario=? AND cnpj=?",
+            (usuario, cnpj),
+        )
 
 
 def get_stats() -> dict:
