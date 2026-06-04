@@ -7,12 +7,15 @@ Ref:  swagger.json v1 / GET /DFe/{NSU}
 
 import io
 import re
+import ssl
 import base64
 import gzip
 import zipfile
 import tempfile
 import os
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 from datetime import date
 
 BASE_URL = "https://adn.nfse.gov.br/contribuintes"
@@ -79,8 +82,9 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
     if additional_certs:
         for ac in additional_certs:
             cert_pem += ac.public_bytes(Encoding.PEM)
-    key_pem  = private_key.private_bytes(
-        Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()
+    # PKCS8 é o formato esperado pela maioria dos servidores mTLS modernos
+    key_pem = private_key.private_bytes(
+        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
     )
     cert_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
     key_tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
@@ -111,6 +115,33 @@ def _decodificar_xml(arquivo_xml_b64: str) -> bytes:
         return raw  # já era XML puro sem compressão
 
 
+class _MTLSAdapter(HTTPAdapter):
+    """HTTPAdapter com SSLContext configurado para mTLS."""
+    def __init__(self, cert_path: str, key_path: str, **kwargs):
+        self._cert_path = cert_path
+        self._key_path  = key_path
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.load_cert_chain(self._cert_path, self._key_path)
+        kwargs["ssl_context"] = ctx
+        super().init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, proxy, **proxy_kwargs):
+        ctx = create_urllib3_context()
+        ctx.load_cert_chain(self._cert_path, self._key_path)
+        proxy_kwargs["ssl_context"] = ctx
+        return super().proxy_manager_for(proxy, **proxy_kwargs)
+
+
+def _make_session(cert_path: str, key_path: str) -> requests.Session:
+    s = requests.Session()
+    adapter = _MTLSAdapter(cert_path, key_path)
+    s.mount("https://", adapter)
+    return s
+
+
 def _consultar_lote(
     cert_path: str,
     key_path: str,
@@ -120,9 +151,8 @@ def _consultar_lote(
     """GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true"""
     url    = f"{BASE_URL}/DFe/{nsu}"
     params = {"cnpjConsulta": cnpj, "lote": "true"}
-    resp   = requests.get(
-        url, cert=(cert_path, key_path), params=params, timeout=TIMEOUT
-    )
+    with _make_session(cert_path, key_path) as s:
+        resp = s.get(url, params=params, timeout=TIMEOUT)
     resp.raise_for_status()
     return resp.json()
 
