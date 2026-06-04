@@ -35,9 +35,9 @@ def render():
 
     # ── Navbar ───────────────────────────────────────────────────────────────
     if is_admin():
-        _nc1, _nc2, _nc3, _nc4, _nc5 = st.columns([2.5, 1.9, 1.5, 1.5, 1.0])
+        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6 = st.columns([2.5, 1.6, 1.6, 1.5, 1.5, 1.0])
     else:
-        _nc1, _nc2, _nc3, _nc4 = st.columns([2.8, 1.9, 1.5, 1.0])
+        _nc1, _nc2, _nc3, _nc4, _nc5 = st.columns([2.5, 1.6, 1.6, 1.5, 1.0])
 
     with _nc1:
         st.markdown(f"""
@@ -47,25 +47,30 @@ def render():
         </div>""", unsafe_allow_html=True)
 
     with _nc2:
+        if st.button("Baixar XMLs", key="nav_baixar_main", use_container_width=True):
+            st.session_state.pagina = "baixar_xmls"
+            st.rerun()
+
+    with _nc3:
         if st.button("Notas do Milhao", key="nav_milhao_main", use_container_width=True):
             st.session_state.pagina = "milhao"
             st.rerun()
 
-    with _nc3:
+    with _nc4:
         if st.button("Dashboard", key="nav_dash_main", use_container_width=True):
             st.session_state.pagina = "dashboard"
             st.rerun()
 
     if is_admin():
-        with _nc4:
+        with _nc5:
             if st.button("Usuarios", key="nav_usuarios_main", use_container_width=True):
                 st.session_state.pagina = "usuarios"
                 st.rerun()
-        with _nc5:
+        with _nc6:
             if st.button("Sair", key="logout_main", use_container_width=True):
                 logout()
     else:
-        with _nc4:
+        with _nc5:
             if st.button("Sair", key="logout_main", use_container_width=True):
                 logout()
 
