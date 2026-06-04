@@ -3,7 +3,7 @@ pages/baixar_xmls.py — Tela "Baixar XMLs" via API NFS-e Nacional
 """
 
 import streamlit as st
-from datetime import date, timedelta
+from datetime import date
 from auth.security import current_user, is_admin, logout
 from assets.icons import icon
 
@@ -23,9 +23,9 @@ def _navbar():
     """, unsafe_allow_html=True)
 
     if is_admin():
-        c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.6, 1.6, 1.5, 1.5, 1.0])
+        c1, c2, c3, c4, c5, c6 = st.columns([3, 1.4, 1.6, 1.4, 1.4, 1.0])
     else:
-        c1, c2, c3, c4, c5 = st.columns([2.5, 1.6, 1.6, 1.5, 1.0])
+        c1, c2, c3, c4, c5 = st.columns([3, 1.4, 1.6, 1.4, 1.0])
 
     with c1:
         st.markdown(f"""
@@ -73,7 +73,7 @@ def render():
         <div class="step-header">
             <div class="step-num">1</div>
             <div class="step-info">
-                <div class="step-title">{ic}&nbsp; Certificado Digital</div>
+                <div class="step-title">{ic}&nbsp; Certificado Digital (A1)</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -82,7 +82,7 @@ def render():
             "pfx_upload", type=["pfx", "p12"],
             label_visibility="collapsed",
             key="pfx_uploader",
-            help="Certificado A1 (.pfx ou .p12)",
+            help="Certificado A1 — arquivo .pfx ou .p12",
         )
 
         senha_cert = st.text_input(
@@ -92,11 +92,32 @@ def render():
             key="senha_pfx",
         )
 
+        # Auto-extrai CNPJ assim que cert + senha estão preenchidos
+        cnpj_auto = ""
+        if pfx_file and senha_cert:
+            if st.session_state.get("_pfx_nome") != pfx_file.name or \
+               st.session_state.get("_pfx_senha") != senha_cert:
+                from core.api_nfse import extrair_cnpj_do_pfx
+                cnpj_auto = extrair_cnpj_do_pfx(pfx_file.read(), senha_cert)
+                pfx_file.seek(0)
+                st.session_state["_cnpj_cert"] = cnpj_auto
+                st.session_state["_pfx_nome"]  = pfx_file.name
+                st.session_state["_pfx_senha"] = senha_cert
+            else:
+                cnpj_auto = st.session_state.get("_cnpj_cert", "")
+
         if pfx_file:
             ic_ok = icon("check-circle", 14, "#10B981")
+            cnpj_fmt = (
+                f"{cnpj_auto[:2]}.{cnpj_auto[2:5]}.{cnpj_auto[5:8]}"
+                f"/{cnpj_auto[8:12]}-{cnpj_auto[12:]}"
+                if len(cnpj_auto) == 14 else "CNPJ não encontrado no cert"
+            )
             st.markdown(
                 f'<div style="color:#10B981;font-size:.82rem;font-weight:600;padding:4px 0;">'
-                f'{ic_ok}&nbsp; {pfx_file.name} carregado</div>',
+                f'{ic_ok}&nbsp; {pfx_file.name}'
+                + (f' &nbsp;&middot;&nbsp; CNPJ: <b>{cnpj_fmt}</b>' if cnpj_auto else "")
+                + '</div>',
                 unsafe_allow_html=True,
             )
 
@@ -107,41 +128,15 @@ def render():
         <div class="step-header">
             <div class="step-num">2</div>
             <div class="step-info">
-                <div class="step-title">{ic}&nbsp; Parametros de Consulta</div>
+                <div class="step-title">{ic}&nbsp; Periodo de Consulta</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        col_cnpj, col_tipo = st.columns(2, gap="medium")
-        with col_cnpj:
-            st.markdown(
-                '<div style="color:#475569;font-size:.7rem;font-weight:600;'
-                'letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px;">'
-                'CNPJ do Tomador / Prestador</div>',
-                unsafe_allow_html=True,
-            )
-            cnpj_input = st.text_input(
-                "cnpj", placeholder="Ex: 12.345.678/0001-90",
-                label_visibility="collapsed", key="cnpj_api",
-            )
-
-        with col_tipo:
-            st.markdown(
-                '<div style="color:#475569;font-size:.7rem;font-weight:600;'
-                'letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px;">'
-                'Tipo de Nota</div>',
-                unsafe_allow_html=True,
-            )
-            tipo_nota = st.selectbox(
-                "tipo", ["tomadas", "emitidas"],
-                label_visibility="collapsed", key="tipo_nota",
-                format_func=lambda x: "Servicos Tomados" if x == "tomadas" else "Servicos Emitidos",
-            )
-
-        col_ini, col_fim = st.columns(2, gap="medium")
-        hoje = date.today()
+        hoje         = date.today()
         primeiro_mes = hoje.replace(day=1)
 
+        col_ini, col_fim = st.columns(2, gap="medium")
         with col_ini:
             st.markdown(
                 '<div style="color:#475569;font-size:.7rem;font-weight:600;'
@@ -153,7 +148,6 @@ def render():
                 "data_ini", value=primeiro_mes,
                 label_visibility="collapsed", key="api_data_ini",
             )
-
         with col_fim:
             st.markdown(
                 '<div style="color:#475569;font-size:.7rem;font-weight:600;'
@@ -165,6 +159,13 @@ def render():
                 "data_fim", value=hoje,
                 label_visibility="collapsed", key="api_data_fim",
             )
+
+        ic_info = icon("info", 13, "#475569")
+        st.markdown(
+            f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
+            f'{ic_info}&nbsp; Sempre baixa <b>Servicos Tomados</b> — tipo definido pelo certificado</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── ETAPA 3 — Baixar ─────────────────────────────────────────────────────
     with st.container(border=True):
@@ -178,13 +179,13 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-        tudo_ok = pfx_file and senha_cert and cnpj_input.strip() and data_ini <= data_fim
+        tudo_ok = pfx_file and senha_cert and data_ini <= data_fim
 
         if not tudo_ok:
             ic_info = icon("info", 14, "#484F58")
             st.markdown(
                 f'<div style="color:#475569;font-size:.8rem;margin-bottom:.6rem;">'
-                f'{ic_info}&nbsp; Preencha certificado, senha, CNPJ e periodo para liberar o download.</div>',
+                f'{ic_info}&nbsp; Faca o upload do certificado e informe a senha para liberar.</div>',
                 unsafe_allow_html=True,
             )
 
@@ -198,34 +199,33 @@ def render():
 
         if btn_baixar:
             from core.api_nfse import baixar_xmls_nfse
-            from datetime import datetime
 
             progress_bar = st.progress(0, text="Conectando na API NFS-e...")
-            log_placeholder = st.empty()
 
             def atualizar_progress(frac: float):
-                pct = int(frac * 100)
-                progress_bar.progress(frac, text=f"Baixando XMLs... {pct}%")
+                progress_bar.progress(frac, text=f"Baixando XMLs... {int(frac*100)}%")
 
             try:
+                pfx_file.seek(0)
                 zip_bytes, log = baixar_xmls_nfse(
                     pfx_bytes=pfx_file.read(),
                     senha=senha_cert,
-                    cnpj=cnpj_input.strip(),
+                    cnpj=cnpj_auto,
                     data_ini=data_ini,
                     data_fim=data_fim,
-                    tipo=tipo_nota,
+                    tipo="tomadas",
                     progress_cb=atualizar_progress,
                 )
 
                 progress_bar.progress(1.0, text="Concluído!")
 
-                with st.expander("Log de download", expanded=True):
+                with st.expander("Log de download", expanded=not bool(zip_bytes)):
                     st.code("\n".join(log), language="")
 
                 if zip_bytes:
+                    cnpj_id  = cnpj_auto[:8] if cnpj_auto else "cnpj"
                     nome_zip = (
-                        f"nfse_{tipo_nota}_{cnpj_input[:8]}_"
+                        f"nfse_tomadas_{cnpj_id}_"
                         f"{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}.zip"
                     )
                     ic_ok = icon("check-circle", 32, "#1AB87A")
@@ -240,7 +240,6 @@ def render():
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-
                     st.download_button(
                         label=f"Baixar  {nome_zip}",
                         data=zip_bytes,
@@ -261,13 +260,13 @@ def render():
                 ic_err = icon("x-circle", 15, "#D93025")
                 st.markdown(
                     f'<div class="error-box">{ic_err}'
-                    f'<span class="box-text">Erro ao conectar na API: {exc}</span></div>',
+                    f'<span class="box-text">Erro: {exc}</span></div>',
                     unsafe_allow_html=True,
                 )
 
     st.markdown("""
     <div class="footer">
         Conversor NFS-e &nbsp;v2.0 &nbsp;&middot;&nbsp; API NFS-e Nacional
-        &nbsp;&middot;&nbsp; webservices.nfse.gov.br
+        &nbsp;&middot;&nbsp; api.nfse.gov.br
     </div>
     """, unsafe_allow_html=True)
