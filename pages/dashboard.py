@@ -45,7 +45,7 @@ def render():
             st.rerun()
 
     with _nc3:
-        if st.button("Notas do Milhao", key="nav_milhao_dash", use_container_width=True):
+        if st.button("Notas do Milhão", key="nav_milhao_dash", use_container_width=True):
             st.session_state.pagina = "milhao"
             st.rerun()
 

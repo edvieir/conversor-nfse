@@ -286,6 +286,8 @@ div[data-testid="stButton"] > button {
     height: 2.7em !important; width: 100% !important;
     white-space: nowrap !important; overflow: hidden !important;
     text-overflow: ellipsis !important;
+    display: flex !important; align-items: center !important;
+    justify-content: center !important;
     transition: all .2s ease !important;
 }
 div[data-testid="stButton"] > button:hover {

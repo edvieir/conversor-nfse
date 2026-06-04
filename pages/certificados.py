@@ -42,7 +42,7 @@ def _navbar():
         if st.button("Baixar XMLs", key="nav_bx_cert", use_container_width=True):
             st.session_state.pagina = "baixar_xmls"; st.rerun()
     with c4:
-        if st.button("Milhao", key="nav_mil_cert", use_container_width=True):
+        if st.button("Notas do Milhão", key="nav_mil_cert", use_container_width=True):
             st.session_state.pagina = "milhao"; st.rerun()
     with c5:
         if st.button("Dashboard", key="nav_dash_cert", use_container_width=True):
