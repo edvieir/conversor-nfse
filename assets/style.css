@@ -25,10 +25,10 @@ button[kind="headerNoPadding"] { display: none !important; }
 
 /* ── SIDEBAR ────────────────────────────────────────────────── */
 [data-testid="stSidebar"] {
-    background-color: #0a1020 !important;
-    border-right: 1px solid #1e2d45 !important;
-    min-width: 220px !important;
-    max-width: 220px !important;
+    background-color: #070d1f !important;
+    border-right: 1px solid rgba(255,255,255,.05) !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
@@ -37,49 +37,43 @@ button[kind="headerNoPadding"] { display: none !important; }
 
 [data-testid="stSidebarContent"] {
     padding: 0 !important;
-    background-color: #0a1020 !important;
+    background-color: #070d1f !important;
 }
 
-/* ── SIDEBAR BUTTONS (nav items) ────────────────────────────── */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+/* ── SIDEBAR BUTTONS ─────────────────────────────────────────── */
+/* Secondary buttons = invisible nav overlays (pulled up over HTML nav items) */
+[data-testid="stSidebar"] button[kind="secondary"] {
+    opacity: 0 !important;
+    height: 44px !important;
+    position: relative !important;
+    z-index: 100 !important;
     background: transparent !important;
-    color: #8b9ab5 !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-size: .82rem !important;
-    font-weight: 600 !important;
-    height: 2.6em !important;
-    width: 100% !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    padding: 0 1rem !important;
-    display: flex !important;
-    align-items: center !important;
-    transition: all .15s ease !important;
-    white-space: nowrap !important;
-}
-
-[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-    background: #151b2d !important;
-    color: #e2e8f0 !important;
     border: none !important;
     box-shadow: none !important;
+    margin-top: -48px !important;
+    padding: 0 !important;
+    cursor: pointer !important;
+    width: 100% !important;
 }
 
-[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
-    background: #00e5ff !important;
-    color: #0a1020 !important;
-    border: none !important;
-    font-weight: 700 !important;
+/* Primary button = logout — visible, styled */
+[data-testid="stSidebar"] button[kind="primary"] {
+    opacity: 1 !important;
+    background: rgba(244,63,94,.08) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(244,63,94,.25) !important;
     border-radius: 8px !important;
+    height: 2.8em !important;
+    font-size: .82rem !important;
+    font-weight: 600 !important;
+    margin-top: 4px !important;
+    width: 100% !important;
     justify-content: center !important;
-    box-shadow: 0 0 20px rgba(0,229,255,.25) !important;
-    margin-bottom: .5rem !important;
 }
 
-[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
-    background: #00c8e0 !important;
-    box-shadow: 0 0 28px rgba(0,229,255,.4) !important;
+[data-testid="stSidebar"] button[kind="primary"]:hover {
+    background: rgba(244,63,94,.15) !important;
+    box-shadow: none !important;
 }
 
 /* ── MAIN AREA BUTTONS ──────────────────────────────────────── */
@@ -332,7 +326,7 @@ div[data-testid="stToast"] {
     margin-bottom: 1rem;
 }
 .step-num {
-    width: 28px; height: 28px; border-radius: 8px;
+    width: 28px; height: 28px; border-radius: 50%;
     background: linear-gradient(135deg, #00b8cc, #007a8a);
     color: #fff; font-weight: 800; font-size: .85rem;
     display: flex; align-items: center; justify-content: center;

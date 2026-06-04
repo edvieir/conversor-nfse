@@ -20,6 +20,14 @@ def render():
 
     nav.render("conversor")
 
+    # Page header
+    st.markdown("""
+<div style="margin-bottom:2rem;">
+  <h1 style="color:#dce1fb;font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;font-family:Manrope,sans-serif;">Processar Lote NFS-e</h1>
+  <p style="color:#849396;font-size:.95rem;margin:0;font-family:Manrope,sans-serif;">Siga o fluxo de 3 passos para validar e converter seus arquivos XML para o formato de destino.</p>
+</div>
+""", unsafe_allow_html=True)
+
     # Chave dinâmica para limpeza do uploader
     if "upload_key" not in st.session_state:
         st.session_state["upload_key"] = 0
