@@ -35,9 +35,9 @@ def render():
 
     # ── Navbar ───────────────────────────────────────────────────────────────
     if is_admin():
-        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6 = st.columns([3, 1.4, 1.6, 1.4, 1.4, 1.0])
+        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6 = st.columns([2.8, 1.3, 1.3, 1.3, 1.3, 1.0])
     else:
-        _nc1, _nc2, _nc3, _nc4, _nc5 = st.columns([3, 1.4, 1.6, 1.4, 1.0])
+        _nc1, _nc2, _nc3, _nc4, _nc5 = st.columns([2.8, 1.3, 1.3, 1.3, 1.0])
 
     with _nc1:
         st.markdown(f"""
@@ -52,7 +52,7 @@ def render():
             st.rerun()
 
     with _nc3:
-        if st.button("Notas do Milhao", key="nav_milhao_main", use_container_width=True):
+        if st.button("Milhao", key="nav_milhao_main", use_container_width=True):
             st.session_state.pagina = "milhao"
             st.rerun()
 

@@ -23,9 +23,9 @@ def _navbar():
     """, unsafe_allow_html=True)
 
     if is_admin():
-        c1, c2, c3, c4, c5, c6 = st.columns([3, 1.4, 1.6, 1.4, 1.4, 1.0])
+        c1, c2, c3, c4, c5, c6 = st.columns([2.8, 1.3, 1.3, 1.3, 1.3, 1.0])
     else:
-        c1, c2, c3, c4, c5 = st.columns([3, 1.4, 1.6, 1.4, 1.0])
+        c1, c2, c3, c4, c5 = st.columns([2.8, 1.3, 1.3, 1.3, 1.0])
 
     with c1:
         st.markdown(f"""
@@ -39,7 +39,7 @@ def _navbar():
             st.session_state.pagina = "conversor"
             st.rerun()
     with c3:
-        if st.button("Notas do Milhao", key="nav_milhao_bx", use_container_width=True):
+        if st.button("Milhao", key="nav_milhao_bx", use_container_width=True):
             st.session_state.pagina = "milhao"
             st.rerun()
     with c4:
