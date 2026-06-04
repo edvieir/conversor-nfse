@@ -60,7 +60,6 @@ def require_login():
 
 
 def _render_login():
-    from assets.icons import SVG_LOGIN_GRAPHIC
 
     st.markdown("""
 <style>
@@ -73,9 +72,6 @@ def _render_login():
 </style>""", unsafe_allow_html=True)
 
     st.markdown('<div style="height:44px"></div>', unsafe_allow_html=True)
-
-    # Ilustração SVG abstrata
-    st.markdown(SVG_LOGIN_GRAPHIC, unsafe_allow_html=True)
 
     # Título
     st.markdown("""
