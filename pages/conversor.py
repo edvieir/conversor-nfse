@@ -35,9 +35,9 @@ def render():
 
     # ── Navbar ───────────────────────────────────────────────────────────────
     if is_admin():
-        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6, _nc7 = st.columns([2.8, 1.3, 1.3, 1.3, 1.3, 1.3, 1.0])
+        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6, _nc7 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.4, 1.0])
     else:
-        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6 = st.columns([2.8, 1.3, 1.3, 1.3, 1.3, 1.0])
+        _nc1, _nc2, _nc3, _nc4, _nc5, _nc6 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.0])
 
     with _nc1:
         st.markdown(f"""

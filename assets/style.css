@@ -284,6 +284,8 @@ div[data-testid="stButton"] > button {
     border: 1px solid #2F3E55 !important; border-radius: 8px !important;
     font-weight: 600 !important; font-size: .84rem !important;
     height: 2.7em !important; width: 100% !important;
+    white-space: nowrap !important; overflow: hidden !important;
+    text-overflow: ellipsis !important;
     transition: all .2s ease !important;
 }
 div[data-testid="stButton"] > button:hover {

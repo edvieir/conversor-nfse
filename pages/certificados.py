@@ -24,9 +24,9 @@ def _navbar():
     """, unsafe_allow_html=True)
 
     if is_admin():
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([2.8, 1.3, 1.3, 1.3, 1.3, 1.3, 1.0])
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.4, 1.0])
     else:
-        c1, c2, c3, c4, c5, c6 = st.columns([2.8, 1.3, 1.3, 1.3, 1.3, 1.0])
+        c1, c2, c3, c4, c5, c6 = st.columns([2.2, 1.4, 1.4, 1.2, 1.4, 1.0])
 
     with c1:
         st.markdown(f"""
