@@ -181,8 +181,15 @@ def render():
             pfx_bytes, senha = resultado
             progress_bar = st.progress(0, text="Conectando na API NFS-e...")
 
+            # Log em tempo real
+            log_placeholder = st.empty()
+
             def atualizar_progress(frac: float):
                 progress_bar.progress(frac, text=f"Baixando XMLs... {int(frac*100)}%")
+
+            def atualizar_log(linhas: list):
+                ultimas = linhas[-30:]  # exibe as últimas 30 linhas para não poluir
+                log_placeholder.code("\n".join(ultimas), language="")
 
             try:
                 zip_bytes, log = baixar_xmls_nfse(
@@ -193,8 +200,10 @@ def render():
                     data_fim=data_fim,
                     tipo="tomadas",
                     progress_cb=atualizar_progress,
+                    log_cb=atualizar_log,
                 )
                 progress_bar.progress(1.0, text="Concluído!")
+                log_placeholder.empty()  # limpa log em tempo real
 
                 with st.expander("Log de download", expanded=not bool(zip_bytes)):
                     st.code("\n".join(log), language="")
@@ -233,6 +242,7 @@ def render():
 
             except Exception as exc:
                 progress_bar.empty()
+                log_placeholder.empty()
                 ic_err = icon("x-circle", 15, "#D93025")
                 st.markdown(
                     f'<div class="error-box">{ic_err}'

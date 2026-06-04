@@ -170,6 +170,7 @@ def baixar_xmls_nfse(
     data_fim: date,
     tipo: str = "tomadas",   # mantido para compatibilidade, não usado na API
     progress_cb=None,
+    log_cb=None,             # callable(list[str]) chamado após cada lote
 ) -> tuple[bytes, list[str]]:
     """
     Baixa todas as NFS-e via NSU a partir do NSU 0, filtra pelo período
@@ -182,6 +183,7 @@ def baixar_xmls_nfse(
 
     try:
         log.append("Extraindo certificado .pfx...")
+        if log_cb: log_cb(log)
         cert_path, key_path, cnpj_cert = _extrair_cert_pfx(pfx_bytes, senha)
 
         cnpj_uso = _limpar_cnpj(cnpj) if cnpj and cnpj.strip() else cnpj_cert
@@ -189,6 +191,7 @@ def baixar_xmls_nfse(
             raise ValueError("CNPJ não encontrado no certificado nem informado.")
         log.append(f"CNPJ: {cnpj_uso}")
         log.append("Conectando na API NFS-e (mTLS)...")
+        if log_cb: log_cb(log)
 
         buf      = io.BytesIO()
         nsu      = 0
@@ -262,9 +265,11 @@ def baixar_xmls_nfse(
                 # Avança NSU: usa o maior NSU do lote + 1
                 if nsu_max <= nsu:
                     log.append("NSU não avançou, encerrando.")
+                    if log_cb: log_cb(log)
                     break
                 nsu = nsu_max + 1
 
+                if log_cb: log_cb(log)
                 if progress_cb:
                     progress_cb(min(lote_num / (lote_num + 1), 0.95))
 
