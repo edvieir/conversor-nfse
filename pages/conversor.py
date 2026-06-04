@@ -47,7 +47,7 @@ def render():
         </div>""", unsafe_allow_html=True)
 
     with _nc2:
-        if st.button("Baixar XMLs", key="nav_baixar_main", use_container_width=True):
+        if st.button("Baixar XML", key="nav_baixar_main", use_container_width=True):
             st.session_state.pagina = "baixar_xmls"; st.rerun()
     with _nc3:
         if st.button("Certificados", key="nav_cert_main", use_container_width=True):

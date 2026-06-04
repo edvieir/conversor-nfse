@@ -39,7 +39,7 @@ def _navbar():
         if st.button("Conversor", key="nav_conv_cert", use_container_width=True):
             st.session_state.pagina = "conversor"; st.rerun()
     with c3:
-        if st.button("Baixar XMLs", key="nav_bx_cert", use_container_width=True):
+        if st.button("Baixar XML", key="nav_bx_cert", use_container_width=True):
             st.session_state.pagina = "baixar_xmls"; st.rerun()
     with c4:
         if st.button("Milhão", key="nav_mil_cert", use_container_width=True):

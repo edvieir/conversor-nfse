@@ -284,11 +284,14 @@ div[data-testid="stButton"] > button {
     border: 1px solid #2F3E55 !important; border-radius: 8px !important;
     font-weight: 600 !important; font-size: .84rem !important;
     height: 2.7em !important; width: 100% !important;
-    white-space: nowrap !important; overflow: hidden !important;
-    text-overflow: ellipsis !important;
     display: flex !important; align-items: center !important;
-    justify-content: center !important;
+    justify-content: center !important; padding: 0 .5em !important;
     transition: all .2s ease !important;
+}
+div[data-testid="stButton"] > button p {
+    white-space: nowrap !important; overflow: hidden !important;
+    text-overflow: ellipsis !important; margin: 0 !important;
+    line-height: 1 !important;
 }
 div[data-testid="stButton"] > button:hover {
     background: #0D1E2E !important; color: #E6EDF3 !important;
