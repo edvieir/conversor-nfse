@@ -237,16 +237,6 @@ def baixar_xmls_nfse(
                     if tipo_doc != "NFSE":
                         continue
 
-                    # Filtro por data
-                    if data_str:
-                        try:
-                            data_doc = date.fromisoformat(data_str)
-                            if not (data_ini <= data_doc <= data_fim):
-                                log.append(f"    → fora do período ({data_ini}..{data_fim}), ignorado")
-                                continue
-                        except ValueError:
-                            pass
-
                     arquivo_b64 = doc.get("ArquivoXml")
                     if not arquivo_b64:
                         log.append(f"    → sem ArquivoXml, ignorado")
@@ -255,6 +245,28 @@ def baixar_xmls_nfse(
                     chave = doc.get("ChaveAcesso") or str(nsu_doc)
                     try:
                         xml_bytes = _decodificar_xml(arquivo_b64)
+
+                        # Filtra pela competência (dCompet) dentro do XML
+                        import xml.etree.ElementTree as _ET2
+                        try:
+                            _root = _ET2.fromstring(xml_bytes)
+                            _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
+                            if _el is not None and _el.text:
+                                data_compet = date.fromisoformat(_el.text.strip()[:10])
+                                if not (data_ini <= data_compet <= data_fim):
+                                    log.append(f"    → competência {data_compet} fora do período, ignorado")
+                                    continue
+                        except Exception:
+                            # Se não conseguir ler dCompet, usa DataHoraGeracao como fallback
+                            if data_str:
+                                try:
+                                    data_doc = date.fromisoformat(data_str)
+                                    if not (data_ini <= data_doc <= data_fim):
+                                        log.append(f"    → fora do período ({data_ini}..{data_fim}), ignorado")
+                                        continue
+                                except ValueError:
+                                    pass
+
                         zf.writestr(f"nfse_{chave}.xml", xml_bytes)
                         total_ok += 1
                         log.append(f"    → SALVO: nfse_{chave}.xml")
