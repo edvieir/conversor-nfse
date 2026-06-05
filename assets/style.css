@@ -34,37 +34,40 @@ button[kind="headerNoPadding"] { display: none !important; }
     visibility: visible !important;
 }
 
-/* Nav overlay buttons — invisible, just capture click */
+/* Nav buttons — completely transparent, zero height, pull up to cover HTML div */
 [data-testid="stSidebar"] div[data-testid="stButton"] > button {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    color: transparent !important;
-    font-size: 0 !important;
-    height: 44px !important;
-    margin-top: -48px !important;
-    position: relative !important;
-    z-index: 10 !important;
+    all: unset !important;
+    display: block !important;
+    width: calc(100% - 16px) !important;
+    height: 42px !important;
+    margin: -46px 8px 2px !important;
+    border-radius: 8px !important;
     cursor: pointer !important;
-    width: 100% !important;
-    padding: 0 !important;
+    position: relative !important;
+    z-index: 20 !important;
+    background: transparent !important;
 }
 [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    background: rgba(255,255,255,.04) !important;
 }
 
-/* Logout button — last button in sidebar, make visible */
+/* Logout — last button, fully styled */
 [data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button {
+    all: unset !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: calc(100% - 32px) !important;
+    height: 2.4em !important;
+    margin: 4px 16px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
     background: rgba(244,63,94,.08) !important;
     color: #f87171 !important;
     border: 1px solid rgba(244,63,94,.2) !important;
+    font-family: Manrope, sans-serif !important;
     font-size: .82rem !important;
     font-weight: 600 !important;
-    height: 2.8em !important;
-    margin-top: 0 !important;
-    border-radius: 8px !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
