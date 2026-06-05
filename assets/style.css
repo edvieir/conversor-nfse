@@ -37,42 +37,7 @@ button[kind="headerNoPadding"] { display: none !important; }
 [data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
 [data-testid="stSidebarContent"] { padding: 0 !important; background-color: #070d1f !important; }
 
-/* ── SIDEBAR BUTTONS ─────────────────────────────────────────── */
-/* Seletores com alta especificidade para ganhar do CSS global */
-
-/* Nav inactive items — transparent, left-aligned */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
-    background: transparent !important;
-    color: #bac9cc !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-size: .87rem !important;
-    font-weight: 600 !important;
-    height: 2.5em !important;
-    width: calc(100% - 16px) !important;
-    margin: 2px 8px !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    padding-left: 12px !important;
-    box-shadow: none !important;
-}
-[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
-    background: rgba(255,255,255,.05) !important;
-    color: #dce1fb !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-/* Logout button — last button, red */
-[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button[kind="secondary"] {
-    color: #f87171 !important;
-    background: rgba(244,63,94,.05) !important;
-    border: 1px solid rgba(244,63,94,.15) !important;
-    justify-content: center !important;
-    margin-top: 4px !important;
-}
-[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button[kind="secondary"]:hover {
-    background: rgba(244,63,94,.12) !important;
-}
+/* Sidebar buttons CSS está no final do arquivo (após o CSS global de botões) */
 
 /* ── MAIN AREA BUTTONS ──────────────────────────────────────── */
 div[data-testid="stButton"] > button {
@@ -469,4 +434,45 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
 [data-testid="stHeader"] {
     background: transparent !important;
     height: 0 !important;
+}
+
+/* ══ SIDEBAR BUTTONS — deve vir APÓS o CSS global de botões ══════
+   Usa section[data-testid="stSidebar"] para especificidade máxima  */
+
+section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+    background: transparent !important;
+    color: #bac9cc !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: .86rem !important;
+    font-weight: 600 !important;
+    height: 2.5em !important;
+    width: calc(100% - 16px) !important;
+    margin: 2px 8px !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding-left: 12px !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
+    background: rgba(255,255,255,.05) !important;
+    color: #dce1fb !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Logout — último botão do sidebar */
+section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button {
+    color: #f87171 !important;
+    background: rgba(244,63,94,.05) !important;
+    border: 1px solid rgba(244,63,94,.15) !important;
+    justify-content: center !important;
+    margin-top: 4px !important;
+}
+
+section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button:hover {
+    background: rgba(244,63,94,.12) !important;
 }

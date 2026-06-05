@@ -2,7 +2,7 @@
 
 import streamlit as st
 from datetime import datetime, timedelta
-from auth.security import is_admin
+from auth.security import is_admin, has_permission
 from db.database import get_stats, get_conversions
 from views import nav
 
@@ -108,12 +108,14 @@ def render():
 
         with st.container(border=True):
             st.markdown('<h4 style="color:#849396;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:0 0 12px;font-family:Manrope,sans-serif;">Ações Rápidas</h4>', unsafe_allow_html=True)
-            if st.button("📄  Gerar Lote TXT", use_container_width=True, key="dash_txt"):
-                st.session_state.pagina = "conversor"
-                st.rerun()
-            if st.button("🔐  Atualizar Certificado", use_container_width=True, key="dash_cert"):
-                st.session_state.pagina = "certificados"
-                st.rerun()
+            if is_admin() or has_permission("conversor"):
+                if st.button("📄  Gerar Lote TXT", use_container_width=True, key="dash_txt"):
+                    st.session_state.pagina = "conversor"
+                    st.rerun()
+            if is_admin() or has_permission("certificados"):
+                if st.button("🔐  Atualizar Certificado", use_container_width=True, key="dash_cert"):
+                    st.session_state.pagina = "certificados"
+                    st.rerun()
 
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
 
