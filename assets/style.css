@@ -442,9 +442,9 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     height: 0 !important;
 }
 
-/* ══ SIDEBAR BUTTONS — all:unset reseta tudo que o Streamlit injeta ══ */
+/* ══ SIDEBAR BUTTONS — especificidade 2,1,1 via :not(#x) supera Streamlit ══ */
 
-[data-testid="stSidebar"] button {
+:not(#x):not(#y) [data-testid="stSidebar"] button {
     all: unset !important;
     box-sizing: border-box !important;
     display: flex !important;
@@ -460,19 +460,18 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     color: #bac9cc !important;
     background: transparent !important;
     border: none !important;
-    text-align: left !important;
     line-height: 1.2 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
 }
 
-[data-testid="stSidebar"] button:hover {
+:not(#x):not(#y) [data-testid="stSidebar"] button:hover {
     background: rgba(255,255,255,.06) !important;
     color: #dce1fb !important;
 }
 
 /* Botão Sair — último botão do sidebar */
-[data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button {
+:not(#x):not(#y) [data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button {
     color: #f87171 !important;
     background: rgba(244,63,94,.05) !important;
     border: 1px solid rgba(244,63,94,.15) !important;
@@ -480,6 +479,10 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     margin-top: 8px !important;
 }
 
-[data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button:hover {
+:not(#x):not(#y) [data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button:hover {
     background: rgba(244,63,94,.12) !important;
 }
+
+/* Fix uploadupload duplicado no file uploader */
+[data-testid="stFileUploadDropzone"] button span:last-child { display: none !important; }
+[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
