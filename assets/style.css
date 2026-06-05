@@ -483,8 +483,3 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
 [data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button:hover {
     background: rgba(244,63,94,.12) !important;
 }
-}
-
-section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button:hover {
-    background: rgba(244,63,94,.12) !important;
-}

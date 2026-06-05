@@ -101,64 +101,6 @@ require_login()   # para o app se nao autenticado e exibe tela de login
 if "pagina" not in st.session_state:
     st.session_state["pagina"] = "conversor"
 
-# ── SIDEBAR BUTTON STYLER (JS via iframe — único método confiável) ──────────────
-import streamlit.components.v1 as components
-components.html("""<script>
-(function() {
-    var NAV_STYLE = [
-        'all:unset',
-        'box-sizing:border-box',
-        'display:flex',
-        'align-items:center',
-        'cursor:pointer',
-        'width:calc(100% - 16px)',
-        'margin:1px 8px',
-        'padding:9px 12px',
-        'border-radius:8px',
-        'font-family:Manrope,sans-serif',
-        'font-size:13px',
-        'font-weight:600',
-        'color:#bac9cc',
-        'background:transparent',
-        'border:none',
-        'white-space:nowrap',
-        'overflow:hidden',
-    ].join(';');
-    var LOGOUT_STYLE = [
-        'all:unset',
-        'box-sizing:border-box',
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-        'cursor:pointer',
-        'width:calc(100% - 16px)',
-        'margin:8px 8px 0',
-        'padding:9px 12px',
-        'border-radius:8px',
-        'font-family:Manrope,sans-serif',
-        'font-size:13px',
-        'font-weight:600',
-        'color:#f87171',
-        'background:rgba(244,63,94,.05)',
-        'border:1px solid rgba(244,63,94,.15)',
-        'white-space:nowrap',
-    ].join(';');
-
-    function apply() {
-        var doc = window.parent.document;
-        var sidebar = doc.querySelector('[data-testid="stSidebar"]');
-        if (!sidebar) return;
-        var btns = sidebar.querySelectorAll('button');
-        btns.forEach(function(btn, i) {
-            btn.setAttribute('style', i === btns.length - 1 ? LOGOUT_STYLE : NAV_STYLE);
-        });
-    }
-
-    apply();
-    var obs = new window.parent.MutationObserver(apply);
-    obs.observe(window.parent.document.body, {childList:true, subtree:true, attributes:true});
-})();
-</script>""", height=0)
 
 # ── ROTEADOR ───────────────────────────────────────────────────────────────────
 from views import conversor, dashboard, usuarios, milhao, baixar_xmls, certificados
