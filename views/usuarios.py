@@ -6,7 +6,7 @@ import streamlit as st
 from auth.security import current_user, is_admin, logout, hash_password
 from db.database import list_users, create_user, delete_user
 from assets.icons import icon
-from pages import nav
+from views import nav
 
 
 def render():

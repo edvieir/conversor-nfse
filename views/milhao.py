@@ -10,7 +10,7 @@ from auth.security import current_user, is_admin, logout
 from core.conversor_milhao import processar_csv_txt, processar_csv_xlsx
 from db.database import log_conversion
 from assets.icons import icon
-from pages import nav
+from views import nav
 
 
 def render():

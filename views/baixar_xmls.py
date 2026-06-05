@@ -7,7 +7,7 @@ from datetime import date
 from auth.security import current_user, is_admin, logout
 from assets.icons import icon
 from db.database import listar_certificados, carregar_certificado
-from pages import nav
+from views import nav
 
 
 def _navbar():

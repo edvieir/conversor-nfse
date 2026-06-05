@@ -7,7 +7,7 @@ from auth.security import current_user, is_admin, logout
 from assets.icons import icon
 from db.database import salvar_certificado, listar_certificados, remover_certificado
 from core.api_nfse import extrair_cnpj_do_pfx
-from pages import nav
+from views import nav
 
 
 def _navbar():
