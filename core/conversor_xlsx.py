@@ -341,18 +341,6 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
         except Exception:
             return 0.0, 0.0, 0.0, 0.0, 0.0
 
-    def _competencia_xml(xml_path):
-        import xml.etree.ElementTree as ET
-        try:
-            root = ET.parse(xml_path).getroot()
-            el = next((e for e in root.iter() if e.tag.endswith("dCompet")), None)
-            if el is not None and el.text:
-                p = el.text.strip()[:7].split("-")
-                return f"{p[1]}/{p[0]}"
-        except Exception:
-            pass
-        return ""
-
     with tempfile.TemporaryDirectory() as tmp:
         for uf_file in uploaded_files:
             uf_file.seek(0)
@@ -391,12 +379,6 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                     text=f"Processando {idx + 1}/{len(arquivos)}: {nome_arq}",
                 )
                 try:
-                    if competencia_filtro:
-                        comp = _competencia_xml(xml_path)
-                        if comp and comp != competencia_filtro:
-                            print(f"  SKIP {nome_arq}: competência {comp} ≠ {competencia_filtro}")
-                            continue
-
                     d = C.parse_nfse(xml_path)
                     if im:
                         d["im"] = im
