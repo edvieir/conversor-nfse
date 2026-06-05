@@ -494,9 +494,9 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     background: rgba(244,63,94,.12) !important;
 }
 
-/* Sidebar — espaçamento compacto entre itens */
+/* Sidebar — espaçamento entre itens */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-    gap: 2px !important;
+    gap: 4px !important;
 }
 [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
     padding: 0 !important;
