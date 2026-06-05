@@ -38,28 +38,10 @@ button[kind="headerNoPadding"] { display: none !important; }
 [data-testid="stSidebarContent"] { padding: 0 !important; background-color: #070d1f !important; }
 
 /* ── SIDEBAR BUTTONS ─────────────────────────────────────────── */
+/* Seletores com alta especificidade para ganhar do CSS global */
 
-/* Nova Conversão (primary) — cyan */
-[data-testid="stSidebar"] button[kind="primary"] {
-    background: #00e5ff !important;
-    color: #00363d !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    font-size: .88rem !important;
-    height: 2.8em !important;
-    width: calc(100% - 32px) !important;
-    margin: 0 16px !important;
-    box-shadow: 0 0 15px rgba(0,229,255,.2) !important;
-    justify-content: center !important;
-}
-[data-testid="stSidebar"] button[kind="primary"]:hover {
-    background: #00cfea !important;
-    box-shadow: 0 0 24px rgba(0,229,255,.35) !important;
-}
-
-/* Nav inactive items (secondary) — transparent, left-aligned */
-[data-testid="stSidebar"] button[kind="secondary"] {
+/* Nav inactive items — transparent, left-aligned */
+[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
     background: transparent !important;
     color: #bac9cc !important;
     border: none !important;
@@ -68,27 +50,27 @@ button[kind="headerNoPadding"] { display: none !important; }
     font-weight: 600 !important;
     height: 2.5em !important;
     width: calc(100% - 16px) !important;
-    margin: 1px 8px !important;
+    margin: 2px 8px !important;
     text-align: left !important;
     justify-content: flex-start !important;
     padding-left: 12px !important;
     box-shadow: none !important;
 }
-[data-testid="stSidebar"] button[kind="secondary"]:hover {
+[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
     background: rgba(255,255,255,.05) !important;
     color: #dce1fb !important;
     border: none !important;
     box-shadow: none !important;
 }
-
-/* Logout (last secondary) — subtle red */
-[data-testid="stSidebar"] div[data-testid="stButton"]:last-child button {
+/* Logout button — last button, red */
+[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button[kind="secondary"] {
     color: #f87171 !important;
-    background: rgba(244,63,94,.06) !important;
+    background: rgba(244,63,94,.05) !important;
     border: 1px solid rgba(244,63,94,.15) !important;
     justify-content: center !important;
+    margin-top: 4px !important;
 }
-[data-testid="stSidebar"] div[data-testid="stButton"]:last-child button:hover {
+[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button[kind="secondary"]:hover {
     background: rgba(244,63,94,.12) !important;
 }
 
