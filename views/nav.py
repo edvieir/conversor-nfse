@@ -4,13 +4,13 @@ from auth.security import current_user, is_admin, logout, has_permission
 
 
 _PAGES = [
-    ("conversor",    "sync",           "🔄", "Converter"),
-    ("baixar_xmls",  "cloud_download", "⬇️", "Baixar XML"),
-    ("certificados", "verified_user",  "🔐", "Certificados"),
-    ("milhao",       "receipt_long",   "📋", "Milhão"),
-    ("dashboard",    "monitoring",     "📊", "Overview"),
+    ("conversor",    "sync",           "Converter"),
+    ("baixar_xmls",  "cloud_download", "Baixar XML"),
+    ("certificados", "verified_user",  "Certificados"),
+    ("milhao",       "receipt_long",   "Milhão"),
+    ("dashboard",    "monitoring",     "Overview"),
 ]
-_ADMIN_PAGE = ("usuarios", "manage_accounts", "👥", "Usuários")
+_ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
 
 
 def render(current_page: str = ""):
@@ -39,13 +39,14 @@ def render(current_page: str = ""):
             pages.append(_ADMIN_PAGE)
 
         for item in pages:
-            key, icon_ms, emoji, label = item
+            key, icon_ms, label = item
             if not admin and not has_permission(key):
                 continue
 
             active = (key == current_page)
 
             if active:
+                # Active item: pure HTML, no button needed
                 st.markdown(f"""
 <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;
             margin:2px 8px;border-radius:8px;border-left:3px solid #00e5ff;
@@ -54,10 +55,16 @@ def render(current_page: str = ""):
   <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
 </div>""", unsafe_allow_html=True)
             else:
-                if st.button(f"{emoji}  {label}", key=f"nb_{key}_{current_page}",
+                # Invisible button (clickable) + HTML overlay (visual)
+                if st.button("‎", key=f"nb_{key}_{current_page}",
                              use_container_width=True):
                     st.session_state.pagina = key
                     st.rerun()
+                st.markdown(f"""
+<div class="nav-overlay">
+  <span class="ms" style="color:#6b7fa3;font-size:20px;">{icon_ms}</span>
+  {label}
+</div>""", unsafe_allow_html=True)
 
         # ── Footer + logout ────────────────────────────────────────────────
         st.markdown("""
@@ -66,3 +73,8 @@ def render(current_page: str = ""):
 
         if st.button("↪  Sair", key=f"logout_{current_page}", use_container_width=True):
             logout()
+        st.markdown("""
+<div class="nav-overlay" style="color:#f87171;justify-content:center;
+     border:1px solid rgba(244,63,94,.15);background:rgba(244,63,94,.05);
+     margin-top:-42px;">↪  Sair</div>
+""", unsafe_allow_html=True)
