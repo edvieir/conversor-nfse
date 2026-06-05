@@ -3955,7 +3955,7 @@ def parse_nfse(xml_path):
 
     # --- Valores ---
     val    = fe(inf, "valores")
-    d["vS"]   = ft(val, "vLiq") or ft(val, "vBC")
+    d["vS"]   = ft(val, "vBC") or ft(val, "vLiq")
     d["aliq"] = ft(val, "pAliqAplic")
     d["vISS"] = ft(val, "vISSQN")
 
