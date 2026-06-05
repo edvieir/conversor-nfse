@@ -494,9 +494,9 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     background: rgba(244,63,94,.12) !important;
 }
 
-/* Sidebar — remove gap entre itens do vertical block */
+/* Sidebar — espaçamento compacto entre itens */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-    gap: 0 !important;
+    gap: 2px !important;
 }
 [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
     padding: 0 !important;
