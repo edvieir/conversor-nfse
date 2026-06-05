@@ -52,7 +52,7 @@ def render():
                         f'<div style="padding:6px 0;font-size:.85rem;">'
                         f'{ic_ok}&nbsp; <b>{cert["razao_social"] or cnpj_fmt}</b>'
                         f' &nbsp;<span style="color:#475569">{cnpj_fmt}</span>'
-                        f' &nbsp;<span style="color:#475569;font-size:.75rem;">— salvo em {cert["criado_em"][:10]}</span>'
+                        f' &nbsp;<span style="color:#475569;font-size:.75rem;">— salvo em {str(cert["criado_em"])[:10]}</span>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
