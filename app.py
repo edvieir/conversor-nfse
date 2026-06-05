@@ -46,7 +46,18 @@ def _load_css():
         st.warning("assets/style.css nao encontrado.")
 
 _load_css()
-st.markdown('<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">', unsafe_allow_html=True)
+st.markdown("""
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<style>
+.ms {
+    font-family: 'Material Symbols Outlined' !important;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    font-size: 20px; line-height: 1; font-style: normal;
+    display: inline-block; flex-shrink: 0;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ── AUTENTICAÇÃO ───────────────────────────────────────────────────────────────
 from auth.security import require_login
@@ -57,7 +68,7 @@ if "pagina" not in st.session_state:
     st.session_state["pagina"] = "conversor"
 
 # ── ROTEADOR ───────────────────────────────────────────────────────────────────
-from pages import conversor, dashboard, usuarios, milhao, baixar_xmls, certificados
+from views import conversor, dashboard, usuarios, milhao, baixar_xmls, certificados
 
 pagina = st.session_state.get("pagina", "conversor")
 

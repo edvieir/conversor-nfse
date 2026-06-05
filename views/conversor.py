@@ -5,7 +5,7 @@ pages/conversor.py — Tela principal de conversão XML → TXT / XLSX
 import streamlit as st
 from datetime import datetime
 from auth.security import current_user, is_admin, logout
-from pages import nav
+from views import nav
 from core.conversor_txt  import processar_uploads, conversor_disponivel
 from core.conversor_xlsx import processar_xlsx_sped
 from db.database import log_conversion
