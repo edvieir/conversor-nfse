@@ -3,32 +3,15 @@ import streamlit as st
 from auth.security import current_user, is_admin, logout, has_permission
 
 
+# (emoji, label, page_key)
 _PAGES = [
-    ("conversor",    "sync",           "Converter"),
-    ("baixar_xmls",  "cloud_download", "Baixar XML"),
-    ("certificados", "verified_user",  "Certificados"),
-    ("milhao",       "receipt_long",   "Milhão"),
-    ("dashboard",    "monitoring",     "Overview"),
+    ("conversor",    "sync",           "🔄", "Converter"),
+    ("baixar_xmls",  "cloud_download", "⬇️", "Baixar XML"),
+    ("certificados", "verified_user",  "🔐", "Certificados"),
+    ("milhao",       "receipt_long",   "📋", "Milhão"),
+    ("dashboard",    "monitoring",     "📊", "Overview"),
 ]
-_ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
-
-
-def _nav_item_html(icon_name: str, label: str, active: bool) -> str:
-    if active:
-        return f"""
-<div style="display:flex;align-items:center;gap:10px;padding:10px 13px;
-            margin:1px 8px;border-radius:8px;border-left:3px solid #00e5ff;
-            background:rgba(0,229,255,.08);cursor:default;">
-  <span class="ms" style="color:#00e5ff;font-size:20px;">{icon_name}</span>
-  <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
-</div>"""
-    else:
-        return f"""
-<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;
-            margin:1px 8px;border-radius:8px;">
-  <span class="ms" style="color:#849396;font-size:20px;">{icon_name}</span>
-  <span style="color:#bac9cc;font-family:Manrope,sans-serif;font-size:13px;font-weight:600;">{label}</span>
-</div>"""
+_ADMIN_PAGE = ("usuarios", "manage_accounts", "👥", "Usuários")
 
 
 def render(current_page: str = ""):
@@ -52,44 +35,49 @@ def render(current_page: str = ""):
 """, unsafe_allow_html=True)
 
         # ── Nova Conversão ────────────────────────────────────────────────
-        st.markdown("""
-<div style="padding:8px 16px 12px;">
-  <div style="background:#00e5ff;color:#00363d;border-radius:8px;padding:10px 16px;
-              display:flex;align-items:center;justify-content:center;gap:6px;
-              font-family:Manrope,sans-serif;font-weight:700;font-size:13px;
-              box-shadow:0 0 15px rgba(0,229,255,.2);">
-    <span class="ms" style="color:#00363d;font-size:18px;">add</span>
-    Nova Conversão
-  </div>
-</div>
-""", unsafe_allow_html=True)
+        if st.button("＋  Nova Conversão", key="nav_nova_conv", use_container_width=True, type="primary"):
+            st.session_state.pagina = "conversor"
+            st.rerun()
+
+        st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
 
         # ── Nav items ─────────────────────────────────────────────────────
         pages = list(_PAGES)
         if admin:
             pages.append(_ADMIN_PAGE)
 
-        for key, icon_name, label in pages:
+        for item in pages:
+            key, icon_ms, emoji, label = item
             if not admin and not has_permission(key):
                 continue
 
             active = (key == current_page)
-            st.markdown(_nav_item_html(icon_name, label, active), unsafe_allow_html=True)
 
-            if not active:
-                if st.button(label, key=f"nb_{key}_{current_page}", use_container_width=True):
+            if active:
+                # Item ativo — HTML div visual (sem botão)
+                st.markdown(f"""
+<div style="display:flex;align-items:center;gap:10px;padding:10px 13px;
+            margin:1px 8px;border-radius:8px;border-left:3px solid #00e5ff;
+            background:rgba(0,229,255,.08);">
+  <span class="ms" style="color:#00e5ff;font-size:20px;">{icon_ms}</span>
+  <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
+</div>""", unsafe_allow_html=True)
+            else:
+                # Item inativo — botão real clicável
+                if st.button(f"{emoji}  {label}", key=f"nb_{key}_{current_page}",
+                             use_container_width=True):
                     st.session_state.pagina = key
                     st.rerun()
 
         # ── Footer ────────────────────────────────────────────────────────
         st.markdown("""
-<div style="border-top:1px solid rgba(255,255,255,.05);margin-top:24px;padding-top:8px;">
-  <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin:1px 8px;border-radius:8px;">
-    <span class="ms" style="color:#849396;font-size:20px;">help</span>
-    <span style="color:#849396;font-family:Manrope,sans-serif;font-size:13px;font-weight:600;">Help Center</span>
+<div style="border-top:1px solid rgba(255,255,255,.05);margin-top:20px;padding:12px 16px 4px;">
+  <div style="color:#4a5568;font-size:12px;font-weight:600;font-family:Manrope,sans-serif;
+              display:flex;align-items:center;gap:8px;">
+    <span class="ms" style="font-size:18px;">help</span> Help Center
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-        if st.button("Sair", key=f"logout_{current_page}", use_container_width=True):
+        if st.button("↪  Sair", key=f"logout_{current_page}", use_container_width=True):
             logout()

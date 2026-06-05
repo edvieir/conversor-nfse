@@ -34,85 +34,62 @@ button[kind="headerNoPadding"] { display: none !important; }
     visibility: visible !important;
 }
 
-/* Nav buttons — completely transparent, zero height, pull up to cover HTML div */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button {
-    all: unset !important;
-    display: block !important;
-    width: calc(100% - 16px) !important;
-    height: 42px !important;
-    margin: -46px 8px 2px !important;
-    border-radius: 8px !important;
-    cursor: pointer !important;
-    position: relative !important;
-    z-index: 20 !important;
-    background: transparent !important;
-}
-[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-    background: rgba(255,255,255,.04) !important;
-}
-
-/* Logout — last button, fully styled */
-[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button {
-    all: unset !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: calc(100% - 32px) !important;
-    height: 2.4em !important;
-    margin: 4px 16px !important;
-    border-radius: 8px !important;
-    cursor: pointer !important;
-    background: rgba(244,63,94,.08) !important;
-    color: #f87171 !important;
-    border: 1px solid rgba(244,63,94,.2) !important;
-    font-family: Manrope, sans-serif !important;
-    font-size: .82rem !important;
-    font-weight: 600 !important;
-}
-
-[data-testid="stSidebar"] > div:first-child {
-    padding: 0 !important;
-}
-
-[data-testid="stSidebarContent"] {
-    padding: 0 !important;
-    background-color: #070d1f !important;
-}
+[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
+[data-testid="stSidebarContent"] { padding: 0 !important; background-color: #070d1f !important; }
 
 /* ── SIDEBAR BUTTONS ─────────────────────────────────────────── */
-/* Secondary buttons = invisible nav overlays (pulled up over HTML nav items) */
-[data-testid="stSidebar"] button[kind="secondary"] {
-    opacity: 0 !important;
-    height: 44px !important;
-    position: relative !important;
-    z-index: 100 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    margin-top: -48px !important;
-    padding: 0 !important;
-    cursor: pointer !important;
-    width: 100% !important;
-}
 
-/* Primary button = logout — visible, styled */
+/* Nova Conversão (primary) — cyan */
 [data-testid="stSidebar"] button[kind="primary"] {
-    opacity: 1 !important;
-    background: rgba(244,63,94,.08) !important;
-    color: #f87171 !important;
-    border: 1px solid rgba(244,63,94,.25) !important;
+    background: #00e5ff !important;
+    color: #00363d !important;
+    border: none !important;
     border-radius: 8px !important;
+    font-weight: 700 !important;
+    font-size: .88rem !important;
     height: 2.8em !important;
-    font-size: .82rem !important;
-    font-weight: 600 !important;
-    margin-top: 4px !important;
-    width: 100% !important;
+    width: calc(100% - 32px) !important;
+    margin: 0 16px !important;
+    box-shadow: 0 0 15px rgba(0,229,255,.2) !important;
     justify-content: center !important;
 }
-
 [data-testid="stSidebar"] button[kind="primary"]:hover {
-    background: rgba(244,63,94,.15) !important;
+    background: #00cfea !important;
+    box-shadow: 0 0 24px rgba(0,229,255,.35) !important;
+}
+
+/* Nav inactive items (secondary) — transparent, left-aligned */
+[data-testid="stSidebar"] button[kind="secondary"] {
+    background: transparent !important;
+    color: #bac9cc !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: .87rem !important;
+    font-weight: 600 !important;
+    height: 2.5em !important;
+    width: calc(100% - 16px) !important;
+    margin: 1px 8px !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding-left: 12px !important;
     box-shadow: none !important;
+}
+[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background: rgba(255,255,255,.05) !important;
+    color: #dce1fb !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Logout (last secondary) — subtle red */
+[data-testid="stSidebar"] div[data-testid="stButton"]:last-child button {
+    color: #f87171 !important;
+    background: rgba(244,63,94,.06) !important;
+    border: 1px solid rgba(244,63,94,.15) !important;
+    justify-content: center !important;
+}
+[data-testid="stSidebar"] div[data-testid="stButton"]:last-child button:hover {
+    background: rgba(244,63,94,.12) !important;
 }
 
 /* ── MAIN AREA BUTTONS ──────────────────────────────────────── */
