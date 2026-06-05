@@ -496,7 +496,7 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
 
 /* Sidebar — espaçamento entre itens */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-    gap: 4px !important;
+    gap: 6px !important;
 }
 [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
     padding: 0 !important;
