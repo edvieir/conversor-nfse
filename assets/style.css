@@ -442,51 +442,34 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     height: 0 !important;
 }
 
-/* ══ SIDEBAR BUTTONS — opacity:0 torna invisível, HTML overlay exibe o visual ══ */
+/* ══ SIDEBAR BUTTONS — wrapper height:0 + button absolute, overlay no flow ══ */
 
 [data-testid="stSidebar"] [data-testid="stButton"] {
+    position: relative !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+    position: absolute !important;
+    top: 0 !important;
+    left: 8px !important;
+    width: calc(100% - 16px) !important;
+    height: 38px !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
+    z-index: 10 !important;
     margin: 0 !important;
     padding: 0 !important;
 }
 
-[data-testid="stSidebar"] [data-testid="stButton"] > button {
-    opacity: 0 !important;
-    height: 38px !important;
-    width: calc(100% - 16px) !important;
-    margin: 0 8px !important;
-    padding: 0 !important;
-    cursor: pointer !important;
-    position: relative !important;
-    z-index: 10 !important;
-    display: block !important;
-}
-
-/* HTML overlay (vem logo após o button no DOM, sobe com margin negativo) */
-.nav-overlay {
-    pointer-events: none;
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 13px;
-    margin: -40px 8px 2px;
-    border-radius: 8px;
-    font-family: Manrope, sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    color: #bac9cc;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-.nav-overlay:hover { /* não ativa pois pointer-events:none — hover no button invisível acima */ }
-
-/* Botão Sair — último, estilo diferente via CSS de menor especificidade */
+/* Botão Sair */
 [data-testid="stSidebar"] [data-testid="stButton"]:last-of-type > button {
-    opacity: 0 !important;
     height: 42px !important;
-    margin-top: 12px !important;
 }
     white-space: nowrap !important;
     overflow: hidden !important;

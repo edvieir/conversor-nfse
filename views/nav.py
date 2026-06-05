@@ -55,13 +55,17 @@ def render(current_page: str = ""):
   <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
 </div>""", unsafe_allow_html=True)
             else:
-                # Invisible button (clickable) + HTML overlay (visual)
+                # Invisible button (absolute, z-index:10) sits on top of overlay
                 if st.button("‎", key=f"nb_{key}_{current_page}",
                              use_container_width=True):
                     st.session_state.pagina = key
                     st.rerun()
+                # Overlay is in normal flow — takes 38px; button is absolute on top
                 st.markdown(f"""
-<div class="nav-overlay">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 13px;margin:0 8px 2px;
+            border-radius:8px;pointer-events:none;position:relative;z-index:1;
+            font-family:Manrope,sans-serif;font-size:13px;font-weight:600;color:#bac9cc;
+            white-space:nowrap;overflow:hidden;">
   <span class="ms" style="color:#6b7fa3;font-size:20px;">{icon_ms}</span>
   {label}
 </div>""", unsafe_allow_html=True)
@@ -74,7 +78,10 @@ def render(current_page: str = ""):
         if st.button("↪  Sair", key=f"logout_{current_page}", use_container_width=True):
             logout()
         st.markdown("""
-<div class="nav-overlay" style="color:#f87171;justify-content:center;
-     border:1px solid rgba(244,63,94,.15);background:rgba(244,63,94,.05);
-     margin-top:-42px;">↪  Sair</div>
+<div style="display:flex;align-items:center;justify-content:center;padding:10px 13px;
+            margin:0 8px 2px;border-radius:8px;pointer-events:none;position:relative;z-index:1;
+            font-family:Manrope,sans-serif;font-size:13px;font-weight:600;color:#f87171;
+            background:rgba(244,63,94,.05);border:1px solid rgba(244,63,94,.15);">
+  ↪  Sair
+</div>
 """, unsafe_allow_html=True)
