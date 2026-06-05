@@ -493,6 +493,7 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     background: rgba(244,63,94,.12) !important;
 }
 
-/* Fix uploadupload duplicado no file uploader */
-[data-testid="stFileUploadDropzone"] button span:last-child { display: none !important; }
-[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
+/* Fix uploadupload — esconde segundo span duplicado no botão do file uploader */
+[data-testid="stFileUploadDropzone"] button > span + span { display: none !important; }
+[data-testid="stFileUploadDropzone"] button > div > span + span { display: none !important; }
+[data-testid="stFileUploadDropzone"] small { display: block !important; }
