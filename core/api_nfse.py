@@ -13,13 +13,15 @@ import gzip
 import zipfile
 import tempfile
 import os
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 from datetime import date
 
-BASE_URL = "https://adn.nfse.gov.br/contribuintes"
-TIMEOUT  = 30
+BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
+TIMEOUT   = 90
+_RETRIES  = 3
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -151,15 +153,24 @@ def _consultar_lote(
     """
     GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true
     Retorna None quando 404 (sem mais documentos).
+    Tenta até _RETRIES vezes com backoff em caso de timeout.
     """
     url    = f"{BASE_URL}/DFe/{nsu}"
     params = {"cnpjConsulta": cnpj, "lote": "true"}
-    with _make_session(cert_path, key_path) as s:
-        resp = s.get(url, params=params, timeout=TIMEOUT)
-    if resp.status_code == 404:
-        return None  # sem mais documentos
-    resp.raise_for_status()
-    return resp.json()
+    ultimo_erro = None
+    for tentativa in range(1, _RETRIES + 1):
+        try:
+            with _make_session(cert_path, key_path) as s:
+                resp = s.get(url, params=params, timeout=TIMEOUT)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            ultimo_erro = e
+            if tentativa < _RETRIES:
+                time.sleep(5 * tentativa)  # 5s, 10s entre tentativas
+    raise ultimo_erro
 
 
 def baixar_xmls_nfse(
