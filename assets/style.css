@@ -23,12 +23,20 @@ button[data-testid="collapsedControl"] { display: none !important; }
 button[kind="headerNoPadding"] { display: none !important; }
 [data-testid="stSidebarCollapseButton"] { display: none !important; }
 
-/* ── SIDEBAR ────────────────────────────────────────────────── */
-[data-testid="stSidebar"] {
+/* ── SIDEBAR — force always visible ─────────────────────────── */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"][aria-expanded="false"],
+[data-testid="stSidebar"][aria-expanded="true"] {
     background-color: #070d1f !important;
     border-right: 1px solid rgba(255,255,255,.05) !important;
     min-width: 260px !important;
     max-width: 260px !important;
+    width: 260px !important;
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    display: block !important;
+    position: sticky !important;
+    top: 0 !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
