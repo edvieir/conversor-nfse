@@ -1,1 +1,509 @@
-IiIiCmNvcmUvY29udmVyc29yX3hsc3gucHkg4oCUIENvbnZlcnPDo28gWE1MIOKGkiBYTFNYIChTUEVEIEdPVikKTMOzZ2ljYSBjb3BpYWRhIGludGVncmFsbWVudGUgZGUgYXBwX3dlYi5weSDigJQgTkVOSFVNQSBsaW5oYSBkZSBjb252ZXJzw6NvIGFsdGVyYWRhLgpBZGljaW9uYWRvOiBzdC5wcm9ncmVzcygpIG5vIGxvb3AgcHJpbmNpcGFsIHBhcmEgZmVlZGJhY2sgdmlzdWFsLgoiIiIKCmltcG9ydCBzeXMKaW1wb3J0IGlvCmltcG9ydCBvcwppbXBvcnQgcmUKaW1wb3J0IHRlbXBmaWxlCmltcG9ydCBjb250ZXh0bGliCmltcG9ydCB6aXBmaWxlCmltcG9ydCB4bWwuZXRyZWUuRWxlbWVudFRyZWUgYXMgX0VUCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKc3lzLnBhdGguaW5zZXJ0KDAsIHN0cihQYXRoKF9fZmlsZV9fKS5wYXJlbnQucGFyZW50KSkKCmltcG9ydCBuZnNlX3htbF90b190eHQgYXMgQwoKCiMg4pSA4pSAIENvbnZlcnNvciBaSVA6IFNoYXJlZFN0cmluZ3Mg4oaSIElubGluZVN0ciArIEZvcm1hdG9zIE51bcOpcmljb3Mg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACiMgQ29sdW5hcyBjb20gZm9ybWF0byAjLCMjMC4wMCAoMS1iYXNlZCk6IG1vbmV0w6FyaWFzICsgYWzDrXF1b3RhCiMgQ29sIDMyIChBbMOtcXVvdGEpIHVzYSBvIG1lc21vIGZvcm1hdG8gZG8gImRldSBjZXJ0byIg4oCUIG51bUZtdElkPTQgKCMsIyMwLjAwKQpfQ09MU19NT05FWSA9IGZyb3plbnNldChbMjAsIDIxLCAyMiwgMjMsIDI0LCAyNSwgMjYsIDI3LCAyOCwgMjksIDMwLCAzMSwgMzUsIDM2XSkKX0NPTF9BTElRICAgPSAzMiAgICMgQWzDrXF1b3RhIHVzYSAwLjAwIChzZW0gc2VwYXJhZG9yIGRlIG1pbGhhcikKCgpkZWYgX2NvbF9udW0obGV0dGVyczogc3RyKSAtPiBpbnQ6CiAgICAiIiInVCcg4oaSIDIwLCAgJ0FGJyDihpIgMzIiIiIKICAgIG4gPSAwCiAgICBmb3IgYyBpbiBsZXR0ZXJzLnVwcGVyKCk6CiAgICAgICAgbiA9IG4gKiAyNiArIChvcmQoYykgLSA2NCkKICAgIHJldHVybiBuCgoKZGVmIF94bHN4X3BhcmFfaW5saW5lc3RyKHhsc3hfYnl0ZXM6IGJ5dGVzKSAtPiBieXRlczoKICAgICIiIgogICAgUMOzcy1wcm9jZXNzYSBvIFhMU1ggZ2VyYWRvIHBlbG8gb3BlbnB5eGwgcGFyYToKCiAgICBBKSBDb252ZXJ0ZXIgdG9kYXMgYXMgY8OpbHVsYXMgc3RyaW5nIHBhcmEgaW5saW5lU3RyICg8aXM+PHQ+dGV4dG88L3Q+PC9pcz4pCiAgICAgICBjb25mb3JtZSBlc3BlcmFkbyBwZWxvIHBvcnRhbCBJU1MgRm9ydGFsZXphIChBcGFjaGUgUE9JKS4KCiAgICBCKSBHYXJhbnRpciBxdWUgY8OpbHVsYXMgbW9uZXTDoXJpYXMgZSBkZSBhbMOtcXVvdGEgdXNlbSBvcyBmb3JtYXRvcyBjb3JyZXRvcwogICAgICAgY29tIGFwcGx5TnVtYmVyRm9ybWF0PSIxIiDigJQgc2VtIGlzc28gbyBwb3J0YWwgZXhpYmUgJzInIGVtIHZleiBkZSAnMiwwMCcuCgogICAgRXRhcGFzIGlubGluZVN0cjoKICAgICAgMS4gTMOqIHNoYXJlZFN0cmluZ3MueG1sIOKGkiB0YWJlbGEgw61uZGljZeKGknRleHRvCiAgICAgIDIuIDxjIHQ9InMiPjx2Pk48L3Y+PC9jPiAgICAg4oaSIDxjIHQ9ImlubGluZVN0ciI+PGlzPjx0PlRFWFQ8L3Q+PC9pcz48L2M+CiAgICAgIDMuIDxjIHQ9ImlubGluZVN0ciI+PHY+VDwvdj48L2M+IOKGkiA8YyB0PSJpbmxpbmVTdHIiPjxpcz48dD5UPC90PjwvaXM+PC9jPgogICAgICA0LiA8YyB0PSJpbmxpbmVTdHIiLz4gICAgICAgIOKGkiA8YyB0PSJpbmxpbmVTdHIiPjxpcz48dC8+PC9pcz48L2M+CiAgICAgIDUuIFJlbW92ZSBzaGFyZWRTdHJpbmdzLnhtbCBlIHN1YXMgcmVmZXLDqm5jaWFzCgogICAgRXRhcGFzIGRlIGZvcm1hdG8gbnVtw6lyaWNvOgogICAgICA2LiBMw6ogc3R5bGVzLnhtbCDihpIgZW5jb250cmEgw61uZGljZXMgcGFyYSBudW1GbXRJZD00ICgjLCMjMC4wMCkgZSAyICgwLjAwKQogICAgICA3LiBBZGljaW9uYSBhcHBseU51bWJlckZvcm1hdD0iMSIgb25kZSBmYWx0YQogICAgICA4LiBBdHVhbGl6YSBhdHJpYnV0byBzPSBkYXMgY8OpbHVsYXMgbW9uZXTDoXJpYXMgZSBkZSBhbMOtcXVvdGEgbmFzIGxpbmhhcyBkZSBkYWRvcwogICAgIiIiCiAgICBfTlMgPSAnaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1hdHMub3JnL3NwcmVhZHNoZWV0bWwvMjAwNi9tYWluJwoKICAgIHNyYyAgID0gemlwZmlsZS5aaXBGaWxlKGlvLkJ5dGVzSU8oeGxzeF9ieXRlcyksICdyJykKICAgIG5vbWVzID0gc3JjLm5hbWVsaXN0KCkKCiAgICAjIOKUgOKUgCBQYXNzbyAxOiBzaGFyZWQgc3RyaW5ncyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKICAgIHRhYmVsYTogbGlzdCA9IFtdCiAgICBpZiAneGwvc2hhcmVkU3RyaW5ncy54bWwnIGluIG5vbWVzOgogICAgICAgIHNzX3Jvb3QgPSBfRVQuZnJvbXN0cmluZyhzcmMucmVhZCgneGwvc2hhcmVkU3RyaW5ncy54bWwnKS5kZWNvZGUoJ3V0Zi04JykpCiAgICAgICAgZm9yIHNpIGluIHNzX3Jvb3QuaXRlcihmJ3t7e19OU319fXNpJyk6CiAgICAgICAgICAgIHBhcnRzID0gW3QudGV4dCBvciAnJyBmb3IgdCBpbiBzaS5pdGVyKGYne3t7X05TfX19dCcpXQogICAgICAgICAgICB0YWJlbGEuYXBwZW5kKCcnLmpvaW4ocGFydHMpKQoKICAgICMg4pSA4pSAIFBhc3NvcyA2LTc6IHByZXBhcmEgY29ycmXDp8OjbyBkZSBzdHlsZXMueG1sIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAogICAgaWR4X21vbmV5ICA9IC0xICAgIyDDrW5kaWNlIGNlbGxYZiBwYXJhICMsIyMwLjAwCiAgICBpZHhfYWxpcSAgID0gLTEgICAjIMOtbmRpY2UgY2VsbFhmIHBhcmEgMC4wMAogICAgc3R5bGVzX2ZpeCA9IE5vbmUKCiAgICBpZiAneGwvc3R5bGVzLnhtbCcgaW4gbm9tZXM6CiAgICAgICAgc3ggPSBzcmMucmVhZCgneGwvc3R5bGVzLnhtbCcpLmRlY29kZSgndXRmLTgnKQoKICAgICAgICBkZWYgX2FpKHBhdCwgcywgZD0wKToKICAgICAgICAgICAgbSA9IHJlLnNlYXJjaChwYXQsIHMpCiAgICAgICAgICAgIHJldHVybiBpbnQobS5ncm91cCgxKSkgaWYgbSBlbHNlIGQKCiAgICAgICAgIyBCdXNjYSBhcGVuYXMgZGVudHJvIGRlIDxjZWxsWGZzPiAobyBzPSBkYXMgY8OpbHVsYXMgYXBvbnRhIHBhcmEgY2VsbFhmcywgbsOjbyBjZWxsU3R5bGVYZnMpCiAgICAgICAgY2VsbHhmc19ibG9jayA9IHJlLnNlYXJjaChyJzxjZWxsWGZzW14+XSo+KC4qPyk8L2NlbGxYZnM+Jywgc3gsIHJlLkRPVEFMTCkKICAgICAgICB4ZnMgPSByZS5maW5kYWxsKHInPHhmIFtePl0rLz4nLCBjZWxseGZzX2Jsb2NrLmdyb3VwKDEpKSBpZiBjZWxseGZzX2Jsb2NrIGVsc2UgW10KICAgICAgICBmb3IgaSwgeGYgaW4gZW51bWVyYXRlKHhmcyk6CiAgICAgICAgICAgIG5maWQgPSBfYWkocidudW1GbXRJZD0iKFxkKykiJywgeGYpCiAgICAgICAgICAgIGZudCAgPSBfYWkocidmb250SWQ9IihcZCspIicsICAgeGYpCiAgICAgICAgICAgIGZsbCAgPSBfYWkocidmaWxsSWQ9IihcZCspIicsICAgeGYpCiAgICAgICAgICAgIGlmIGZudCA9PSAwIGFuZCBmbGwgPT0gMDoKICAgICAgICAgICAgICAgIGlmIG5maWQgPT0gNCBhbmQgaWR4X21vbmV5IDwgMDogaWR4X21vbmV5ID0gaQogICAgICAgICAgICAgICAgaWYgbmZpZCA9PSAyIGFuZCBpZHhfYWxpcSAgPCAwOiBpZHhfYWxpcSAgPSBpCgogICAgICAgICMgQ3JpYSBlc3RpbG9zIGF1c2VudGVzCiAgICAgICAgY3VyX2NvdW50ID0gbGVuKHhmcykKICAgICAgICBpZiBpZHhfbW9uZXkgPCAwOgogICAgICAgICAgICBlbnRyeSA9ICc8eGYgbnVtRm10SWQ9IjQiIGZvbnRJZD0iMCIgZmlsbElkPSIwIiBib3JkZXJJZD0iMCIgeGZJZD0iMCIgYXBwbHlOdW1iZXJGb3JtYXQ9IjEiLz4nCiAgICAgICAgICAgIHN4ID0gc3gucmVwbGFjZSgnPC9jZWxsWGZzPicsIGVudHJ5ICsgJzwvY2VsbFhmcz4nKQogICAgICAgICAgICBpZHhfbW9uZXkgPSBjdXJfY291bnQKICAgICAgICAgICAgY3VyX2NvdW50ICs9IDEKICAgICAgICBpZiBpZHhfYWxpcSA8IDA6CiAgICAgICAgICAgIGVudHJ5ID0gJzx4ZiBudW1GbXRJZD0iMiIgZm9udElkPSIwIiBmaWxsSWQ9IjAiIGJvcmRlcklkPSIwIiB4ZklkPSIwIiBhcHBseU51bWJlckZvcm1hdD0iMSIvPicKICAgICAgICAgICAgc3ggPSBzeC5yZXBsYWNlKCc8L2NlbGxYZnM+JywgZW50cnkgKyAnPC9jZWxsWGZzPicpCiAgICAgICAgICAgIGlkeF9hbGlxID0gY3VyX2NvdW50CgogICAgICAgICMgQWRpY2lvbmEgYXBwbHlOdW1iZXJGb3JtYXQ9IjEiIG9uZGUgZmFsdGEKICAgICAgICBkZWYgX2ZpeF9hcHBseShtKToKICAgICAgICAgICAgeGYgPSBtLmdyb3VwKDApCiAgICAgICAgICAgIG5tID0gcmUuc2VhcmNoKHInbnVtRm10SWQ9IihcZCspIicsIHhmKQogICAgICAgICAgICBpZiBubSBhbmQgaW50KG5tLmdyb3VwKDEpKSA+IDAgYW5kICdhcHBseU51bWJlckZvcm1hdCcgbm90IGluIHhmOgogICAgICAgICAgICAgICAgeGYgPSB4Zls6LTJdICsgJyBhcHBseU51bWJlckZvcm1hdD0iMSIvPicKICAgICAgICAgICAgcmV0dXJuIHhmCgogICAgICAgIHN4ID0gcmUuc3ViKHInPHhmIFtePl0rLz4nLCBfZml4X2FwcGx5LCBzeCkKICAgICAgICBzdHlsZXNfZml4ID0gc3guZW5jb2RlKCd1dGYtOCcpCgogICAgIyDilIDilIAgUGFzc28gODogY29ycmlnZSBzPSBuYXMgY8OpbHVsYXMgZGUgZGFkb3Mg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACiAgICBkZWYgX2ZpeF9jZWxsX3MoeG1sX3N0cjogc3RyKSAtPiBzdHI6CiAgICAgICAgaWYgaWR4X21vbmV5IDwgMCBhbmQgaWR4X2FsaXEgPCAwOgogICAgICAgICAgICByZXR1cm4geG1sX3N0cgoKICAgICAgICBkZWYgX3VwZChtKToKICAgICAgICAgICAgY29vcmQgPSBtLmdyb3VwKDEpCiAgICAgICAgICAgIHJlc3QgID0gbS5ncm91cCgyKQogICAgICAgICAgICBsbSA9IHJlLm1hdGNoKHInKFtBLVpdKykoXGQrKScsIGNvb3JkKQogICAgICAgICAgICBpZiBub3QgbG06CiAgICAgICAgICAgICAgICByZXR1cm4gbS5ncm91cCgwKQogICAgICAgICAgICBjb2wgPSBfY29sX251bShsbS5ncm91cCgxKSkKICAgICAgICAgICAgcm93ID0gaW50KGxtLmdyb3VwKDIpKQogICAgICAgICAgICBpZiByb3cgPCAyOgogICAgICAgICAgICAgICAgcmV0dXJuIG0uZ3JvdXAoMCkgICAjIGNhYmXDp2FsaG8g4oCUIG7Do28gbWV4ZQogICAgICAgICAgICBpZiBjb2wgaW4gX0NPTFNfTU9ORVkgYW5kIGlkeF9tb25leSA+PSAwOgogICAgICAgICAgICAgICAgdGFyZ2V0ID0gaWR4X21vbmV5CiAgICAgICAgICAgIGVsaWYgY29sID09IF9DT0xfQUxJUSBhbmQgaWR4X2FsaXEgPj0gMDoKICAgICAgICAgICAgICAgIHRhcmdldCA9IGlkeF9hbGlxCiAgICAgICAgICAgIGVsc2U6CiAgICAgICAgICAgICAgICByZXR1cm4gbS5ncm91cCgwKQogICAgICAgICAgICByZXN0MiA9IHJlLnN1YihyJ1xzKnM9IlxkKyInLCAnJywgcmVzdCkKICAgICAgICAgICAgcmV0dXJuIGYnPGMgcj0ie2Nvb3JkfSIgcz0ie3RhcmdldH0ie3Jlc3QyfT4nCgogICAgICAgIHJldHVybiByZS5zdWIocic8YyByPSIoW0EtWl0rXGQrKSIoW14+XSopPicsIF91cGQsIHhtbF9zdHIpCgogICAgIyDilIDilIAgSGVscGVycyBpbmxpbmVTdHIg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACiAgICBkZWYgX2VzYyhzOiBzdHIpIC0+IHN0cjoKICAgICAgICByZXR1cm4gcy5yZXBsYWNlKCcmJywgJyZhbXA7JykucmVwbGFjZSgnPCcsICcmbHQ7JykucmVwbGFjZSgnPicsICcmZ3Q7JykKCiAgICBkZWYgX3Byb2Nlc3Nhcl9zaGVldCh4bWxfc3RyOiBzdHIpIC0+IHN0cjoKICAgICAgICAjIFBhc3NvIDI6IHNoYXJlZCBzdHJpbmdzIOKGkiBpbmxpbmVTdHIKICAgICAgICBkZWYgX3JlcF9zaGFyZWQobSk6CiAgICAgICAgICAgIHByZSwgcG9zdCwgaWR4X3N0ciA9IG0uZ3JvdXAoMSksIG0uZ3JvdXAoMiksIG0uZ3JvdXAoMykKICAgICAgICAgICAgaWR4ICA9IGludChpZHhfc3RyKQogICAgICAgICAgICB0ZXh0ID0gdGFiZWxhW2lkeF0gaWYgMCA8PSBpZHggPCBsZW4odGFiZWxhKSBlbHNlICcnCiAgICAgICAgICAgIHRhZyAgPSBmJzxjIHtwcmV9dD0iaW5saW5lU3RyIntwb3N0fT4nCiAgICAgICAgICAgIGJvZHkgPSBmJzxpcz48dD57X2VzYyh0ZXh0KX08L3Q+PC9pcz4nIGlmIHRleHQgZWxzZSAnPGlzPjx0Lz48L2lzPicKICAgICAgICAgICAgcmV0dXJuIGYne3RhZ317Ym9keX08L2M+JwoKICAgICAgICB4bWxfc3RyID0gcmUuc3ViKAogICAgICAgICAgICByJzxjICgoPzpbXlxTXG5dKlxTW14+XSo/XHMrKT8pdD0icyIoXHMqKD86W14+XSo/KT8pPjx2PihcZCspPC92PjwvYz4nLAogICAgICAgICAgICBfcmVwX3NoYXJlZCwgeG1sX3N0cgogICAgICAgICkKCiAgICAgICAgIyBQYXNzbyAzOiBpbmxpbmVTdHIgY29tIDx2PlRFWFRPPC92PgogICAgICAgIGRlZiBfcmVwX3YobSk6CiAgICAgICAgICAgIGF0dHJzLCB0ZXh0ID0gbS5ncm91cCgxKSwgbS5ncm91cCgyKQogICAgICAgICAgICBib2R5ID0gZic8aXM+PHQ+e19lc2ModGV4dCl9PC90PjwvaXM+JyBpZiB0ZXh0IGVsc2UgJzxpcz48dC8+PC9pcz4nCiAgICAgICAgICAgIHJldHVybiBmJzxjIHthdHRyc30+e2JvZHl9PC9jPicKCiAgICAgICAgeG1sX3N0ciA9IHJlLnN1YigKICAgICAgICAgICAgcic8YyAoW14+XSp0PSJpbmxpbmVTdHIiW14+XSopPjx2PihbXjxdKik8L3Y+PC9jPicsCiAgICAgICAgICAgIF9yZXBfdiwgeG1sX3N0cgogICAgICAgICkKCiAgICAgICAgIyBQYXNzbyA0OiBzZWxmLWNsb3NpbmcgaW5saW5lU3RyCiAgICAgICAgeG1sX3N0ciA9IHJlLnN1YigKICAgICAgICAgICAgcic8YyAoW14+XSp0PSJpbmxpbmVTdHIiW14vXSo/KVxzKi8+JywKICAgICAgICAgICAgcic8YyBcMT48aXM+PHQvPjwvaXM+PC9jPicsCiAgICAgICAgICAgIHhtbF9zdHIKICAgICAgICApCgogICAgICAgIHJldHVybiB4bWxfc3RyCgogICAgIyDilIDilIAgR3JhdmEgWklQIGRlIHNhw61kYSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKICAgIGJ1Zl9vdXQgPSBpby5CeXRlc0lPKCkKICAgIHdpdGggemlwZmlsZS5aaXBGaWxlKGJ1Zl9vdXQsICd3JywgY29tcHJlc3Npb249emlwZmlsZS5aSVBfREVGTEFURUQpIGFzIHpvdXQ6CiAgICAgICAgZm9yIGl0ZW0gaW4gc3JjLmluZm9saXN0KCk6CiAgICAgICAgICAgIG5vbWUgICAgPSBpdGVtLmZpbGVuYW1lCiAgICAgICAgICAgIGNvbnRlbnQgPSBzcmMucmVhZChub21lKQoKICAgICAgICAgICAgaWYgbm9tZSA9PSAneGwvc2hhcmVkU3RyaW5ncy54bWwnOgogICAgICAgICAgICAgICAgY29udGludWUKCiAgICAgICAgICAgIGVsaWYgbm9tZSA9PSAneGwvc3R5bGVzLnhtbCcgYW5kIHN0eWxlc19maXg6CiAgICAgICAgICAgICAgICBjb250ZW50ID0gc3R5bGVzX2ZpeAoKICAgICAgICAgICAgZWxpZiBub21lID09ICd4bC9fcmVscy93b3JrYm9vay54bWwucmVscyc6CiAgICAgICAgICAgICAgICBzID0gY29udGVudC5kZWNvZGUoJ3V0Zi04JykKICAgICAgICAgICAgICAgIHMgPSByZS5zdWIocic8UmVsYXRpb25zaGlwW14+XStbU3NdaGFyZWRbU3NddHJpbmdzW14+XSovPlxzKicsICcnLCBzKQogICAgICAgICAgICAgICAgY29udGVudCA9IHMuZW5jb2RlKCd1dGYtOCcpCgogICAgICAgICAgICBlbGlmIG5vbWUgPT0gJ1tDb250ZW50X1R5cGVzXS54bWwnOgogICAgICAgICAgICAgICAgcyA9IGNvbnRlbnQuZGVjb2RlKCd1dGYtOCcpCiAgICAgICAgICAgICAgICBzID0gcmUuc3ViKHInPE92ZXJyaWRlW14+XStbU3NdaGFyZWRbU3NddHJpbmdzW14+XSovPlxzKicsICcnLCBzKQogICAgICAgICAgICAgICAgY29udGVudCA9IHMuZW5jb2RlKCd1dGYtOCcpCgogICAgICAgICAgICBlbGlmIG5vbWUuc3RhcnRzd2l0aCgneGwvd29ya3NoZWV0cy8nKSBhbmQgbm9tZS5lbmRzd2l0aCgnLnhtbCcpOgogICAgICAgICAgICAgICAgeG1sID0gX3Byb2Nlc3Nhcl9zaGVldChjb250ZW50LmRlY29kZSgndXRmLTgnKSkKICAgICAgICAgICAgICAgIHhtbCA9IF9maXhfY2VsbF9zKHhtbCkgICAgICAgICAgIyBjb3JyaWdlIHM9IHBhcmEgZm9ybWF0b3MgbnVtw6lyaWNvcwogICAgICAgICAgICAgICAgY29udGVudCA9IHhtbC5lbmNvZGUoJ3V0Zi04JykKCiAgICAgICAgICAgIHpvdXQud3JpdGVzdHIoaXRlbSwgY29udGVudCkKCiAgICBzcmMuY2xvc2UoKQogICAgcmV0dXJuIGJ1Zl9vdXQuZ2V0dmFsdWUoKQoKCmRlZiBwcm9jZXNzYXJfeGxzeF9zcGVkKHVwbG9hZGVkX2ZpbGVzLCBpbTogc3RyLCBjb21wZXRlbmNpYV9maWx0cm86IHN0ciA9ICIiKToKICAgICIiIkdlcmEgWExTWCBubyBsYXlvdXQgZXhhdG8gZG8gU1BFRCBHT1Yg4oCUIGFiYSAnU2VydmnDp29zIFRvbWFkb3MnLCA0MyBjb2x1bmFzLiIiIgogICAgaW1wb3J0IGdsb2IgYXMgX2dsb2IKICAgIGltcG9ydCBvcGVucHl4bAogICAgZnJvbSBvcGVucHl4bC5zdHlsZXMgaW1wb3J0IEZvbnQsIFBhdHRlcm5GaWxsCiAgICBmcm9tIG9wZW5weXhsLnV0aWxzIGltcG9ydCBnZXRfY29sdW1uX2xldHRlcgogICAgaW1wb3J0IHN0cmVhbWxpdCBhcyBzdAoKICAgICMgQ2FiZcOnYWxob3MgZSBsYXJndXJhcyBleGF0YXMgZG8gU1BFRCBHT1YKICAgIENPTFVOQVMgPSBbCiAgICAgICAgKCJUaXBvIERvYy4iLCAgICAgICAgICAgICAgICAgICAgICAgMjQuMTQpLAogICAgICAgICgiTsO6bWVybyIsICAgICAgICAgICAgICAgICAgICAgICAgICAxMC4yOCksCiAgICAgICAgKCJDw7NkaWdvIGRlIFZlcmlmaWNhw6fDo28iLCAgICAgICAgICAgMjMuNTcpLAogICAgICAgICgiQ29tcGV0w6puY2lhIiwgICAgICAgICAgICAgICAgICAgICAxNC41NyksCiAgICAgICAgKCJEYXRhIiwgICAgICAgICAgICAgICAgICAgICAgICAgICAgMTEuNDIpLAogICAgICAgICgiVmVuY2ltZW50byIsICAgICAgICAgICAgICAgICAgICAgIDEzLjQyKSwKICAgICAgICAoIk7Dum1lcm8gUlBTIiwgICAgICAgICAgICAgICAgICAgICAgMTguNDIpLAogICAgICAgICgiU8OpcmllIFJQUyIsICAgICAgICAgICAgICAgICAgICAgICAxMS4xNCksCiAgICAgICAgKCJUaXBvIFJQUyIsICAgICAgICAgICAgICAgICAgICAgICAgMTAuMjgpLAogICAgICAgICgiTmF0dXJlemEgZGEgT3BlcmHDp8OjbyIsICAgICAgICAgICAgMjcuNzEpLAogICAgICAgICgiUmVnaW1lIEVzcGVjaWFsIFRyaWJ1dGHDp8OjbyIsICAgICAgNTIuMTQpLAogICAgICAgICgiT3BlcmHDp8OjbyBTaW1wbGVzIE5hY2lvbmFsIiwgICAgICAgMjkuMjgpLAogICAgICAgICgiSW5jZW50aXZhZG9yIEN1bHR1cmFsIiwgICAgICAgICAgIDIyLjg1KSwKICAgICAgICAoIkl0ZW0gZGEgTGlzdGEiLCAgICAgICAgICAgICAgICAgICAxNC41NyksCiAgICAgICAgKCJDTkFFIiwgICAgICAgICAgICAgICAgICAgICAgICAgICAxMjMuMTQpLAogICAgICAgICgiQVJUIiwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA1LjI4KSwKICAgICAgICAoIkPDs2RpZ28gT2JyYSIsICAgICAgICAgICAgICAgICAgICAgMTMuODUpLAogICAgICAgICgiTsO6bWVybyBFbXBlbmhvIiwgICAgICAgICAgICAgICAgICAxOS40MiksCiAgICAgICAgKCJEaXNjcmltaW5hw6fDo28gZG9zIFNlcnZpw6dvcyIsICAgICAxNDEuMTQpLAogICAgICAgICgiVmFsb3IgZG9zIFNlcnZpw6dvcyIsICAgICAgICAgICAgICAyMC4yOCksCiAgICAgICAgKCJEZWR1w6fDtWVzIFBlcm1pdGlkYXMgZW0gTGVpIiwgICAgICAzMC40MiksCiAgICAgICAgKCJEZXNjb250byBDb25kaWNpb25hZG8iLCAgICAgICAgICAgMjUuMjgpLAogICAgICAgICgiRGVzY29udG8gSW5jb25kaWNpb25hZG8iLCAgICAgICAgIDI3LjAwKSwKICAgICAgICAoIlJldGVuw6fDtWVzIEZlZGVyYWlzIiwgICAgICAgICAgICAgIDIxLjI4KSwKICAgICAgICAoIk91dHJhcyBSZXRlbsOnw7VlcyIsICAgICAgICAgICAgICAgMTkuNDIpLAogICAgICAgICgiUElTIiwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA0LjQyKSwKICAgICAgICAoIkNPRklOUyIsICAgICAgICAgICAgICAgICAgICAgICAgICAgOC44NSksCiAgICAgICAgKCJJUlJGIiwgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDUuNzEpLAogICAgICAgICgiQ1NMTCIsICAgICAgICAgICAgICAgICAgICAgICAgICAgICA2LjE0KSwKICAgICAgICAoIklOU1MiLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgNS44NSksCiAgICAgICAgKCJCYXNlIGRlIEPDoWxjdWxvIiwgICAgICAgICAgICAgICAgIDE3LjI4KSwKICAgICAgICAoIkFsw61xdW90YSIsICAgICAgICAgICAgICAgICAgICAgICAgIDkuODUpLAogICAgICAgICgiTG9jYWwgZGEgUHJlc3Rhw6fDo28iLCAgICAgICAgICAgICAgMjIuMTQpLAogICAgICAgICgiSVNTIFJldGlkbyIsICAgICAgICAgICAgICAgICAgICAgIDExLjcxKSwKICAgICAgICAoIlZhbG9yIGRvIElTUyIsICAgICAgICAgICAgICAgICAgICAxMy44NSksCiAgICAgICAgKCJWYWxvciBMw61xdWlkbyIsICAgICAgICAgICAgICAgICAgIDE0Ljg1KSwKICAgICAgICAoIlN0YXR1cyBEb2MuIiwgICAgICAgICAgICAgICAgICAgICAxMy4wMCksCiAgICAgICAgKCJJbnNjcmnDp8OjbyBQcmVzdGFkb3IiLCAgICAgICAgICAgICAyMS4xNCksCiAgICAgICAgKCJDUEYvQ05QSiBQcmVzdGFkb3IiLCAgICAgICAgICAgICAgMjEuNDIpLAogICAgICAgICgiUmF6w6NvIFNvY2lhbC9Ob21lIGRvIFByZXN0YWRvciIsICA1OC41NyksCiAgICAgICAgKCJFc2NyaXR1cmHDp8OjbyIsICAgICAgICAgICAgICAgICAgICAxMy44NSksCiAgICAgICAgKCJPcmlnZW0iLCAgICAgICAgICAgICAgICAgICAgICAgICAgIDkuNzEpLAogICAgICAgICgiU3RhdHVzIEFjZWl0ZSIsICAgICAgICAgICAgICAgICAgIDE0Ljg1KSwKICAgIF0KCiAgICBJQkdFX0ZPUlRBTEVaQSA9ICIyMzA0NDAwIgoKICAgIGRlZiBfZmxvYXQodik6CiAgICAgICAgdHJ5OgogICAgICAgICAgICByZXR1cm4gZmxvYXQodikgaWYgdiBlbHNlIDAuMAogICAgICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgICAgIHJldHVybiAwLjAKCiAgICBkZWYgX3N0cih2KToKICAgICAgICAiIiJSZXRvcm5hIHN0cmluZyBsaW1wYSwgb3UgJycgcGFyYSB2YXppbyAoaW5saW5lU3RyIHZpYSBfZm9yY2FyX2lubGluZSkuIiIiCiAgICAgICAgcmV0dXJuIHN0cih2KS5zdHJpcCgpIGlmIHYgZWxzZSAiIgoKICAgIGRlZiBfZGF0YV9mbXQoaXNvLCBmbXQpOgogICAgICAgIGlmIG5vdCBpc286CiAgICAgICAgICAgIHJldHVybiAiIgogICAgICAgIGRhdGFfcGFydCA9IGlzb1s6MTBdCiAgICAgICAgdHJ5OgogICAgICAgICAgICBwYXJ0ZXMgPSBkYXRhX3BhcnQuc3BsaXQoIi0iKQogICAgICAgICAgICBpZiBmbXQgPT0gIm1lcyI6CiAgICAgICAgICAgICAgICByZXR1cm4gZiJ7cGFydGVzWzFdfS97cGFydGVzWzBdfSIKICAgICAgICAgICAgZWxzZToKICAgICAgICAgICAgICAgIHJldHVybiBmIntwYXJ0ZXNbMl19L3twYXJ0ZXNbMV19L3twYXJ0ZXNbMF19IgogICAgICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgICAgIHJldHVybiBpc28KCiAgICBkZWYgX2xvY2FsX3ByZXN0YWNhbyhkKToKICAgICAgICB1ZiAgID0gX3N0cihkLmdldCgidWYiLCAiIikpCiAgICAgICAgeExQICA9IF9zdHIoZC5nZXQoInhMUCIsICIiKSkKICAgICAgICBjTFAgID0gX3N0cihkLmdldCgiY0xQIiwgIiIpKQogICAgICAgIHhNdW4gPSBfc3RyKGQuZ2V0KCJ4TXVuIiwgIiIpKQogICAgICAgIG5vbWVfbXVuID0gKAogICAgICAgICAgICB4TFAKICAgICAgICAgICAgb3IgZ2V0YXR0cihDLCAiSUJHRV9UT19OT01FIiwge30pLmdldChjTFAsICIiKQogICAgICAgICAgICBvciB4TXVuCiAgICAgICAgKQogICAgICAgIGlmIG5vbWVfbXVuIGFuZCB1ZjoKICAgICAgICAgICAgcmV0dXJuIGYie25vbWVfbXVuLnVwcGVyKCl9IC0ge3VmLnVwcGVyKCl9IgogICAgICAgIHJldHVybiBub21lX211bi51cHBlcigpIGlmIG5vbWVfbXVuIGVsc2UgTm9uZQoKICAgIGRlZiBfY25hZV9kZXNjKGNuYWU5KToKICAgICAgICBkZXNjID0gZ2V0YXR0cihDLCAiQ05BRTlfVE9fREVTQyIsIHt9KS5nZXQoY25hZTksICIiKQogICAgICAgIHJldHVybiBmIntjbmFlOX0gLSB7ZGVzY30iIGlmIGRlc2MgZWxzZSBjbmFlOQoKICAgIGRlZiBfZXh0cmFpcl9mZWQoeG1sX3BhdGgpOgogICAgICAgICIiIgogICAgICAgIEV4dHJhaSB0b2RhcyBhcyByZXRlbsOnw7VlcyBmZWRlcmFpcyBkaXJldGFtZW50ZSBkbyBYTUwuCiAgICAgICAgcGFyc2VfbmZzZSgpIG7Do28gbWFwZWlhIGNvcnJldGFtZW50ZSBQSVMvQ09GSU5TL0lSUkYvQ1NMTCBubyBtb2RlbG8gbmFjaW9uYWwuCiAgICAgICAgIiIiCiAgICAgICAgaW1wb3J0IHhtbC5ldHJlZS5FbGVtZW50VHJlZSBhcyBFVAoKICAgICAgICBkZWYgX3Yocm9vdCwgKnRhZ3MpOgogICAgICAgICAgICBmb3IgdGFnIGluIHRhZ3M6CiAgICAgICAgICAgICAgICBlbCA9IG5leHQoKGUgZm9yIGUgaW4gcm9vdC5pdGVyKCkgaWYgZS50YWcuZW5kc3dpdGgodGFnKSksIE5vbmUpCiAgICAgICAgICAgICAgICBpZiBlbCBpcyBub3QgTm9uZSBhbmQgZWwudGV4dDoKICAgICAgICAgICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICAgICAgICAgIHJldHVybiBmbG9hdChlbC50ZXh0LnN0cmlwKCkpCiAgICAgICAgICAgICAgICAgICAgZXhjZXB0IChWYWx1ZUVycm9yLCBBdHRyaWJ1dGVFcnJvcik6CiAgICAgICAgICAgICAgICAgICAgICAgIHBhc3MKICAgICAgICAgICAgcmV0dXJuIDAuMAoKICAgICAgICB0cnk6CiAgICAgICAgICAgIHJvb3QgPSBFVC5wYXJzZSh4bWxfcGF0aCkuZ2V0cm9vdCgpCiAgICAgICAgICAgIHJldHVybiAoCiAgICAgICAgICAgICAgICBfdihyb290LCAidlBpcyIsICAgICJ2UElTIiksCiAgICAgICAgICAgICAgICBfdihyb290LCAidkNvZmlucyIsICJ2Q09GSU5TIiksCiAgICAgICAgICAgICAgICBfdihyb290LCAidlJldElSUkYiKSwKICAgICAgICAgICAgICAgIF92KHJvb3QsICJ2UmV0Q1NMTCIpLAogICAgICAgICAgICAgICAgX3Yocm9vdCwgInZJTlNTIiksCiAgICAgICAgICAgICkKICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICByZXR1cm4gMC4wLCAwLjAsIDAuMCwgMC4wLCAwLjAKCiAgICBkZWYgX2NvbXBldGVuY2lhX3htbCh4bWxfcGF0aCk6CiAgICAgICAgaW1wb3J0IHhtbC5ldHJlZS5FbGVtZW50VHJlZSBhcyBFVAogICAgICAgIHRyeToKICAgICAgICAgICAgcm9vdCA9IEVULnBhcnNlKHhtbF9wYXRoKS5nZXRyb290KCkKICAgICAgICAgICAgZWwgPSBuZXh0KChlIGZvciBlIGluIHJvb3QuaXRlcigpIGlmIGUudGFnLmVuZHN3aXRoKCJkQ29tcGV0IikpLCBOb25lKQogICAgICAgICAgICBpZiBlbCBpcyBub3QgTm9uZSBhbmQgZWwudGV4dDoKICAgICAgICAgICAgICAgIHAgPSBlbC50ZXh0LnN0cmlwKClbOjddLnNwbGl0KCItIikKICAgICAgICAgICAgICAgIHJldHVybiBmIntwWzFdfS97cFswXX0iCiAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICAgICAgcGFzcwogICAgICAgIHJldHVybiAiIgoKICAgIHdpdGggdGVtcGZpbGUuVGVtcG9yYXJ5RGlyZWN0b3J5KCkgYXMgdG1wOgogICAgICAgIGZvciB1Zl9maWxlIGluIHVwbG9hZGVkX2ZpbGVzOgogICAgICAgICAgICB1Zl9maWxlLnNlZWsoMCkKICAgICAgICAgICAgd2l0aCBvcGVuKG9zLnBhdGguam9pbih0bXAsIHVmX2ZpbGUubmFtZSksICJ3YiIpIGFzIGZoOgogICAgICAgICAgICAgICAgZmgud3JpdGUodWZfZmlsZS5yZWFkKCkpCgogICAgICAgIGFycXVpdm9zID0gc29ydGVkKF9nbG9iLmdsb2Iob3MucGF0aC5qb2luKHRtcCwgIioueG1sIikpKQoKICAgICAgICB3YiA9IG9wZW5weXhsLldvcmtib29rKCkKICAgICAgICB3cyA9IHdiLmFjdGl2ZQogICAgICAgIHdzLnRpdGxlID0gIlNlcnZpw6dvcyBUb21hZG9zIgoKICAgICAgICBoZWFkZXJfZmlsbCA9IFBhdHRlcm5GaWxsKGZpbGxfdHlwZT0ic29saWQiLCBmZ0NvbG9yPSJDMEMwQzAiKQogICAgICAgIGhlYWRlcl9mb250ID0gRm9udChib2xkPVRydWUsIHNpemU9MTEpCgogICAgICAgIGZvciBjb2xfaWR4LCAodGl0dWxvLCBsYXJndXJhKSBpbiBlbnVtZXJhdGUoQ09MVU5BUywgMSk6CiAgICAgICAgICAgIGNlbGwgPSB3cy5jZWxsKHJvdz0xLCBjb2x1bW49Y29sX2lkeCwgdmFsdWU9dGl0dWxvKQogICAgICAgICAgICBjZWxsLmZvbnQgID0gaGVhZGVyX2ZvbnQKICAgICAgICAgICAgY2VsbC5maWxsICA9IGhlYWRlcl9maWxsCiAgICAgICAgICAgIGxldHJhID0gZ2V0X2NvbHVtbl9sZXR0ZXIoY29sX2lkeCkKICAgICAgICAgICAgd3MuY29sdW1uX2RpbWVuc2lvbnNbbGV0cmFdLndpZHRoID0gbGFyZ3VyYQoKICAgICAgICBidWYgICA9IGlvLlN0cmluZ0lPKCkKICAgICAgICB0b3RhbCA9IDAKICAgICAgICBlcnJvcyA9IFtdCiAgICAgICAgbl9hcnFzID0gbWF4KGxlbihhcnF1aXZvcyksIDEpCgogICAgICAgICMgQmFycmEgZGUgcHJvZ3Jlc3NvIG5vIFN0cmVhbWxpdAogICAgICAgIF9wcm9ncmVzcyA9IHN0LnByb2dyZXNzKDAsIHRleHQ9IkluaWNpYW5kbyBwcm9jZXNzYW1lbnRvLi4uIikKCiAgICAgICAgd2l0aCBjb250ZXh0bGliLnJlZGlyZWN0X3N0ZG91dChidWYpOgogICAgICAgICAgICBmb3IgaWR4LCB4bWxfcGF0aCBpbiBlbnVtZXJhdGUoYXJxdWl2b3MpOgogICAgICAgICAgICAgICAgbm9tZV9hcnEgPSBvcy5wYXRoLmJhc2VuYW1lKHhtbF9wYXRoKQogICAgICAgICAgICAgICAgX3Byb2dyZXNzLnByb2dyZXNzKAogICAgICAgICAgICAgICAgICAgIChpZHggKyAxKSAvIG5fYXJxcywKICAgICAgICAgICAgICAgICAgICB0ZXh0PWYiUHJvY2Vzc2FuZG8ge2lkeCArIDF9L3tsZW4oYXJxdWl2b3MpfToge25vbWVfYXJxfSIsCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICAgICAgaWYgY29tcGV0ZW5jaWFfZmlsdHJvOgogICAgICAgICAgICAgICAgICAgICAgICBjb21wID0gX2NvbXBldGVuY2lhX3htbCh4bWxfcGF0aCkKICAgICAgICAgICAgICAgICAgICAgICAgaWYgY29tcCBhbmQgY29tcCAhPSBjb21wZXRlbmNpYV9maWx0cm86CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBwcmludChmIiAgU0tJUCB7bm9tZV9hcnF9OiBjb21wZXTDqm5jaWEge2NvbXB9IOKJoCB7Y29tcGV0ZW5jaWFfZmlsdHJvfSIpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBjb250aW51ZQoKICAgICAgICAgICAgICAgICAgICBkID0gQy5wYXJzZV9uZnNlKHhtbF9wYXRoKQogICAgICAgICAgICAgICAgICAgIGlmIGltOgogICAgICAgICAgICAgICAgICAgICAgICBkWyJpbSJdID0gaW0KCiAgICAgICAgICAgICAgICAgICAgIyBFeHRyYWkgbk5GU2UgZGlyZXRhbWVudGUgZG8gWE1MIChuw7ptZXJvIGNvcnJldG8gZGEgbm90YSkKICAgICAgICAgICAgICAgICAgICBpbXBvcnQgeG1sLmV0cmVlLkVsZW1lbnRUcmVlIGFzIF9FVDIKICAgICAgICAgICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICAgICAgICAgIF9yb290MiA9IF9FVDIucGFyc2UoeG1sX3BhdGgpLmdldHJvb3QoKQogICAgICAgICAgICAgICAgICAgICAgICBfbk5GU2UgPSBuZXh0KChlLnRleHQgZm9yIGUgaW4gX3Jvb3QyLml0ZXIoKSBpZiBlLnRhZy5lbmRzd2l0aCgibk5GU2UiKSksIE5vbmUpCiAgICAgICAgICAgICAgICAgICAgICAgIGlmIF9uTkZTZToKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGRbIm5ORlNlIl0gPSBfbk5GU2Uuc3RyaXAoKQogICAgICAgICAgICAgICAgICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgICAgICAgICAgICAgICAgIHBhc3MKCiAgICAgICAgICAgICAgICAgICAgY25hZTksIGl0ZW0sIGFsaXFfY25hZSA9IEMucmVzb2x2ZXJfY25hZTkoZCkKICAgICAgICAgICAgICAgICAgICBkaEVtaSA9IF9zdHIoZC5nZXQoImRoRW1pIiwgIiIpKQoKICAgICAgICAgICAgICAgICAgICB2UyAgID0gX2Zsb2F0KGQuZ2V0KCJ2UyIpKQogICAgICAgICAgICAgICAgICAgIHZJU1MgPSBfZmxvYXQoZC5nZXQoInZJU1MiKSkKICAgICAgICAgICAgICAgICAgICB2UElTLCB2Q09GSU5TLCB2SVJSRiwgdkNTTEwsIHZJTlNTID0gX2V4dHJhaXJfZmVkKHhtbF9wYXRoKQogICAgICAgICAgICAgICAgICAgIGFsaXEgICA9IF9mbG9hdChkLmdldCgiYWxpcSIpKSBvciBmbG9hdChhbGlxX2NuYWUgb3IgMCkKICAgICAgICAgICAgICAgICAgICB0cFJldCAgPSBfc3RyKGQuZ2V0KCJ0cFJldCIsICIxIikpCiAgICAgICAgICAgICAgICAgICAgaXNzX3JldGlkbyA9ICh0cFJldCA9PSAiMiIpCgogICAgICAgICAgICAgICAgICAgIHJldF9mZWRlcmFpcyAgPSB2UElTICsgdkNPRklOUyArIHZDU0xMCgogICAgICAgICAgICAgICAgICAgICMgT3BlcmHDp8OjbyBTaW1wbGVzIE5hY2lvbmFsIOKAlCBsw6ogZG8gWE1MCiAgICAgICAgICAgICAgICAgICAgb3Bfc2ltcCA9IF9zdHIoZC5nZXQoIm9wU2ltcE5hYyIpKSBvciAiIgogICAgICAgICAgICAgICAgICAgIHNpbXBsZXNfbmFjID0gIlNpbSIgaWYgb3Bfc2ltcCBpbiAoIjEiLCAiMiIpIGVsc2UgIk7Do28iCgogICAgICAgICAgICAgICAgICAgIHdzLmFwcGVuZChbCiAgICAgICAgICAgICAgICAgICAgICAgICJORlMtZSBkZSBPdXRybyBNdW5pY8OtcGlvIiwgICAgICAgICAgIyBbMDFdIFRpcG8gRG9jLgogICAgICAgICAgICAgICAgICAgICAgICBfc3RyKGQuZ2V0KCJuTkZTZSIpIG9yIGQuZ2V0KCJuREZTZSIpKSwgIyBbMDJdIE7Dum1lcm8gKG5ORlNlIHRlbSBwcmlvcmlkYWRlKQogICAgICAgICAgICAgICAgICAgICAgICBOb25lLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIyBbMDNdIEPDs2RpZ28gVmVyaWZpY2HDp8OjbwogICAgICAgICAgICAgICAgICAgICAgICBfZGF0YV9mbXQoZGhFbWksICJtZXMiKSwgICAgICAgICAgICAjIFswNF0gQ29tcGV0w6puY2lhCiAgICAgICAgICAgICAgICAgICAgICAgIF9kYXRhX2ZtdChkaEVtaSwgImRpYSIpLCAgICAgICAgICAgICMgWzA1XSBEYXRhCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFswNl0gVmVuY2ltZW50bwogICAgICAgICAgICAgICAgICAgICAgICBOb25lLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIyBbMDddIE7Dum1lcm8gUlBTCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFswOF0gU8OpcmllIFJQUwogICAgICAgICAgICAgICAgICAgICAgICBOb25lLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIyBbMDldIFRpcG8gUlBTCiAgICAgICAgICAgICAgICAgICAgICAgICJUcmlidXRhw6fDo28gRm9yYSBkbyBNdW5pY8OtcGlvIiwgICAgICMgWzEwXSBOYXR1cmV6YSBkYSBPcGVyYcOnw6NvCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFsxMV0gUmVnaW1lIEVzcGVjaWFsIFRyaWJ1dGHDp8OjbwogICAgICAgICAgICAgICAgICAgICAgICBzaW1wbGVzX25hYywgICAgICAgICAgICAgICAgICAgICAgICAjIFsxMl0gT3BlcmHDp8OjbyBTaW1wbGVzIE5hY2lvbmFsCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzEzXSBJbmNlbnRpdmFkb3IgQ3VsdHVyYWwKICAgICAgICAgICAgICAgICAgICAgICAgaXRlbSwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIyBbMTRdIEl0ZW0gZGEgTGlzdGEKICAgICAgICAgICAgICAgICAgICAgICAgX2NuYWVfZGVzYyhjbmFlOSksICAgICAgICAgICAgICAgICAgIyBbMTVdIENOQUUKICAgICAgICAgICAgICAgICAgICAgICAgTm9uZSwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzE2XSBBUlQKICAgICAgICAgICAgICAgICAgICAgICAgTm9uZSwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzE3XSBDw7NkaWdvIE9icmEKICAgICAgICAgICAgICAgICAgICAgICAgTm9uZSwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzE4XSBOw7ptZXJvIEVtcGVuaG8KICAgICAgICAgICAgICAgICAgICAgICAgX3N0cihkLmdldCgiZGVzYyIpKSwgICAgICAgICAgICAgICAgIyBbMTldIERpc2NyaW1pbmHDp8OjbwogICAgICAgICAgICAgICAgICAgICAgICB2UywgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIyBbMjBdIFZhbG9yIGRvcyBTZXJ2acOnb3MKICAgICAgICAgICAgICAgICAgICAgICAgTm9uZSwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzIxXSBEZWR1w6fDtWVzCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFsyMl0gRGVzY29udG8gQ29uZGljaW9uYWRvCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFsyM10gRGVzY29udG8gSW5jb25kaWNpb25hZG8KICAgICAgICAgICAgICAgICAgICAgICAgcmV0X2ZlZGVyYWlzIGlmIHJldF9mZWRlcmFpcyBlbHNlIDAuMCwgIyBbMjRdIFJldGVuw6fDtWVzIEZlZGVyYWlzCiAgICAgICAgICAgICAgICAgICAgICAgIE5vbmUsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFsyNV0gT3V0cmFzIFJldGVuw6fDtWVzCiAgICAgICAgICAgICAgICAgICAgICAgIHZQSVMgICAgaWYgdlBJUyAgICBlbHNlIE5vbmUsICAgICAgICAjIFsyNl0gUElTCiAgICAgICAgICAgICAgICAgICAgICAgIHZDT0ZJTlMgaWYgdkNPRklOUyBlbHNlIE5vbmUsICAgICAgICAjIFsyN10gQ09GSU5TCiAgICAgICAgICAgICAgICAgICAgICAgIHZJUlJGICAgaWYgdklSUkYgICBlbHNlIE5vbmUsICAgICAgICAjIFsyOF0gSVJSRgogICAgICAgICAgICAgICAgICAgICAgICB2Q1NMTCAgIGlmIHZDU0xMICAgZWxzZSBOb25lLCAgICAgICAgIyBbMjldIENTTEwKICAgICAgICAgICAgICAgICAgICAgICAgdklOU1MgICBpZiB2SU5TUyAgIGVsc2UgTm9uZSwgICAgICAgICMgWzMwXSBJTlNTCiAgICAgICAgICAgICAgICAgICAgICAgIHZTLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFszMV0gQmFzZSBkZSBDw6FsY3VsbwogICAgICAgICAgICAgICAgICAgICAgICBhbGlxLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFszMl0gQWzDrXF1b3RhCiAgICAgICAgICAgICAgICAgICAgICAgIF9sb2NhbF9wcmVzdGFjYW8oZCksICAgICAgICAgICAgICAgICMgWzMzXSBMb2NhbCBkYSBQcmVzdGHDp8OjbwogICAgICAgICAgICAgICAgICAgICAgICAiU2ltIiBpZiBpc3NfcmV0aWRvIGVsc2UgIk7Do28iLCAgICAgIyBbMzRdIElTUyBSZXRpZG8KICAgICAgICAgICAgICAgICAgICAgICAgdklTUyBpZiBpc3NfcmV0aWRvIGVsc2UgMCwgICAgICAgICAgIyBbMzVdIFZhbG9yIGRvIElTUyAoMCBzZSBuw6NvIHJldGlkbykKICAgICAgICAgICAgICAgICAgICAgICAgdlMsICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzM2XSBWYWxvciBMw61xdWlkbwogICAgICAgICAgICAgICAgICAgICAgICAiTk9STUFMIiwgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFszN10gU3RhdHVzIERvYy4KICAgICAgICAgICAgICAgICAgICAgICAgTm9uZSwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgWzM4XSBJbnNjcmnDp8OjbyBQcmVzdGFkb3IKICAgICAgICAgICAgICAgICAgICAgICAgX3N0cihkLmdldCgiY25waiIpKSwgICAgICAgICAgICAgICAgIyBbMzldIENQRi9DTlBKIFByZXN0YWRvcgogICAgICAgICAgICAgICAgICAgICAgICBfc3RyKGQuZ2V0KCJub21lIikpLCAgICAgICAgICAgICAgICAjIFs0MF0gUmF6w6NvIFNvY2lhbAogICAgICAgICAgICAgICAgICAgICAgICAiQXR1YWwiLCAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIFs0MV0gRXNjcml0dXJhw6fDo28KICAgICAgICAgICAgICAgICAgICAgICAgIlByZXN0YWRvciIsICAgICAgICAgICAgICAgICAgICAgICAgIyBbNDJdIE9yaWdlbQogICAgICAgICAgICAgICAgICAgICAgICAiTsOjbyBpbmZvcm1hZGEiLCAgICAgICAgICAgICAgICAgICAgIyBbNDNdIFN0YXR1cyBBY2VpdGUKICAgICAgICAgICAgICAgICAgICBdKQoKICAgICAgICAgICAgICAgICAgICAjIEZvcm1hdG9zIGRlY2ltYWlzIOKAlCAjLCMjMC4wMCBlbSB0b2RvcyAoaWd1YWwgYW8gImRldSBjZXJ0byIpCiAgICAgICAgICAgICAgICAgICAgciA9IHdzLm1heF9yb3cKICAgICAgICAgICAgICAgICAgICBmb3IgX2NvbCBpbiBbMjAsIDIxLCAyMiwgMjMsIDI0LCAyNSwgMjYsIDI3LCAyOCwgMjksIDMwLCAzMSwgMzUsIDM2XToKICAgICAgICAgICAgICAgICAgICAgICAgd3MuY2VsbChyb3c9ciwgY29sdW1uPV9jb2wpLm51bWJlcl9mb3JtYXQgPSAnIywjIzAuMDAnCiAgICAgICAgICAgICAgICAgICAgd3MuY2VsbChyb3c9ciwgY29sdW1uPTMyKS5udW1iZXJfZm9ybWF0ID0gJzAuMDAnICAjIEFsw61xdW90YQoKICAgICAgICAgICAgICAgICAgICB0b3RhbCArPSAxCiAgICAgICAgICAgICAgICAgICAgcHJpbnQoZiIgIE9LICAge25vbWVfYXJxfSIpCiAgICAgICAgICAgICAgICAgICAgcHJpbnQoZiIgICAgICAgTkZTZSB7ZC5nZXQoJ25ERlNlJywnJyl9IHwge2QuZ2V0KCdub21lJywnJylbOjM1XX0iKQoKICAgICAgICAgICAgICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZXhjOgogICAgICAgICAgICAgICAgICAgIGVycm9zLmFwcGVuZCgobm9tZV9hcnEsIHN0cihleGMpKSkKICAgICAgICAgICAgICAgICAgICBwcmludChmIiAgRVJSTyB7bm9tZV9hcnF9OiB7ZXhjfSIpCgogICAgICAgIF9wcm9ncmVzcy5lbXB0eSgpCgogICAgICAgIHByaW50KGYiXG4gIFByb2Nlc3NhZGFzOiB7dG90YWx9IG5vdGEocykiKQogICAgICAgIGlmIGVycm9zOgogICAgICAgICAgICBwcmludChmIiAgQ29tIGVycm86ICAgIHtsZW4oZXJyb3MpfSIpCiAgICAgICAgICAgIGZvciBuLCBlIGluIGVycm9zOgogICAgICAgICAgICAgICAgcHJpbnQoZiIgICAgLSB7bn06IHtlfSIpCgogICAgICAgIGxvZyAgID0gYnVmLmdldHZhbHVlKCkKICAgICAgICBzYWlkYSA9IG9zLnBhdGguam9pbih0bXAsICJyZXN1bHRhZG8ueGxzeCIpCiAgICAgICAgd2Iuc2F2ZShzYWlkYSkKCiAgICAgICAgZGF0YSA9IGIiIgogICAgICAgIGlmIG9zLnBhdGguZXhpc3RzKHNhaWRhKToKICAgICAgICAgICAgd2l0aCBvcGVuKHNhaWRhLCAicmIiKSBhcyBmaDoKICAgICAgICAgICAgICAgIGRhdGEgPSBmaC5yZWFkKCkKICAgICAgICAgICAgIyBDb252ZXJ0ZSBTaGFyZWRTdHJpbmdzIOKGkiBJbmxpbmVTdHIgKGNvbXBhdGliaWxpZGFkZSBBcGFjaGUgUE9JKQogICAgICAgICAgICBkYXRhID0gX3hsc3hfcGFyYV9pbmxpbmVzdHIoZGF0YSkKCiAgICByZXR1cm4gZGF0YSwgbG9nCg==
+"""
+core/conversor_xlsx.py — Conversão XML → XLSX (SPED GOV)
+Lógica copiada integralmente de app_web.py — NENHUMA linha de conversão alterada.
+Adicionado: st.progress() no loop principal para feedback visual.
+"""
+
+import sys
+import io
+import os
+import re
+import tempfile
+import contextlib
+import zipfile
+import xml.etree.ElementTree as _ET
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import nfse_xml_to_txt as C
+
+
+# ── Conversor ZIP: SharedStrings → InlineStr + Formatos Numéricos ────────────
+# Colunas com formato #,##0.00 (1-based): monetárias + alíquota
+# Col 32 (Alíquota) usa o mesmo formato do "deu certo" — numFmtId=4 (#,##0.00)
+_COLS_MONEY = frozenset([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36])
+_COL_ALIQ   = 32   # Alíquota usa 0.00 (sem separador de milhar)
+
+
+def _col_num(letters: str) -> int:
+    """'T' → 20,  'AF' → 32"""
+    n = 0
+    for c in letters.upper():
+        n = n * 26 + (ord(c) - 64)
+    return n
+
+
+def _xlsx_para_inlinestr(xlsx_bytes: bytes) -> bytes:
+    """
+    Pós-processa o XLSX gerado pelo openpyxl para:
+
+    A) Converter todas as células string para inlineStr (<is><t>texto</t></is>)
+       conforme esperado pelo portal ISS Fortaleza (Apache POI).
+
+    B) Garantir que células monetárias e de alíquota usem os formatos corretos
+       com applyNumberFormat="1" — sem isso o portal exibe '2' em vez de '2,00'.
+
+    Etapas inlineStr:
+      1. Lê sharedStrings.xml → tabela índice→texto
+      2. <c t="s"><v>N</v></c>     → <c t="inlineStr"><is><t>TEXT</t></is></c>
+      3. <c t="inlineStr"><v>T</v></c> → <c t="inlineStr"><is><t>T</t></is></c>
+      4. <c t="inlineStr"/>        → <c t="inlineStr"><is><t/></is></c>
+      5. Remove sharedStrings.xml e suas referências
+
+    Etapas de formato numérico:
+      6. Lê styles.xml → encontra índices para numFmtId=4 (#,##0.00) e 2 (0.00)
+      7. Adiciona applyNumberFormat="1" onde falta
+      8. Atualiza atributo s= das células monetárias e de alíquota nas linhas de dados
+    """
+    _NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+
+    src   = zipfile.ZipFile(io.BytesIO(xlsx_bytes), 'r')
+    nomes = src.namelist()
+
+    # ── Passo 1: shared strings ───────────────────────────────────────────────
+    tabela: list = []
+    if 'xl/sharedStrings.xml' in nomes:
+        ss_root = _ET.fromstring(src.read('xl/sharedStrings.xml').decode('utf-8'))
+        for si in ss_root.iter(f'{{{_NS}}}si'):
+            parts = [t.text or '' for t in si.iter(f'{{{_NS}}}t')]
+            tabela.append(''.join(parts))
+
+    # ── Passos 6-7: prepara correção de styles.xml ────────────────────────────
+    idx_money  = -1   # índice cellXf para #,##0.00
+    idx_aliq   = -1   # índice cellXf para 0.00
+    styles_fix = None
+
+    if 'xl/styles.xml' in nomes:
+        sx = src.read('xl/styles.xml').decode('utf-8')
+
+        def _ai(pat, s, d=0):
+            m = re.search(pat, s)
+            return int(m.group(1)) if m else d
+
+        # Busca apenas dentro de <cellXfs> (o s= das células aponta para cellXfs, não cellStyleXfs)
+        cellxfs_block = re.search(r'<cellXfs[^>]*>(.*?)</cellXfs>', sx, re.DOTALL)
+        xfs = re.findall(r'<xf [^>]+/>', cellxfs_block.group(1)) if cellxfs_block else []
+        for i, xf in enumerate(xfs):
+            nfid = _ai(r'numFmtId="(\d+)"', xf)
+            fnt  = _ai(r'fontId="(\d+)"',   xf)
+            fll  = _ai(r'fillId="(\d+)"',   xf)
+            if fnt == 0 and fll == 0:
+                if nfid == 4 and idx_money < 0: idx_money = i
+                if nfid == 2 and idx_aliq  < 0: idx_aliq  = i
+
+        # Cria estilos ausentes
+        cur_count = len(xfs)
+        if idx_money < 0:
+            entry = '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+            sx = sx.replace('</cellXfs>', entry + '</cellXfs>')
+            idx_money = cur_count
+            cur_count += 1
+        if idx_aliq < 0:
+            entry = '<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+            sx = sx.replace('</cellXfs>', entry + '</cellXfs>')
+            idx_aliq = cur_count
+
+        # Adiciona applyNumberFormat="1" onde falta
+        def _fix_apply(m):
+            xf = m.group(0)
+            nm = re.search(r'numFmtId="(\d+)"', xf)
+            if nm and int(nm.group(1)) > 0 and 'applyNumberFormat' not in xf:
+                xf = xf[:-2] + ' applyNumberFormat="1"/>'
+            return xf
+
+        sx = re.sub(r'<xf [^>]+/>', _fix_apply, sx)
+        styles_fix = sx.encode('utf-8')
+
+    # ── Passo 8: corrige s= nas células de dados ──────────────────────────────
+    def _fix_cell_s(xml_str: str) -> str:
+        if idx_money < 0 and idx_aliq < 0:
+            return xml_str
+
+        def _upd(m):
+            coord = m.group(1)
+            rest  = m.group(2)
+            lm = re.match(r'([A-Z]+)(\d+)', coord)
+            if not lm:
+                return m.group(0)
+            col = _col_num(lm.group(1))
+            row = int(lm.group(2))
+            if row < 2:
+                return m.group(0)   # cabeçalho — não mexe
+            if col in _COLS_MONEY and idx_money >= 0:
+                target = idx_money
+            elif col == _COL_ALIQ and idx_aliq >= 0:
+                target = idx_aliq
+            else:
+                return m.group(0)
+            rest2 = re.sub(r'\s*s="\d+"', '', rest)
+            return f'<c r="{coord}" s="{target}"{rest2}>'
+
+        return re.sub(r'<c r="([A-Z]+\d+)"([^>]*)>', _upd, xml_str)
+
+    # ── Helpers inlineStr ─────────────────────────────────────────────────────
+    def _esc(s: str) -> str:
+        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    def _processar_sheet(xml_str: str) -> str:
+        # Passo 2: shared strings → inlineStr
+        def _rep_shared(m):
+            pre, post, idx_str = m.group(1), m.group(2), m.group(3)
+            idx  = int(idx_str)
+            text = tabela[idx] if 0 <= idx < len(tabela) else ''
+            tag  = f'<c {pre}t="inlineStr"{post}>'
+            body = f'<is><t>{_esc(text)}</t></is>' if text else '<is><t/></is>'
+            return f'{tag}{body}</c>'
+
+        xml_str = re.sub(
+            r'<c ((?:[^\S\n]*\S[^>]*?\s+)?)t="s"(\s*(?:[^>]*?)?)><v>(\d+)</v></c>',
+            _rep_shared, xml_str
+        )
+
+        # Passo 3: inlineStr com <v>TEXTO</v>
+        def _rep_v(m):
+            attrs, text = m.group(1), m.group(2)
+            body = f'<is><t>{_esc(text)}</t></is>' if text else '<is><t/></is>'
+            return f'<c {attrs}>{body}</c>'
+
+        xml_str = re.sub(
+            r'<c ([^>]*t="inlineStr"[^>]*)><v>([^<]*)</v></c>',
+            _rep_v, xml_str
+        )
+
+        # Passo 4: self-closing inlineStr
+        xml_str = re.sub(
+            r'<c ([^>]*t="inlineStr"[^/]*?)\s*/>',
+            r'<c \1><is><t/></is></c>',
+            xml_str
+        )
+
+        return xml_str
+
+    # ── Grava ZIP de saída ────────────────────────────────────────────────────
+    buf_out = io.BytesIO()
+    with zipfile.ZipFile(buf_out, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+        for item in src.infolist():
+            nome    = item.filename
+            content = src.read(nome)
+
+            if nome == 'xl/sharedStrings.xml':
+                continue
+
+            elif nome == 'xl/styles.xml' and styles_fix:
+                content = styles_fix
+
+            elif nome == 'xl/_rels/workbook.xml.rels':
+                s = content.decode('utf-8')
+                s = re.sub(r'<Relationship[^>]+[Ss]hared[Ss]trings[^>]*/>\s*', '', s)
+                content = s.encode('utf-8')
+
+            elif nome == '[Content_Types].xml':
+                s = content.decode('utf-8')
+                s = re.sub(r'<Override[^>]+[Ss]hared[Ss]trings[^>]*/>\s*', '', s)
+                content = s.encode('utf-8')
+
+            elif nome.startswith('xl/worksheets/') and nome.endswith('.xml'):
+                xml = _processar_sheet(content.decode('utf-8'))
+                xml = _fix_cell_s(xml)          # corrige s= para formatos numéricos
+                content = xml.encode('utf-8')
+
+            zout.writestr(item, content)
+
+    src.close()
+    return buf_out.getvalue()
+
+
+def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
+    """Gera XLSX no layout exato do SPED GOV — aba 'Serviços Tomados', 43 colunas."""
+    import glob as _glob
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    import streamlit as st
+
+    # Cabeçalhos e larguras exatas do SPED GOV
+    COLUNAS = [
+        ("Tipo Doc.",                       24.14),
+        ("Número",                          10.28),
+        ("Código de Verificação",           23.57),
+        ("Competência",                     14.57),
+        ("Data",                            11.42),
+        ("Vencimento",                      13.42),
+        ("Número RPS",                      18.42),
+        ("Série RPS",                       11.14),
+        ("Tipo RPS",                        10.28),
+        ("Natureza da Operação",            27.71),
+        ("Regime Especial Tributação",      52.14),
+        ("Operação Simples Nacional",       29.28),
+        ("Incentivador Cultural",           22.85),
+        ("Item da Lista",                   14.57),
+        ("CNAE",                           123.14),
+        ("ART",                              5.28),
+        ("Código Obra",                     13.85),
+        ("Número Empenho",                  19.42),
+        ("Discriminação dos Serviços",     141.14),
+        ("Valor dos Serviços",              20.28),
+        ("Deduções Permitidas em Lei",      30.42),
+        ("Desconto Condicionado",           25.28),
+        ("Desconto Incondicionado",         27.00),
+        ("Retenções Federais",              21.28),
+        ("Outras Retenções",               19.42),
+        ("PIS",                              4.42),
+        ("COFINS",                           8.85),
+        ("IRRF",                             5.71),
+        ("CSLL",                             6.14),
+        ("INSS",                             5.85),
+        ("Base de Cálculo",                 17.28),
+        ("Alíquota",                         9.85),
+        ("Local da Prestação",              22.14),
+        ("ISS Retido",                      11.71),
+        ("Valor do ISS",                    13.85),
+        ("Valor Líquido",                   14.85),
+        ("Status Doc.",                     13.00),
+        ("Inscrição Prestador",             21.14),
+        ("CPF/CNPJ Prestador",              21.42),
+        ("Razão Social/Nome do Prestador",  58.57),
+        ("Escrituração",                    13.85),
+        ("Origem",                           9.71),
+        ("Status Aceite",                   14.85),
+    ]
+
+    IBGE_FORTALEZA = "2304400"
+
+    def _float(v):
+        try:
+            return float(v) if v else 0.0
+        except Exception:
+            return 0.0
+
+    def _str(v):
+        """Retorna string limpa, ou '' para vazio (inlineStr via _forcar_inline)."""
+        return str(v).strip() if v else ""
+
+    def _data_fmt(iso, fmt):
+        if not iso:
+            return ""
+        data_part = iso[:10]
+        try:
+            partes = data_part.split("-")
+            if fmt == "mes":
+                return f"{partes[1]}/{partes[0]}"
+            else:
+                return f"{partes[2]}/{partes[1]}/{partes[0]}"
+        except Exception:
+            return iso
+
+    def _local_prestacao(d):
+        uf   = _str(d.get("uf", ""))
+        xLP  = _str(d.get("xLP", ""))
+        cLP  = _str(d.get("cLP", ""))
+        xMun = _str(d.get("xMun", ""))
+        nome_mun = (
+            xLP
+            or getattr(C, "IBGE_TO_NOME", {}).get(cLP, "")
+            or xMun
+        )
+        if nome_mun and uf:
+            return f"{nome_mun.upper()} - {uf.upper()}"
+        return nome_mun.upper() if nome_mun else None
+
+    def _cnae_desc(cnae9):
+        desc = getattr(C, "CNAE9_TO_DESC", {}).get(cnae9, "")
+        return f"{cnae9} - {desc}" if desc else cnae9
+
+    def _extrair_fed(xml_path):
+        """
+        Extrai todas as retenções federais diretamente do XML.
+        parse_nfse() não mapeia corretamente PIS/COFINS/IRRF/CSLL no modelo nacional.
+        """
+        import xml.etree.ElementTree as ET
+
+        def _v(root, *tags):
+            for tag in tags:
+                el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
+                if el is not None and el.text:
+                    try:
+                        return float(el.text.strip())
+                    except (ValueError, AttributeError):
+                        pass
+            return 0.0
+
+        try:
+            root = ET.parse(xml_path).getroot()
+            return (
+                _v(root, "vPis",    "vPIS"),
+                _v(root, "vCofins", "vCOFINS"),
+                _v(root, "vRetIRRF"),
+                _v(root, "vRetCSLL"),
+                _v(root, "vINSS"),
+            )
+        except Exception:
+            return 0.0, 0.0, 0.0, 0.0, 0.0
+
+    def _competencia_xml(xml_path):
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.parse(xml_path).getroot()
+            el = next((e for e in root.iter() if e.tag.endswith("dCompet")), None)
+            if el is not None and el.text:
+                p = el.text.strip()[:7].split("-")
+                return f"{p[1]}/{p[0]}"
+        except Exception:
+            pass
+        return ""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for uf_file in uploaded_files:
+            uf_file.seek(0)
+            with open(os.path.join(tmp, uf_file.name), "wb") as fh:
+                fh.write(uf_file.read())
+
+        arquivos = sorted(_glob.glob(os.path.join(tmp, "*.xml")))
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Serviços Tomados"
+
+        header_fill = PatternFill(fill_type="solid", fgColor="C0C0C0")
+        header_font = Font(bold=True, size=11)
+
+        for col_idx, (titulo, largura) in enumerate(COLUNAS, 1):
+            cell = ws.cell(row=1, column=col_idx, value=titulo)
+            cell.font  = header_font
+            cell.fill  = header_fill
+            letra = get_column_letter(col_idx)
+            ws.column_dimensions[letra].width = largura
+
+        buf   = io.StringIO()
+        total = 0
+        erros = []
+        n_arqs = max(len(arquivos), 1)
+
+        # Barra de progresso no Streamlit
+        _progress = st.progress(0, text="Iniciando processamento...")
+
+        with contextlib.redirect_stdout(buf):
+            for idx, xml_path in enumerate(arquivos):
+                nome_arq = os.path.basename(xml_path)
+                _progress.progress(
+                    (idx + 1) / n_arqs,
+                    text=f"Processando {idx + 1}/{len(arquivos)}: {nome_arq}",
+                )
+                try:
+                    if competencia_filtro:
+                        comp = _competencia_xml(xml_path)
+                        if comp and comp != competencia_filtro:
+                            print(f"  SKIP {nome_arq}: competência {comp} ≠ {competencia_filtro}")
+                            continue
+
+                    d = C.parse_nfse(xml_path)
+                    if im:
+                        d["im"] = im
+
+                    # Extrai nNFSe diretamente do XML (número correto da nota)
+                    import xml.etree.ElementTree as _ET2
+                    try:
+                        _root2 = _ET2.parse(xml_path).getroot()
+                        _nNFSe = next((e.text for e in _root2.iter() if e.tag.endswith("nNFSe")), None)
+                        if _nNFSe:
+                            d["nNFSe"] = _nNFSe.strip()
+                    except Exception:
+                        pass
+
+                    cnae9, item, aliq_cnae = C.resolver_cnae9(d)
+                    dhEmi = _str(d.get("dhEmi", ""))
+
+                    vS   = _float(d.get("vS"))
+                    vISS = _float(d.get("vISS"))
+                    vPIS, vCOFINS, vIRRF, vCSLL, vINSS = _extrair_fed(xml_path)
+                    aliq   = _float(d.get("aliq")) or float(aliq_cnae or 0)
+                    tpRet  = _str(d.get("tpRet", "1"))
+                    iss_retido = (tpRet == "2")
+
+                    ret_federais  = vPIS + vCOFINS + vCSLL
+
+                    # Operação Simples Nacional — lê do XML
+                    op_simp = _str(d.get("opSimpNac")) or ""
+                    simples_nac = "Sim" if op_simp in ("1", "2") else "Não"
+
+                    ws.append([
+                        "NFS-e de Outro Município",          # [01] Tipo Doc.
+                        _str(d.get("nNFSe") or d.get("nDFSe")), # [02] Número (nNFSe tem prioridade)
+                        None,                                # [03] Código Verificação
+                        _data_fmt(dhEmi, "mes"),            # [04] Competência
+                        _data_fmt(dhEmi, "dia"),            # [05] Data
+                        None,                                # [06] Vencimento
+                        None,                                # [07] Número RPS
+                        None,                                # [08] Série RPS
+                        None,                                # [09] Tipo RPS
+                        "Tributação Fora do Município",     # [10] Natureza da Operação
+                        None,                                # [11] Regime Especial Tributação
+                        simples_nac,                        # [12] Operação Simples Nacional
+                        None,                               # [13] Incentivador Cultural
+                        item,                               # [14] Item da Lista
+                        _cnae_desc(cnae9),                  # [15] CNAE
+                        None,                                # [16] ART
+                        None,                                # [17] Código Obra
+                        None,                                # [18] Número Empenho
+                        _str(d.get("desc")),                # [19] Discriminação
+                        vS,                                  # [20] Valor dos Serviços
+                        None,                                # [21] Deduções
+                        None,                                # [22] Desconto Condicionado
+                        None,                                # [23] Desconto Incondicionado
+                        ret_federais if ret_federais else 0.0, # [24] Retenções Federais
+                        None,                                # [25] Outras Retenções
+                        vPIS    if vPIS    else None,        # [26] PIS
+                        vCOFINS if vCOFINS else None,        # [27] COFINS
+                        vIRRF   if vIRRF   else None,        # [28] IRRF
+                        vCSLL   if vCSLL   else None,        # [29] CSLL
+                        vINSS   if vINSS   else None,        # [30] INSS
+                        vS,                                  # [31] Base de Cálculo
+                        aliq,                               # [32] Alíquota
+                        _local_prestacao(d),                # [33] Local da Prestação
+                        "Sim" if iss_retido else "Não",     # [34] ISS Retido
+                        vISS if iss_retido else 0,          # [35] Valor do ISS (0 se não retido)
+                        vS,                                  # [36] Valor Líquido
+                        "NORMAL",                           # [37] Status Doc.
+                        None,                                # [38] Inscrição Prestador
+                        _str(d.get("cnpj")),                # [39] CPF/CNPJ Prestador
+                        _str(d.get("nome")),                # [40] Razão Social
+                        "Atual",                            # [41] Escrituração
+                        "Prestador",                        # [42] Origem
+                        "Não informada",                    # [43] Status Aceite
+                    ])
+
+                    # Formatos decimais — #,##0.00 em todos (igual ao "deu certo")
+                    r = ws.max_row
+                    for _col in [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 36]:
+                        ws.cell(row=r, column=_col).number_format = '#,##0.00'
+                    ws.cell(row=r, column=32).number_format = '0.00'  # Alíquota
+
+                    total += 1
+                    print(f"  OK   {nome_arq}")
+                    print(f"       NFSe {d.get('nDFSe','')} | {d.get('nome','')[:35]}")
+
+                except Exception as exc:
+                    erros.append((nome_arq, str(exc)))
+                    print(f"  ERRO {nome_arq}: {exc}")
+
+        _progress.empty()
+
+        print(f"\n  Processadas: {total} nota(s)")
+        if erros:
+            print(f"  Com erro:    {len(erros)}")
+            for n, e in erros:
+                print(f"    - {n}: {e}")
+
+        log   = buf.getvalue()
+        saida = os.path.join(tmp, "resultado.xlsx")
+        wb.save(saida)
+
+        data = b""
+        if os.path.exists(saida):
+            with open(saida, "rb") as fh:
+                data = fh.read()
+            # Converte SharedStrings → InlineStr (compatibilidade Apache POI)
+            data = _xlsx_para_inlinestr(data)
+
+    return data, log
