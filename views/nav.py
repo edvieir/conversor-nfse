@@ -4,13 +4,13 @@ from auth.security import current_user, is_admin, logout, has_permission
 
 
 _PAGES = [
-    ("conversor",    "sync",           "Converter"),
-    ("baixar_xmls",  "cloud_download", "Baixar XML"),
-    ("certificados", "verified_user",  "Certificados"),
-    ("milhao",       "receipt_long",   "Milhão"),
-    ("dashboard",    "monitoring",     "Overview"),
+    ("conversor",    "sync",           "🔄", "Converter"),
+    ("baixar_xmls",  "cloud_download", "⬇️", "Baixar XML"),
+    ("certificados", "verified_user",  "🔐", "Certificados"),
+    ("milhao",       "receipt_long",   "📋", "Milhão"),
+    ("dashboard",    "monitoring",     "📊", "Overview"),
 ]
-_ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
+_ADMIN_PAGE = ("usuarios", "manage_accounts", "👥", "Usuários")
 
 
 def render(current_page: str = ""):
@@ -33,38 +33,31 @@ def render(current_page: str = ""):
 </div>
 """, unsafe_allow_html=True)
 
-        # ── Nav items (pure HTML links — no st.button CSS conflicts) ───────
+        # ── Nav items ─────────────────────────────────────────────────────
         pages = list(_PAGES)
         if admin:
             pages.append(_ADMIN_PAGE)
 
-        nav_html = ""
         for item in pages:
-            key, icon_ms, label = item
+            key, icon_ms, emoji, label = item
             if not admin and not has_permission(key):
                 continue
 
-            if key == current_page:
-                nav_html += f"""
+            active = (key == current_page)
+
+            if active:
+                st.markdown(f"""
 <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;
             margin:2px 8px;border-radius:8px;border-left:3px solid #00e5ff;
             background:rgba(0,229,255,.08);">
   <span class="ms" style="color:#00e5ff;font-size:20px;">{icon_ms}</span>
   <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
-</div>"""
+</div>""", unsafe_allow_html=True)
             else:
-                nav_html += f"""
-<a href="?nav={key}" target="_self" style="display:flex;align-items:center;gap:10px;padding:10px 13px;
-   margin:2px 8px;border-radius:8px;text-decoration:none;
-   color:#bac9cc;font-family:Manrope,sans-serif;font-size:13px;font-weight:600;
-   transition:background .15s,color .15s;"
-   onmouseover="this.style.background='rgba(255,255,255,.06)';this.style.color='#dce1fb';"
-   onmouseout="this.style.background='transparent';this.style.color='#bac9cc';">
-  <span class="ms" style="color:#6b7fa3;font-size:20px;">{icon_ms}</span>
-  {label}
-</a>"""
-
-        st.markdown(nav_html, unsafe_allow_html=True)
+                if st.button(f"{emoji}  {label}", key=f"nb_{key}_{current_page}",
+                             use_container_width=True):
+                    st.session_state.pagina = key
+                    st.rerun()
 
         # ── Footer + logout ────────────────────────────────────────────────
         st.markdown("""

@@ -39,8 +39,9 @@ button[kind="headerNoPadding"] { display: none !important; }
 
 /* Sidebar buttons CSS está no final do arquivo (após o CSS global de botões) */
 
-/* ── MAIN AREA BUTTONS ──────────────────────────────────────── */
-div[data-testid="stButton"] > button {
+/* ── MAIN AREA BUTTONS (somente fora do sidebar) ────────────────── */
+[data-testid="stMain"] div[data-testid="stButton"] > button,
+[data-testid="stMainBlockContainer"] div[data-testid="stButton"] > button {
     background: #131929 !important;
     color: #c9d1d9 !important;
     border: 1px solid #1e2d45 !important;
@@ -59,7 +60,8 @@ div[data-testid="stButton"] > button {
     text-overflow: ellipsis !important;
 }
 
-div[data-testid="stButton"] > button p {
+[data-testid="stMain"] div[data-testid="stButton"] > button p,
+[data-testid="stMainBlockContainer"] div[data-testid="stButton"] > button p {
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -67,14 +69,16 @@ div[data-testid="stButton"] > button p {
     line-height: 1 !important;
 }
 
-div[data-testid="stButton"] > button:hover {
+[data-testid="stMain"] div[data-testid="stButton"] > button:hover,
+[data-testid="stMainBlockContainer"] div[data-testid="stButton"] > button:hover {
     background: #0d1526 !important;
     color: #e6edf3 !important;
     border-color: #00e5ff !important;
     box-shadow: 0 0 0 2px rgba(0,229,255,.15) !important;
 }
 
-div[data-testid="stButton"] > button[kind="primary"] {
+[data-testid="stMain"] div[data-testid="stButton"] > button[kind="primary"],
+[data-testid="stMainBlockContainer"] div[data-testid="stButton"] > button[kind="primary"] {
     background: linear-gradient(135deg, #00b8cc, #007a8a) !important;
     color: #ffffff !important;
     border: none !important;
@@ -84,14 +88,16 @@ div[data-testid="stButton"] > button[kind="primary"] {
     box-shadow: 0 2px 12px rgba(0,200,220,.3) !important;
 }
 
-div[data-testid="stButton"] > button[kind="primary"]:hover {
+[data-testid="stMain"] div[data-testid="stButton"] > button[kind="primary"]:hover,
+[data-testid="stMainBlockContainer"] div[data-testid="stButton"] > button[kind="primary"]:hover {
     background: linear-gradient(135deg, #00d4eb, #009ab0) !important;
     box-shadow: 0 4px 20px rgba(0,200,220,.45) !important;
     transform: translateY(-1px) !important;
 }
 
-div[data-testid="stButton"] > button[kind="primary"]:disabled,
-div[data-testid="stButton"] > button:disabled {
+[data-testid="stMain"] div[data-testid="stButton"] > button[kind="primary"]:disabled,
+[data-testid="stMain"] div[data-testid="stButton"] > button:disabled,
+[data-testid="stMainBlockContainer"] div[data-testid="stButton"] > button:disabled {
     background: #0d1526 !important;
     color: #2f3e55 !important;
     border: 1px solid #1a2a3a !important;

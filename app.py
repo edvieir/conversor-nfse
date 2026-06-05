@@ -101,13 +101,6 @@ require_login()   # para o app se nao autenticado e exibe tela de login
 if "pagina" not in st.session_state:
     st.session_state["pagina"] = "conversor"
 
-# Lê parâmetro de URL ?nav= gerado pelos links do sidebar
-_nav_param = st.query_params.get("nav", "")
-_valid_pages = {"conversor", "baixar_xmls", "certificados", "milhao", "dashboard", "usuarios"}
-if _nav_param in _valid_pages:
-    st.session_state["pagina"] = _nav_param
-    st.query_params.clear()
-    st.rerun()
 
 # ── ROTEADOR ───────────────────────────────────────────────────────────────────
 from views import conversor, dashboard, usuarios, milhao, baixar_xmls, certificados
