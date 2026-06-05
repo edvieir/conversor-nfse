@@ -13,8 +13,25 @@ _PAGES = [
 _ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
 
 
+def _nav_item_html(icon_name: str, label: str, active: bool) -> str:
+    if active:
+        return f"""
+<div style="display:flex;align-items:center;gap:10px;padding:10px 13px;
+            margin:1px 8px;border-radius:8px;border-left:3px solid #00e5ff;
+            background:rgba(0,229,255,.08);cursor:default;">
+  <span class="ms" style="color:#00e5ff;font-size:20px;">{icon_name}</span>
+  <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
+</div>"""
+    else:
+        return f"""
+<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;
+            margin:1px 8px;border-radius:8px;">
+  <span class="ms" style="color:#849396;font-size:20px;">{icon_name}</span>
+  <span style="color:#bac9cc;font-family:Manrope,sans-serif;font-size:13px;font-weight:600;">{label}</span>
+</div>"""
+
+
 def render(current_page: str = ""):
-    user  = current_user()
     admin = is_admin()
 
     with st.sidebar:
@@ -34,7 +51,7 @@ def render(current_page: str = ""):
 </div>
 """, unsafe_allow_html=True)
 
-        # ── Nova Conversão (visual) ────────────────────────────────────────
+        # ── Nova Conversão ────────────────────────────────────────────────
         st.markdown("""
 <div style="padding:8px 16px 12px;">
   <div style="background:#00e5ff;color:#00363d;border-radius:8px;padding:10px 16px;
@@ -57,25 +74,9 @@ def render(current_page: str = ""):
                 continue
 
             active = (key == current_page)
+            st.markdown(_nav_item_html(icon_name, label, active), unsafe_allow_html=True)
 
-            if active:
-                st.markdown(f"""
-<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;
-            margin:2px 8px;border-radius:8px;border-left:3px solid #00e5ff;
-            background:rgba(0,229,255,.08);padding-left:13px;">
-  <span class="ms" style="color:#00e5ff;">{icon_name}</span>
-  <span style="color:#00e5ff;font-family:Manrope,sans-serif;font-size:13px;font-weight:700;">{label}</span>
-</div>
-""", unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;
-            margin:2px 8px;border-radius:8px;">
-  <span class="ms" style="color:#849396;">{icon_name}</span>
-  <span style="color:#bac9cc;font-family:Manrope,sans-serif;font-size:13px;font-weight:600;">{label}</span>
-</div>
-""", unsafe_allow_html=True)
-                # Botão invisível sobreposto ao item HTML acima
+            if not active:
                 if st.button(label, key=f"nb_{key}_{current_page}", use_container_width=True):
                     st.session_state.pagina = key
                     st.rerun()
@@ -83,8 +84,8 @@ def render(current_page: str = ""):
         # ── Footer ────────────────────────────────────────────────────────
         st.markdown("""
 <div style="border-top:1px solid rgba(255,255,255,.05);margin-top:24px;padding-top:8px;">
-  <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin:2px 8px;border-radius:8px;">
-    <span class="ms" style="color:#849396;">help</span>
+  <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin:1px 8px;border-radius:8px;">
+    <span class="ms" style="color:#849396;font-size:20px;">help</span>
     <span style="color:#849396;font-family:Manrope,sans-serif;font-size:13px;font-weight:600;">Help Center</span>
   </div>
 </div>
