@@ -1,34 +1,135 @@
 """
-db/database.py — Persistência SQLite
-Tabelas: users (usuários), conversions (histórico de conversões)
+db/database.py — Persistência PostgreSQL (Supabase)
+Tabelas: users, conversions, certificados
 
-Na primeira execução migra automaticamente o config.yaml existente.
-Em produção (Render), use a variável de ambiente ADMIN_BOOTSTRAP=login:senha
-para garantir que o admin exista após cada redeploy.
+Variável de ambiente obrigatória em produção:
+  DATABASE_URL=postgresql://postgres:SENHA@db.XXX.supabase.co:5432/postgres
+
+Em desenvolvimento local, se DATABASE_URL não estiver definida, usa SQLite como fallback.
 """
 
-import sqlite3
 import os
-from pathlib import Path
 from datetime import datetime, date
+from contextlib import contextmanager
 
-# Caminho do banco — pasta data/ na raiz do projeto
-DB_PATH = Path(__file__).parent.parent / "data" / "conversor.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+# ── Backend: PostgreSQL ou SQLite (fallback local) ───────────────────────────
+
+if DATABASE_URL:
+    import psycopg2
+    import psycopg2.extras
+
+    @contextmanager
+    def _conn():
+        con = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            yield con
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
+
+    _PG = True
+else:
+    import sqlite3
+    from pathlib import Path
+
+    _DB_PATH = Path(__file__).parent.parent / "data" / "conversor.db"
+
+    @contextmanager
+    def _conn():
+        _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+        con.row_factory = sqlite3.Row
+        try:
+            yield con
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
+
+    _PG = False
 
 
-def _conn() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(str(DB_PATH), check_same_thread=False)
-    con.row_factory = sqlite3.Row
-    return con
+def _exec(sql: str, params=(), fetch_one=False, fetch_all=False):
+    """Execute a single statement and optionally fetch results."""
+    with _conn() as con:
+        cur = con.cursor()
+        cur.execute(sql, params)
+        if fetch_one:
+            row = cur.fetchone()
+            return dict(row) if row else None
+        if fetch_all:
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+        return cur.rowcount
 
 
-# ── INICIALIZAÇÃO ────────────────────────────────────────────────────────────────
+# ── INICIALIZAÇÃO ─────────────────────────────────────────────────────────────
 
 def init_db():
-    """Cria as tabelas, migra config.yaml e garante o admin bootstrap."""
+    """Cria as tabelas e garante os usuários bootstrap."""
+    if _PG:
+        _init_pg()
+    else:
+        _init_sqlite()
+    _bootstrap_admin()
+    _bootstrap_users()
+
+
+def _init_pg():
     with _conn() as con:
-        con.executescript("""
+        cur = con.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id            SERIAL PRIMARY KEY,
+                username      TEXT UNIQUE NOT NULL,
+                name          TEXT NOT NULL,
+                email         TEXT DEFAULT '',
+                password_hash TEXT NOT NULL,
+                role          TEXT DEFAULT 'user',
+                permissoes    TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard',
+                created_at    TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS conversions (
+                id           SERIAL PRIMARY KEY,
+                ts           TEXT NOT NULL,
+                usuario      TEXT NOT NULL,
+                modo         TEXT NOT NULL,
+                qtd_arquivos INTEGER DEFAULT 0,
+                sucesso      INTEGER DEFAULT 1
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS certificados (
+                id            SERIAL PRIMARY KEY,
+                usuario       TEXT NOT NULL,
+                cnpj          TEXT NOT NULL,
+                razao_social  TEXT DEFAULT '',
+                pfx_enc       BYTEA NOT NULL,
+                senha_enc     TEXT NOT NULL,
+                criado_em     TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(usuario, cnpj)
+            )
+        """)
+        # Add permissoes column if missing (migration for existing DBs)
+        cur.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS
+            permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'
+        """)
+
+
+def _init_sqlite():
+    with _conn() as con:
+        cur = con.cursor()
+        cur.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 username      TEXT UNIQUE NOT NULL,
@@ -36,6 +137,7 @@ def init_db():
                 email         TEXT DEFAULT '',
                 password_hash TEXT NOT NULL,
                 role          TEXT DEFAULT 'user',
+                permissoes    TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard',
                 created_at    TEXT DEFAULT (datetime('now','localtime'))
             );
             CREATE TABLE IF NOT EXISTS conversions (
@@ -57,108 +159,64 @@ def init_db():
                 UNIQUE(usuario, cnpj)
             );
         """)
-    # Migration: add permissoes column if not exists
+    # Migration: add permissoes if not exists
     try:
-        with _conn() as con:
-            con.execute(
-                "ALTER TABLE users ADD COLUMN permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'"
-            )
+        _exec("ALTER TABLE users ADD COLUMN permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'")
     except Exception:
-        pass  # Column already exists
-
-    _migrate_from_yaml()
-    _bootstrap_admin()
-    _bootstrap_users()
-
-
-def _migrate_from_yaml():
-    """Importa usuários do config.yaml se a tabela users estiver vazia."""
-    cfg_path = Path(__file__).parent.parent / "config.yaml"
-    if not cfg_path.exists():
-        return
-    with _conn() as con:
-        count = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        if count > 0:
-            return
-    try:
-        import yaml
-        with open(cfg_path, encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-        usuarios = cfg.get("credentials", {}).get("usernames", {})
-        with _conn() as con:
-            for username, dados in usuarios.items():
-                role = "admin" if username == "admin" else "user"
-                con.execute(
-                    "INSERT OR IGNORE INTO users "
-                    "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)",
-                    (
-                        username,
-                        dados.get("name", username.title()),
-                        dados.get("email", ""),
-                        dados.get("password", ""),
-                        role,
-                    ),
-                )
-        print(f"[db] Migrados {len(usuarios)} usuário(s) do config.yaml")
-    except Exception as exc:
-        print(f"[db] Migração config.yaml falhou: {exc}")
+        pass
 
 
 def _bootstrap_admin():
-    """
-    Garante que existe ao menos um admin.
-    Variável de ambiente: ADMIN_BOOTSTRAP=login:senha
-    Útil no Render onde o filesystem é efêmero.
-    """
     raw = os.environ.get("ADMIN_BOOTSTRAP", "").strip()
     if not raw or ":" not in raw:
         return
-    with _conn() as con:
-        count = con.execute(
-            "SELECT COUNT(*) FROM users WHERE role='admin'"
-        ).fetchone()[0]
-        if count > 0:
-            return
+    count = _exec("SELECT COUNT(*) AS n FROM users WHERE role='admin'", fetch_one=True)
+    if count and count.get("n", count.get("count(*)", 0)) > 0:
+        return
     import bcrypt
     username, senha = raw.split(":", 1)
-    pw_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
-    with _conn() as con:
-        con.execute(
-            "INSERT OR IGNORE INTO users (username, name, email, password_hash, role) "
-            "VALUES (?,?,?,?,?)",
+    pw_hash = bcrypt.hashpw(senha.encode(), bcrypt.gensalt(12)).decode()
+    ph = "%s" if _PG else "?"
+    try:
+        _exec(
+            f"INSERT INTO users (username, name, email, password_hash, role) VALUES ({ph},{ph},{ph},{ph},{ph})",
             (username, username.title(), f"{username}@empresa.com", pw_hash, "admin"),
         )
-    print(f"[db] Admin bootstrap: usuário '{username}' criado.")
+        print(f"[db] Admin bootstrap: '{username}' criado.")
+    except Exception:
+        pass
 
 
 def _bootstrap_users():
-    """
-    Garante que os usuários padrão existam a cada inicialização.
-    Usa INSERT OR IGNORE — não sobrescreve senhas já alteradas pelo admin.
-    Variável opcional USERS_BOOTSTRAP=login:senha:nome[:email] (separados por '|')
-    permite adicionar usuários extras via painel do Render.
-    """
     import bcrypt
 
-    # ── Usuários fixos — criados automaticamente se não existirem ────────────
     _FIXOS = [
-        # (username,  senha_inicial,  nome,               email)
         ("p&p",    "123456",    "P&P Contabilidade", "pp@empresa.com"),
         ("calebe", "calebe123", "Calebe",             "calebe@exemplo.com"),
     ]
 
+    ph = "%s" if _PG else "?"
+    conflict = "ON CONFLICT (username) DO NOTHING" if _PG else "OR IGNORE"
+    insert_kw = "INSERT" if _PG else "INSERT"
+
     for username, senha, nome, email in _FIXOS:
-        pw_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
-        with _conn() as con:
-            con.execute(
-                "INSERT OR IGNORE INTO users "
-                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)",
-                (username, nome, email, pw_hash, "user"),
+        pw_hash = bcrypt.hashpw(senha.encode(), bcrypt.gensalt(12)).decode()
+        if _PG:
+            sql = (
+                "INSERT INTO users (username, name, email, password_hash, role) "
+                f"VALUES (%s,%s,%s,%s,%s) ON CONFLICT (username) DO NOTHING"
             )
+        else:
+            sql = (
+                "INSERT OR IGNORE INTO users "
+                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)"
+            )
+        try:
+            _exec(sql, (username, nome, email, pw_hash, "user"))
+        except Exception:
+            pass
         print(f"[db] Bootstrap: '{username}' verificado/criado.")
 
-    # ── Usuários extras via variável de ambiente (opcional) ──────────────────
-    # Formato: USERS_BOOTSTRAP=login:senha:nome[:email]|login2:senha2:nome2
     raw = os.environ.get("USERS_BOOTSTRAP", "").strip()
     if not raw:
         return
@@ -166,111 +224,99 @@ def _bootstrap_users():
         partes = entrada.strip().split(":", 3)
         if len(partes) < 3:
             continue
-        username = partes[0].strip()
-        senha    = partes[1].strip()
-        nome     = partes[2].strip()
-        email    = partes[3].strip() if len(partes) == 4 else f"{username}@empresa.com"
-        if not username or not senha:
+        u = partes[0].strip()
+        s = partes[1].strip()
+        n = partes[2].strip()
+        e = partes[3].strip() if len(partes) == 4 else f"{u}@empresa.com"
+        if not u or not s:
             continue
-        pw_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
-        with _conn() as con:
-            con.execute(
-                "INSERT OR IGNORE INTO users "
-                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)",
-                (username, nome, email, pw_hash, "user"),
-            )
-        print(f"[db] Bootstrap extra: '{username}' verificado/criado.")
+        pw_hash = bcrypt.hashpw(s.encode(), bcrypt.gensalt(12)).decode()
+        try:
+            _exec(sql, (u, n, e, pw_hash, "user"))
+        except Exception:
+            pass
+        print(f"[db] Bootstrap extra: '{u}' verificado/criado.")
 
 
-# ── CRUD — USUÁRIOS ──────────────────────────────────────────────────────────────
+# ── CRUD — USUÁRIOS ───────────────────────────────────────────────────────────
 
 def get_user(username: str) -> dict | None:
-    with _conn() as con:
-        row = con.execute(
-            "SELECT username, name, email, password_hash, role "
-            "FROM users WHERE username = ?",
-            (username.strip().lower(),),
-        ).fetchone()
-    return dict(row) if row else None
+    ph = "%s" if _PG else "?"
+    return _exec(
+        f"SELECT username, name, email, password_hash, role FROM users WHERE username = {ph}",
+        (username.strip().lower(),),
+        fetch_one=True,
+    )
 
 
 def list_users() -> list[dict]:
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT username, name, email, role, created_at "
-            "FROM users ORDER BY role DESC, created_at"
-        ).fetchall()
-    return [dict(r) for r in rows]
+    return _exec(
+        "SELECT username, name, email, role, created_at FROM users ORDER BY role DESC, created_at",
+        fetch_all=True,
+    )
 
 
 def create_user(username: str, name: str, email: str,
                 password_hash: str, role: str = "user") -> bool:
+    ph = "%s" if _PG else "?"
     try:
-        with _conn() as con:
-            con.execute(
-                "INSERT INTO users (username, name, email, password_hash, role) "
-                "VALUES (?,?,?,?,?)",
-                (username.strip().lower(), name.strip(), email.strip(), password_hash, role),
-            )
+        _exec(
+            f"INSERT INTO users (username, name, email, password_hash, role) VALUES ({ph},{ph},{ph},{ph},{ph})",
+            (username.strip().lower(), name.strip(), email.strip(), password_hash, role),
+        )
         return True
-    except sqlite3.IntegrityError:
+    except Exception:
         return False
 
 
 def delete_user(username: str):
-    with _conn() as con:
-        con.execute("DELETE FROM users WHERE username = ?", (username,))
+    ph = "%s" if _PG else "?"
+    _exec(f"DELETE FROM users WHERE username = {ph}", (username,))
 
 
 def get_user_permissions(username: str) -> list[str]:
-    """Returns list of allowed pages. Empty list means all pages (admin/default)."""
-    with _conn() as con:
-        row = con.execute("SELECT permissoes, role FROM users WHERE username=?", (username,)).fetchone()
+    ph = "%s" if _PG else "?"
+    row = _exec(f"SELECT permissoes, role FROM users WHERE username={ph}", (username,), fetch_one=True)
     if not row:
         return []
-    if row["role"] == "admin":
-        return []  # admins always see everything
-    perms = row["permissoes"] or "conversor,baixar_xmls,certificados,milhao,dashboard"
+    if row.get("role") == "admin":
+        return []
+    perms = row.get("permissoes") or "conversor,baixar_xmls,certificados,milhao,dashboard"
     return [p.strip() for p in perms.split(",") if p.strip()]
 
 
 def set_user_permissions(username: str, permissoes: list[str]):
-    with _conn() as con:
-        con.execute("UPDATE users SET permissoes=? WHERE username=?",
-                    (",".join(permissoes), username))
+    ph = "%s" if _PG else "?"
+    _exec(f"UPDATE users SET permissoes={ph} WHERE username={ph}", (",".join(permissoes), username))
 
 
 def update_password(username: str, new_hash: str):
-    with _conn() as con:
-        con.execute(
-            "UPDATE users SET password_hash = ? WHERE username = ?",
-            (new_hash, username),
-        )
+    ph = "%s" if _PG else "?"
+    _exec(f"UPDATE users SET password_hash = {ph} WHERE username = {ph}", (new_hash, username))
 
 
-# ── CRUD — CONVERSÕES ────────────────────────────────────────────────────────────
+# ── CRUD — CONVERSÕES ─────────────────────────────────────────────────────────
 
 def log_conversion(usuario: str, modo: str, qtd: int, sucesso: bool):
     ts = datetime.now().isoformat()
-    with _conn() as con:
-        con.execute(
-            "INSERT INTO conversions (ts, usuario, modo, qtd_arquivos, sucesso) "
-            "VALUES (?,?,?,?,?)",
-            (ts, usuario, modo.upper(), qtd, int(sucesso)),
-        )
+    ph = "%s" if _PG else "?"
+    _exec(
+        f"INSERT INTO conversions (ts, usuario, modo, qtd_arquivos, sucesso) VALUES ({ph},{ph},{ph},{ph},{ph})",
+        (ts, usuario, modo.upper(), qtd, int(sucesso)),
+    )
 
 
 def get_conversions(limit: int = 500) -> list[dict]:
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT ts, usuario, modo, qtd_arquivos AS arquivos, sucesso "
-            "FROM conversions ORDER BY ts DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    return [dict(r) for r in rows]
+    ph = "%s" if _PG else "?"
+    rows = _exec(
+        f"SELECT ts, usuario, modo, qtd_arquivos AS arquivos, sucesso FROM conversions ORDER BY ts DESC LIMIT {ph}",
+        (limit,),
+        fetch_all=True,
+    )
+    return rows or []
 
 
-# ── CRUD — CERTIFICADOS ──────────────────────────────────────────────────────────
+# ── CRUD — CERTIFICADOS ───────────────────────────────────────────────────────
 
 def salvar_certificado(usuario: str, cnpj: str, razao_social: str,
                        pfx_bytes: bytes, senha: str) -> bool:
@@ -278,8 +324,19 @@ def salvar_certificado(usuario: str, cnpj: str, razao_social: str,
     pfx_enc   = encrypt_bytes(pfx_bytes)
     senha_enc = encrypt_str(senha)
     try:
-        with _conn() as con:
-            con.execute(
+        if _PG:
+            _exec(
+                """INSERT INTO certificados (usuario, cnpj, razao_social, pfx_enc, senha_enc)
+                   VALUES (%s,%s,%s,%s,%s)
+                   ON CONFLICT (usuario, cnpj) DO UPDATE SET
+                     razao_social=EXCLUDED.razao_social,
+                     pfx_enc=EXCLUDED.pfx_enc,
+                     senha_enc=EXCLUDED.senha_enc,
+                     criado_em=NOW()""",
+                (usuario, cnpj, razao_social, psycopg2.Binary(pfx_enc), senha_enc),
+            )
+        else:
+            _exec(
                 """INSERT INTO certificados (usuario, cnpj, razao_social, pfx_enc, senha_enc)
                    VALUES (?,?,?,?,?)
                    ON CONFLICT(usuario, cnpj) DO UPDATE SET
@@ -296,23 +353,23 @@ def salvar_certificado(usuario: str, cnpj: str, razao_social: str,
 
 
 def listar_certificados(usuario: str) -> list[dict]:
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT id, cnpj, razao_social, criado_em FROM certificados "
-            "WHERE usuario = ? ORDER BY razao_social",
-            (usuario,),
-        ).fetchall()
-    return [dict(r) for r in rows]
+    ph = "%s" if _PG else "?"
+    rows = _exec(
+        f"SELECT id, cnpj, razao_social, criado_em FROM certificados WHERE usuario = {ph} ORDER BY razao_social",
+        (usuario,),
+        fetch_all=True,
+    )
+    return rows or []
 
 
 def carregar_certificado(usuario: str, cnpj: str) -> tuple[bytes, str] | None:
-    """Retorna (pfx_bytes, senha) descriptografados, ou None se não encontrado."""
     from core.crypto import decrypt_bytes, decrypt_str
-    with _conn() as con:
-        row = con.execute(
-            "SELECT pfx_enc, senha_enc FROM certificados WHERE usuario=? AND cnpj=?",
-            (usuario, cnpj),
-        ).fetchone()
+    ph = "%s" if _PG else "?"
+    row = _exec(
+        f"SELECT pfx_enc, senha_enc FROM certificados WHERE usuario={ph} AND cnpj={ph}",
+        (usuario, cnpj),
+        fetch_one=True,
+    )
     if not row:
         return None
     try:
@@ -325,40 +382,41 @@ def carregar_certificado(usuario: str, cnpj: str) -> tuple[bytes, str] | None:
 
 
 def remover_certificado(usuario: str, cnpj: str):
-    with _conn() as con:
-        con.execute(
-            "DELETE FROM certificados WHERE usuario=? AND cnpj=?",
-            (usuario, cnpj),
-        )
+    ph = "%s" if _PG else "?"
+    _exec(f"DELETE FROM certificados WHERE usuario={ph} AND cnpj={ph}", (usuario, cnpj))
 
 
 def get_stats() -> dict:
     hoje = str(date.today())
     mes  = hoje[:7]
-    with _conn() as con:
-        total  = con.execute("SELECT COUNT(*) FROM conversions").fetchone()[0]
-        d_hoje = con.execute(
-            "SELECT COUNT(*) FROM conversions WHERE ts LIKE ?", (f"{hoje}%",)
-        ).fetchone()[0]
-        d_mes  = con.execute(
-            "SELECT COUNT(*) FROM conversions WHERE ts LIKE ?", (f"{mes}%",)
-        ).fetchone()[0]
-        xmls   = con.execute(
-            "SELECT COALESCE(SUM(qtd_arquivos),0) FROM conversions WHERE sucesso=1"
-        ).fetchone()[0]
-        txt_c  = con.execute(
-            "SELECT COUNT(*) FROM conversions WHERE modo='TXT' AND sucesso=1"
-        ).fetchone()[0]
-        xlsx_c = con.execute(
-            "SELECT COUNT(*) FROM conversions WHERE modo='XLSX' AND sucesso=1"
-        ).fetchone()[0]
-        by_usr = con.execute(
-            "SELECT usuario, COUNT(*) FROM conversions GROUP BY usuario ORDER BY 2 DESC"
-        ).fetchall()
-        by_day = con.execute(
-            "SELECT DATE(ts) AS d, COUNT(*) FROM conversions "
-            "WHERE ts >= date('now','-14 days') GROUP BY d ORDER BY d"
-        ).fetchall()
+
+    if _PG:
+        total  = (_exec("SELECT COUNT(*) AS n FROM conversions", fetch_one=True) or {}).get("n", 0) or (_exec("SELECT COUNT(*) FROM conversions", fetch_one=True) or {}).get("count", 0)
+        d_hoje = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s", (f"{hoje}%",), fetch_one=True) or {}).get("n", 0)
+        d_mes  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s", (f"{mes}%",), fetch_one=True) or {}).get("n", 0)
+        xmls   = (_exec("SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1", fetch_one=True) or {}).get("n", 0)
+        txt_c  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
+        xlsx_c = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
+        by_usr = _exec("SELECT usuario, COUNT(*) AS cnt FROM conversions GROUP BY usuario ORDER BY 2 DESC", fetch_all=True) or []
+        by_day = _exec(
+            "SELECT DATE(ts::date) AS d, COUNT(*) AS cnt FROM conversions "
+            "WHERE ts::date >= CURRENT_DATE - INTERVAL '14 days' GROUP BY d ORDER BY d",
+            fetch_all=True,
+        ) or []
+    else:
+        total  = (_exec("SELECT COUNT(*) AS n FROM conversions", fetch_one=True) or {}).get("n", 0)
+        d_hoje = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?", (f"{hoje}%",), fetch_one=True) or {}).get("n", 0)
+        d_mes  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?", (f"{mes}%",), fetch_one=True) or {}).get("n", 0)
+        xmls   = (_exec("SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1", fetch_one=True) or {}).get("n", 0)
+        txt_c  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
+        xlsx_c = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
+        by_usr = _exec("SELECT usuario, COUNT(*) AS cnt FROM conversions GROUP BY usuario ORDER BY 2 DESC", fetch_all=True) or []
+        by_day = _exec(
+            "SELECT DATE(ts) AS d, COUNT(*) AS cnt FROM conversions "
+            "WHERE ts >= date('now','-14 days') GROUP BY d ORDER BY d",
+            fetch_all=True,
+        ) or []
+
     return {
         "total":       total,
         "hoje":        d_hoje,
@@ -366,6 +424,6 @@ def get_stats() -> dict:
         "xmls":        xmls,
         "txt":         txt_c,
         "xlsx":        xlsx_c,
-        "por_usuario": {r[0]: r[1] for r in by_usr},
-        "por_dia":     {r[0]: r[1] for r in by_day},
+        "por_usuario": {r["usuario"]: r["cnt"] for r in by_usr},
+        "por_dia":     {str(r["d"]): r["cnt"] for r in by_day},
     }
