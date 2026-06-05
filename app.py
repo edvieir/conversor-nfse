@@ -56,6 +56,40 @@ st.markdown("""
     font-size: 20px; line-height: 1; font-style: normal;
     display: inline-block; flex-shrink: 0;
 }
+/* Sidebar nav buttons — override global stButton styles */
+[data-testid="stSidebar"] [data-testid="stButton"] > button,
+[data-testid="stSidebar"] button[kind="secondary"],
+[data-testid="stSidebar"] button[data-testid="baseButton-secondary"] {
+    background: transparent !important;
+    color: #bac9cc !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: .86rem !important;
+    font-weight: 600 !important;
+    height: 2.4rem !important;
+    width: calc(100% - 16px) !important;
+    margin: 1px 8px !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding-left: 12px !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] > button:hover,
+[data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:hover {
+    background: rgba(255,255,255,.06) !important;
+    color: #dce1fb !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"]:last-of-type > button {
+    color: #f87171 !important;
+    background: rgba(244,63,94,.05) !important;
+    border: 1px solid rgba(244,63,94,.15) !important;
+    justify-content: center !important;
+    margin-top: 4px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
