@@ -62,7 +62,7 @@ def render(current_page: str = ""):
                     st.rerun()
                 # Overlay is in normal flow — takes 38px; button is absolute on top
                 st.markdown(f"""
-<div style="display:flex;align-items:center;gap:10px;padding:9px 13px;margin:0 8px 2px;
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;margin:0 8px;
             border-radius:8px;pointer-events:none;position:relative;z-index:1;
             font-family:Manrope,sans-serif;font-size:13px;font-weight:600;color:#bac9cc;
             white-space:nowrap;overflow:hidden;">
