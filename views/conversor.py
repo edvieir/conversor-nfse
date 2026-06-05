@@ -212,7 +212,7 @@ def render():
 
             # Registra no banco
             log_conversion(
-                usuario=user["username"],
+                usuario=current_user().get("username", "?"),
                 modo=modo,
                 qtd=len(uploaded),
                 sucesso=bool(dados_saida),
