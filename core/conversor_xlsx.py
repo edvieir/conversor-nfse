@@ -391,12 +391,6 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                     text=f"Processando {idx + 1}/{len(arquivos)}: {nome_arq}",
                 )
                 try:
-                    if competencia_filtro:
-                        comp = _competencia_xml(xml_path)
-                        if comp and comp != competencia_filtro:
-                            print(f"  SKIP {nome_arq}: competência {comp} ≠ {competencia_filtro}")
-                            continue
-
                     d = C.parse_nfse(xml_path)
                     if im:
                         d["im"] = im
