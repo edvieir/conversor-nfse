@@ -71,17 +71,14 @@ def render(current_page: str = ""):
 </div>""", unsafe_allow_html=True)
 
         # ── Footer + logout ────────────────────────────────────────────────
-        st.markdown("""
-<div style="border-top:1px solid rgba(255,255,255,.05);margin-top:24px;padding-top:4px;"></div>
-""", unsafe_allow_html=True)
-
         if st.button("↪  Sair", key=f"logout_{current_page}", use_container_width=True):
             logout()
         st.markdown("""
 <div style="display:flex;align-items:center;justify-content:center;padding:10px 13px;
-            margin:0 8px 2px;border-radius:8px;pointer-events:none;position:relative;z-index:1;
+            margin:20px 8px 4px;border-radius:8px;pointer-events:none;position:relative;z-index:1;
             font-family:Manrope,sans-serif;font-size:13px;font-weight:600;color:#f87171;
-            background:rgba(244,63,94,.05);border:1px solid rgba(244,63,94,.15);">
+            background:rgba(244,63,94,.05);border:1px solid rgba(244,63,94,.15);
+            border-top:1px solid rgba(255,255,255,.07);">
   ↪  Sair
 </div>
 """, unsafe_allow_html=True)
