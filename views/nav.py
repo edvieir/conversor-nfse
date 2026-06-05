@@ -7,8 +7,8 @@ _PAGES = [
     ("conversor",    "sync",           "Converter"),
     ("baixar_xmls",  "cloud_download", "Baixar XML"),
     ("certificados", "verified_user",  "Certificados"),
-    ("milhao",       "receipt_long",   "Milhão"),
-    ("dashboard",    "monitoring",     "Overview"),
+    ("milhao",       "receipt_long",   "Notas do Milhão"),
+    ("dashboard",    "monitoring",     "Dashboard"),
 ]
 _ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
 
