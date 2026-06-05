@@ -493,7 +493,19 @@ h1, h2, h3, h4 { color: #e2e8f0 !important; font-weight: 700; }
     background: rgba(244,63,94,.12) !important;
 }
 
-/* Fix uploadupload — esconde segundo span duplicado no botão do file uploader */
-[data-testid="stFileUploadDropzone"] button > span + span { display: none !important; }
-[data-testid="stFileUploadDropzone"] button > div > span + span { display: none !important; }
-[data-testid="stFileUploadDropzone"] small { display: block !important; }
+/* Fix uploadupload — zera texto do botão e injeta label via pseudo-elemento */
+[data-testid="stFileUploadDropzone"] button {
+    font-size: 0 !important;
+    color: transparent !important;
+}
+[data-testid="stFileUploadDropzone"] button * {
+    font-size: 0 !important;
+    color: transparent !important;
+}
+[data-testid="stFileUploadDropzone"] button::after {
+    content: "Selecionar arquivos";
+    font-size: 13px !important;
+    font-family: Manrope, sans-serif !important;
+    font-weight: 600 !important;
+    color: #c9d1d9 !important;
+}
