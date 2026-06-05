@@ -257,10 +257,19 @@ def baixar_xmls_nfse(
                     try:
                         xml_bytes = _decodificar_xml(arquivo_b64)
 
-                        # Filtra pela competência (dCompet) dentro do XML
                         import xml.etree.ElementTree as _ET2
                         try:
                             _root = _ET2.fromstring(xml_bytes)
+
+                            # Filtra apenas serviços TOMADOS (empresa é tomadora)
+                            _toma_el = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
+                            if _toma_el is not None:
+                                _cnpj_toma = next((e.text for e in _toma_el.iter() if e.tag.endswith("CNPJ")), None)
+                                if _cnpj_toma and re.sub(r"\D", "", _cnpj_toma) != cnpj_uso:
+                                    log.append(f"    → serviço prestado (não tomado), ignorado")
+                                    continue
+
+                            # Filtra pela competência (dCompet) dentro do XML
                             _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
                             if _el is not None and _el.text:
                                 data_compet = date.fromisoformat(_el.text.strip()[:10])
