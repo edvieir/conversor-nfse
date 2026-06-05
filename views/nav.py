@@ -17,44 +17,6 @@ def render(current_page: str = ""):
     admin = is_admin()
 
     with st.sidebar:
-        # Inject scoped button CSS — overrides global stButton styles inside sidebar
-        st.markdown("""<style>
-section[data-testid="stSidebar"] button[data-testid="baseButton-secondary"],
-section[data-testid="stSidebar"] button[kind="secondary"],
-section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
-    background: transparent !important;
-    color: #bac9cc !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-size: .86rem !important;
-    font-weight: 600 !important;
-    height: 2.4rem !important;
-    width: calc(100% - 16px) !important;
-    margin: 1px 8px !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    padding-left: 12px !important;
-    box-shadow: none !important;
-    display: flex !important;
-    align-items: center !important;
-}
-section[data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:hover,
-section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-    background: rgba(255,255,255,.06) !important;
-    color: #dce1fb !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button,
-section[data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:last-of-type {
-    color: #f87171 !important;
-    background: rgba(244,63,94,.05) !important;
-    border: 1px solid rgba(244,63,94,.15) !important;
-    justify-content: center !important;
-    margin-top: 4px !important;
-}
-</style>""", unsafe_allow_html=True)
-
         # ── Brand ─────────────────────────────────────────────────────────
         st.markdown("""
 <div style="padding:24px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:12px;">
