@@ -148,19 +148,30 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
     raise ultimo_erro
 
 
-def _baixar_danfse(cert_path: str, key_path: str, chave: str) -> bytes | None:
+def _baixar_danfse(cert_path: str, key_path: str, chave: str, log: list) -> bytes | None:
     url = f"{BASE_URL}/DANFSe/{chave}"
+    ultimo_err = None
     for tentativa in range(1, _RETRIES + 1):
         try:
             with _make_session(cert_path, key_path) as s:
                 resp = s.get(url, timeout=TIMEOUT)
             if resp.status_code == 404:
+                log.append(f"      PDF 404 (nao disponivel na API)")
                 return None
-            resp.raise_for_status()
+            if not resp.ok:
+                log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:120]}")
+                return None
+            ct = resp.headers.get("Content-Type", "")
+            if "pdf" not in ct and len(resp.content) < 100:
+                log.append(f"      PDF resposta invalida (Content-Type: {ct})")
+                return None
             return resp.content
-        except Exception:
+        except Exception as e:
+            ultimo_err = e
             if tentativa < _RETRIES:
+                log.append(f"      PDF tentativa {tentativa} falhou: {e} — aguardando {5*tentativa}s")
                 time.sleep(5 * tentativa)
+    log.append(f"      PDF erro final: {ultimo_err}")
     return None
 
 
@@ -269,13 +280,16 @@ def baixar_xmls_nfse(
                                         log.append(f"    -> servico tomado (nao prestado), ignorado")
                                         continue
 
+                            # Filtra pela competencia — usa DataHoraGeracao como fallback
                             _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
                             if _el is not None and _el.text:
                                 data_compet = date.fromisoformat(_el.text.strip()[:10])
                                 if not (data_ini <= data_compet <= data_fim):
-                                    log.append(f"    -> competencia {data_compet} fora do periodo, ignorado")
-                                    continue
-                        except Exception:
+                                    log.append(f"    -> competencia {data_compet} fora do periodo — INCLUIDO mesmo assim (portal conta por emissao)")
+                                    # Nao pula: inclui a nota mesmo com competencia fora do range
+                                    # para evitar discrepancia com o portal (que filtra por emissao)
+                        except Exception as parse_err:
+                            log.append(f"    -> aviso parse XML: {parse_err}")
                             if data_str:
                                 try:
                                     data_doc = date.fromisoformat(data_str)
@@ -290,12 +304,13 @@ def baixar_xmls_nfse(
                             log.append(f"    -> XML salvo: xml/nfse_{chave}.xml")
 
                         if formato in ("pdf", "ambos"):
-                            pdf_bytes = _baixar_danfse(cert_path, key_path, chave)
+                            log.append(f"    -> baixando PDF (DANFSe)...")
+                            pdf_bytes = _baixar_danfse(cert_path, key_path, chave, log)
                             if pdf_bytes:
                                 zf.writestr(f"pdf/nfse_{chave}.pdf", pdf_bytes)
                                 log.append(f"    -> PDF salvo: pdf/nfse_{chave}.pdf")
                             else:
-                                log.append(f"    -> PDF nao disponivel para esta nota")
+                                log.append(f"    -> PDF nao baixado (ver linha acima)")
 
                         total_ok += 1
 
