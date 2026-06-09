@@ -123,6 +123,10 @@ def _init_pg():
             ALTER TABLE users ADD COLUMN IF NOT EXISTS
             permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'
         """)
+        cur.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS
+            validade DATE DEFAULT NULL
+        """)
 
 
 def _init_sqlite():
@@ -160,6 +164,10 @@ def _init_sqlite():
         """)
     try:
         _exec("ALTER TABLE users ADD COLUMN permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'")
+    except Exception:
+        pass
+    try:
+        _exec("ALTER TABLE users ADD COLUMN validade DATE DEFAULT NULL")
     except Exception:
         pass
 
@@ -247,7 +255,7 @@ def _bootstrap_users():
 def get_user(username: str) -> dict | None:
     ph = "%s" if _PG else "?"
     return _exec(
-        f"SELECT username, name, email, password_hash, role FROM users WHERE username = {ph}",
+        f"SELECT username, name, email, password_hash, role, validade FROM users WHERE username = {ph}",
         (username.strip().lower(),),
         fetch_one=True,
     )
@@ -255,22 +263,28 @@ def get_user(username: str) -> dict | None:
 
 def list_users() -> list[dict]:
     return _exec(
-        "SELECT username, name, email, role, created_at FROM users ORDER BY role DESC, created_at",
+        "SELECT username, name, email, role, created_at, validade FROM users ORDER BY role DESC, created_at",
         fetch_all=True,
     )
 
 
 def create_user(username: str, name: str, email: str,
-                password_hash: str, role: str = "user") -> bool:
+                password_hash: str, role: str = "user",
+                validade=None) -> bool:
     ph = "%s" if _PG else "?"
     try:
         _exec(
-            f"INSERT INTO users (username, name, email, password_hash, role) VALUES ({ph},{ph},{ph},{ph},{ph})",
-            (username.strip().lower(), name.strip(), email.strip(), password_hash, role),
+            f"INSERT INTO users (username, name, email, password_hash, role, validade) VALUES ({ph},{ph},{ph},{ph},{ph},{ph})",
+            (username.strip().lower(), name.strip(), email.strip(), password_hash, role, validade),
         )
         return True
     except Exception:
         return False
+
+
+def update_validade(username: str, validade):
+    ph = "%s" if _PG else "?"
+    _exec(f"UPDATE users SET validade = {ph} WHERE username = {ph}", (validade, username))
 
 
 def delete_user(username: str):
