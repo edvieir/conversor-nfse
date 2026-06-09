@@ -148,37 +148,42 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
     raise ultimo_erro
 
 
-def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list) -> bytes | None:
-    url    = f"{BASE_URL}/DANFSe/{chave}"
-    params = {"cnpjConsulta": cnpj}
+def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list, nsu: int = 0) -> bytes | None:
+    # Tenta chaveAcesso primeiro, depois NSU como fallback
+    candidatos = [chave]
+    if nsu:
+        candidatos.append(str(nsu))
     headers = {"Accept": "application/pdf"}
-    ultimo_err = None
-    for tentativa in range(1, _RETRIES + 1):
-        try:
-            with _make_session(cert_path, key_path) as s:
-                resp = s.get(url, params=params, headers=headers, timeout=TIMEOUT)
-            if resp.status_code == 404:
-                log.append(f"      PDF 404 — chave nao encontrada na API | body: {resp.text[:300]}")
-                return None
-            if resp.status_code == 429:
-                espera = 30 * tentativa
-                log.append(f"      PDF 429 (rate limit) — aguardando {espera}s")
-                time.sleep(espera)
-                continue
-            if not resp.ok:
-                log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
-                return None
-            ct = resp.headers.get("Content-Type", "")
-            if "pdf" not in ct.lower() and len(resp.content) < 200:
-                log.append(f"      PDF resposta inesperada (Content-Type: {ct}, {len(resp.content)} bytes): {resp.text[:120]}")
-                return None
-            return resp.content
-        except Exception as e:
-            ultimo_err = e
-            if tentativa < _RETRIES:
-                log.append(f"      PDF tentativa {tentativa} falhou: {e} — aguardando {5*tentativa}s")
-                time.sleep(5 * tentativa)
-    log.append(f"      PDF erro final: {ultimo_err}")
+    for id_cand in candidatos:
+        url = f"{BASE_URL}/DANFSe/{id_cand}"
+        params = {"cnpjConsulta": cnpj} if len(id_cand) > 10 else {}
+        ultimo_err = None
+        for tentativa in range(1, _RETRIES + 1):
+            try:
+                with _make_session(cert_path, key_path) as s:
+                    resp = s.get(url, params=params, headers=headers, timeout=TIMEOUT)
+                if resp.status_code == 404:
+                    log.append(f"      PDF 404 (id={id_cand!r}) body={resp.text[:200]!r}")
+                    break  # tenta proximo candidato
+                if resp.status_code == 429:
+                    espera = 30 * tentativa
+                    log.append(f"      PDF 429 — aguardando {espera}s")
+                    time.sleep(espera)
+                    continue
+                if not resp.ok:
+                    log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
+                    return None
+                ct = resp.headers.get("Content-Type", "")
+                if "pdf" not in ct.lower() and len(resp.content) < 200:
+                    log.append(f"      PDF resposta inesperada (ct={ct}, {len(resp.content)}b): {resp.text[:120]}")
+                    return None
+                return resp.content
+            except Exception as e:
+                ultimo_err = e
+                if tentativa < _RETRIES:
+                    log.append(f"      PDF tentativa {tentativa} falhou: {e}")
+                    time.sleep(5 * tentativa)
+    log.append(f"      PDF indisponivel para esta nota")
     return None
 
 
@@ -312,7 +317,7 @@ def baixar_xmls_nfse(
                         if formato in ("pdf", "ambos"):
                             log.append(f"    -> baixando PDF (DANFSe) chave={chave!r} ({len(chave)} chars)...")
                             time.sleep(1)  # evita rate limit 429
-                            pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave, log)
+                            pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave, log, nsu=nsu_doc)
                             if pdf_bytes:
                                 zf.writestr(f"pdf/nfse_{chave}.pdf", pdf_bytes)
                                 log.append(f"    -> PDF salvo: pdf/nfse_{chave}.pdf")
