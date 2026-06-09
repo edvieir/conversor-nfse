@@ -150,13 +150,15 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
 
 def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list) -> bytes | None:
     url    = f"{BASE_URL}/DANFSe/{chave}"
+    params = {"cnpjConsulta": cnpj}
+    headers = {"Accept": "application/pdf"}
     ultimo_err = None
     for tentativa in range(1, _RETRIES + 1):
         try:
             with _make_session(cert_path, key_path) as s:
-                resp = s.get(url, timeout=TIMEOUT)
+                resp = s.get(url, params=params, headers=headers, timeout=TIMEOUT)
             if resp.status_code == 404:
-                log.append(f"      PDF 404 — chave nao encontrada na API")
+                log.append(f"      PDF 404 — chave nao encontrada na API | body: {resp.text[:300]}")
                 return None
             if resp.status_code == 429:
                 espera = 30 * tentativa
