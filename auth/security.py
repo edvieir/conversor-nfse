@@ -104,8 +104,18 @@ def _render_login():
 
 
 def _do_login(username: str, password: str):
+    from datetime import date
     user = get_user(username)
     if user and verify_password(password, user["password_hash"]):
+        validade = user.get("validade")
+        if validade:
+            try:
+                val_date = validade if isinstance(validade, date) else date.fromisoformat(str(validade)[:10])
+                if val_date < date.today():
+                    st.error("Acesso expirado. Entre em contato com o administrador.")
+                    return
+            except Exception:
+                pass
         st.session_state["authenticated"] = True
         st.session_state["username"]      = user["username"]
         st.session_state["name"]          = user["name"]

@@ -3,8 +3,12 @@ pages/usuarios.py — Gerenciamento de usuários (somente admin)
 """
 
 import streamlit as st
+from datetime import date
 from auth.security import current_user, is_admin, logout, hash_password
-from db.database import list_users, create_user, delete_user
+from db.database import (
+    list_users, create_user, delete_user,
+    update_password, update_validade,
+)
 from assets.icons import icon
 from views import nav
 
@@ -39,6 +43,7 @@ def render():
             unsafe_allow_html=True,
         )
     else:
+        hoje = date.today()
         linhas = ""
         for u in usuarios:
             badge = (
@@ -46,20 +51,34 @@ def render():
                 if u["role"] == "admin"
                 else '<span class="user-badge">usuario</span>'
             )
-            # Escapa & para evitar HTML inválido em logins como "p&p"
             _login = u["username"].replace("&", "&amp;")
             _nome  = u["name"].replace("&", "&amp;")
             _email = (u["email"] or "—").replace("&", "&amp;")
+
+            val = u.get("validade")
+            if val:
+                try:
+                    val_date = val if isinstance(val, date) else date.fromisoformat(str(val)[:10])
+                    if val_date < hoje:
+                        _val = f'<span style="color:#D93025;font-weight:600">{val_date} ⛔</span>'
+                    else:
+                        _val = str(val_date)
+                except Exception:
+                    _val = str(val)
+            else:
+                _val = "—"
+
             linhas += f"""
             <tr>
                 <td>{badge} <strong style="color:#e6edf3">{_login}</strong></td>
                 <td>{_nome}</td>
                 <td>{_email}</td>
+                <td>{_val}</td>
             </tr>"""
         st.markdown(f"""
         <table class="user-table">
             <thead><tr>
-                <th>Login</th><th>Nome</th><th>E-mail</th>
+                <th>Login</th><th>Nome</th><th>E-mail</th><th>Validade</th>
             </tr></thead>
             <tbody>{linhas}</tbody>
         </table>
@@ -80,6 +99,17 @@ def render():
             novo_email = st.text_input("E-mail", placeholder="ex: joao@empresa.com")
             nova_senha = st.text_input("Senha *  (min. 6 caracteres)", type="password")
         confirmar_senha = st.text_input("Confirmar senha *", type="password")
+
+        col_val1, col_val2 = st.columns([1, 2])
+        with col_val1:
+            usar_validade = st.checkbox("Definir prazo de validade")
+        with col_val2:
+            data_validade = st.date_input(
+                "Validade até",
+                value=date.today().replace(year=date.today().year + 1),
+                min_value=date.today(),
+                disabled=not usar_validade,
+            )
 
         submitted = st.form_submit_button(
             "Criar usuario", use_container_width=True, type="primary"
@@ -113,11 +143,13 @@ def render():
             else:
                 with st.spinner("Gerando hash da senha..."):
                     hashed = hash_password(nova_senha)
+                val = data_validade if usar_validade else None
                 ok = create_user(
                     novo_login.strip().lower(),
                     novo_nome.strip(),
                     novo_email.strip() or f"{novo_login.strip()}@empresa.com",
                     hashed,
+                    validade=val,
                 )
                 ic_ok = icon("check-circle", 15, "#1AB87A")
                 if ok:
@@ -137,6 +169,110 @@ def render():
 
     st.divider()
 
+    # ── Alterar senha ─────────────────────────────────────────────────────────
+    ic_key = icon("key", 16, "#E6EDF3")
+    st.markdown(f"#### {ic_key}&nbsp; Alterar senha de usuario", unsafe_allow_html=True)
+
+    opcoes_senha = [u["username"] for u in usuarios if u["username"] != user["username"]]
+    if not opcoes_senha:
+        ic_info = icon("info", 15, "#00A8AB")
+        st.markdown(
+            f'<div class="info-box">{ic_info}'
+            f'<span class="box-text">Nao ha outros usuarios para alterar a senha.</span></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        nomes_map = {u["username"]: u["name"] for u in usuarios}
+        with st.form("form_change_password"):
+            login_senha = st.selectbox(
+                "Selecione o usuario",
+                options=opcoes_senha,
+                format_func=lambda u: f"{u}  —  {nomes_map.get(u, '')}",
+                key="sel_change_pw",
+            )
+            col_pw1, col_pw2 = st.columns(2)
+            with col_pw1:
+                nova_pw = st.text_input("Nova senha *  (min. 6 caracteres)", type="password", key="nova_pw")
+            with col_pw2:
+                conf_pw = st.text_input("Confirmar nova senha *", type="password", key="conf_pw")
+
+            btn_pw = st.form_submit_button("Alterar senha", type="primary", use_container_width=True)
+            if btn_pw:
+                erros_pw = []
+                if len(nova_pw) < 6:
+                    erros_pw.append("Senha deve ter pelo menos 6 caracteres.")
+                if nova_pw != conf_pw:
+                    erros_pw.append("As senhas nao coincidem.")
+                if erros_pw:
+                    ic_err = icon("x-circle", 15, "#D93025")
+                    for e in erros_pw:
+                        st.markdown(
+                            f'<div class="error-box">{ic_err}'
+                            f'<span class="box-text">{e}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                else:
+                    with st.spinner("Atualizando senha..."):
+                        hashed = hash_password(nova_pw)
+                        update_password(login_senha, hashed)
+                    ic_ok = icon("check-circle", 15, "#1AB87A")
+                    st.markdown(
+                        f'<div class="success-box">{ic_ok}'
+                        f'<span class="box-text">Senha de <strong>{login_senha}</strong> '
+                        f'alterada com sucesso.</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+    st.divider()
+
+    # ── Alterar prazo de validade ─────────────────────────────────────────────
+    ic_cal = icon("calendar", 16, "#E6EDF3")
+    st.markdown(f"#### {ic_cal}&nbsp; Alterar prazo de validade", unsafe_allow_html=True)
+
+    usuarios_nao_admin_val = [u for u in usuarios if u["role"] != "admin"]
+    if not usuarios_nao_admin_val:
+        ic_info = icon("info", 15, "#00A8AB")
+        st.markdown(
+            f'<div class="info-box">{ic_info}'
+            f'<span class="box-text">Nao ha usuarios comuns cadastrados.</span></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        nomes_map2 = {u["username"]: u["name"] for u in usuarios}
+        with st.form("form_validade"):
+            login_val = st.selectbox(
+                "Selecione o usuario",
+                options=[u["username"] for u in usuarios_nao_admin_val],
+                format_func=lambda u: f"{u}  —  {nomes_map2.get(u, '')}",
+                key="sel_validade",
+            )
+            col_v1, col_v2 = st.columns([1, 2])
+            with col_v1:
+                sem_limite = st.checkbox("Sem prazo (acesso permanente)")
+            with col_v2:
+                val_data = st.date_input(
+                    "Nova validade",
+                    value=date.today().replace(year=date.today().year + 1),
+                    key="val_data_input",
+                    disabled=sem_limite,
+                )
+
+            btn_val = st.form_submit_button("Salvar validade", type="primary", use_container_width=True)
+            if btn_val:
+                nova_val = None if sem_limite else val_data
+                update_validade(login_val, nova_val)
+                ic_ok = icon("check-circle", 15, "#1AB87A")
+                msg = "sem prazo definido" if nova_val is None else f"validade até {nova_val}"
+                st.markdown(
+                    f'<div class="success-box">{ic_ok}'
+                    f'<span class="box-text">Validade de <strong>{login_val}</strong> '
+                    f'atualizada: {msg}.</span></div>',
+                    unsafe_allow_html=True,
+                )
+                st.rerun()
+
+    st.divider()
+
     # ── Remover usuário ───────────────────────────────────────────────────────
     ic_trash = icon("trash-2", 16, "#E6EDF3")
     st.markdown(f"#### {ic_trash}&nbsp; Remover usuario", unsafe_allow_html=True)
@@ -151,12 +287,12 @@ def render():
             unsafe_allow_html=True,
         )
     else:
-        nomes_map = {u["username"]: u["name"] for u in usuarios}
+        nomes_map3 = {u["username"]: u["name"] for u in usuarios}
         with st.form("form_remove_user"):
             login_remover = st.selectbox(
                 "Selecione o usuario a remover",
                 options=opcoes_remover,
-                format_func=lambda u: f"{u}  —  {nomes_map.get(u,'')}",
+                format_func=lambda u: f"{u}  —  {nomes_map3.get(u,'')}",
             )
             ic_warn = icon("alert-triangle", 15, "#C77D0A")
             st.markdown(
