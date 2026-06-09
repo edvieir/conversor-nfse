@@ -150,12 +150,11 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
 
 def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list) -> bytes | None:
     url    = f"{BASE_URL}/DANFSe/{chave}"
-    params = {"cnpjConsulta": cnpj}
     ultimo_err = None
     for tentativa in range(1, _RETRIES + 1):
         try:
             with _make_session(cert_path, key_path) as s:
-                resp = s.get(url, params=params, timeout=TIMEOUT)
+                resp = s.get(url, timeout=TIMEOUT)
             if resp.status_code == 404:
                 log.append(f"      PDF 404 — chave nao encontrada na API")
                 return None
@@ -306,7 +305,7 @@ def baixar_xmls_nfse(
                             log.append(f"    -> XML salvo: xml/nfse_{chave}.xml")
 
                         if formato in ("pdf", "ambos"):
-                            log.append(f"    -> baixando PDF (DANFSe)...")
+                            log.append(f"    -> baixando PDF (DANFSe) chave={chave!r} ({len(chave)} chars)...")
                             time.sleep(1)  # evita rate limit 429
                             pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave, log)
                             if pdf_bytes:
