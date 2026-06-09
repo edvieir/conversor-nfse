@@ -156,14 +156,15 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
     headers = {"Accept": "application/pdf"}
     for id_cand in candidatos:
         url = f"{BASE_URL}/DANFSe/{id_cand}"
-        params = {"cnpjConsulta": cnpj} if len(id_cand) > 10 else {}
+        params = {"cnpjConsulta": cnpj}
         ultimo_err = None
         for tentativa in range(1, _RETRIES + 1):
             try:
                 with _make_session(cert_path, key_path) as s:
                     resp = s.get(url, params=params, headers=headers, timeout=TIMEOUT)
                 if resp.status_code == 404:
-                    log.append(f"      PDF 404 (id={id_cand!r}) body={resp.text[:200]!r}")
+                    hdrs = {k: v for k, v in resp.headers.items() if k.lower() in ("content-type", "server", "x-error", "x-message", "location")}
+                    log.append(f"      PDF 404 (id={id_cand!r}) headers={hdrs} body={resp.text[:200]!r}")
                     break  # tenta proximo candidato
                 if resp.status_code == 429:
                     espera = 30 * tentativa
