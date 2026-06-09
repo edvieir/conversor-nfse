@@ -1,5 +1,5 @@
 """
-pages/baixar_xmls.py — Baixar XMLs via API NFS-e usando certificado salvo
+pages/baixar_xmls.py — Baixar XMLs/PDFs via API NFS-e usando certificado salvo
 """
 
 import streamlit as st
@@ -94,27 +94,84 @@ def render():
             data_fim = st.date_input("data_fim", value=hoje,
                                      label_visibility="collapsed", key="api_data_fim")
 
-        ic_info = icon("info", 13, "#475569")
-        st.markdown(
-            f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; Baixa <b>Servicos Tomados</b> do período selecionado</div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── ETAPA 3 — Baixar ─────────────────────────────────────────────────────
+    # ── ETAPA 3 — Opções ──────────────────────────────────────────────────────
     with st.container(border=True):
-        ic = icon("download", 16, "#00CED1")
+        ic = icon("sliders", 16, "#00CED1")
         st.markdown(f"""
         <div class="step-header">
             <div class="step-num">3</div>
             <div class="step-info">
-                <div class="step-title">{ic}&nbsp; Baixar XMLs</div>
+                <div class="step-title">{ic}&nbsp; Opcoes</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
+        col_tipo, col_fmt = st.columns(2, gap="medium")
+
+        with col_tipo:
+            st.markdown(_label("Tipo de Serviço"), unsafe_allow_html=True)
+            tipo_opcoes = {
+                "Serviços Tomados":   "tomados",
+                "Serviços Prestados": "prestados",
+                "Todos":              "todos",
+            }
+            tipo_label = st.selectbox(
+                "tipo", list(tipo_opcoes.keys()),
+                label_visibility="collapsed",
+                key="sel_tipo",
+            )
+            tipo_sel = tipo_opcoes[tipo_label]
+
+        with col_fmt:
+            st.markdown(_label("Formato do Arquivo"), unsafe_allow_html=True)
+            fmt_opcoes = {
+                "XML":       "xml",
+                "PDF":       "pdf",
+                "XML + PDF": "ambos",
+            }
+            fmt_label = st.selectbox(
+                "formato", list(fmt_opcoes.keys()),
+                label_visibility="collapsed",
+                key="sel_formato",
+            )
+            fmt_sel = fmt_opcoes[fmt_label]
+
+        # Dica contextual
+        _dicas = {
+            "tomados":   "Notas onde a empresa figura como <b>tomadora</b> do serviço.",
+            "prestados": "Notas onde a empresa figura como <b>prestadora</b> do serviço.",
+            "todos":     "Todas as notas vinculadas ao CNPJ, sem filtrar papel.",
+        }
+        ic_info = icon("info", 13, "#475569")
+        st.markdown(
+            f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
+            f'{ic_info}&nbsp; {_dicas[tipo_sel]}</div>',
+            unsafe_allow_html=True,
+        )
+
+        if fmt_sel in ("pdf", "ambos"):
+            ic_info2 = icon("info", 13, "#475569")
+            st.markdown(
+                f'<div style="color:#475569;font-size:.72rem;margin-top:4px;">'
+                f'{ic_info2}&nbsp; PDF (DANFSe) baixado da API — uma requisição extra por nota.</div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── ETAPA 4 — Baixar ─────────────────────────────────────────────────────
+    with st.container(border=True):
+        ic = icon("download", 16, "#00CED1")
+        st.markdown(f"""
+        <div class="step-header">
+            <div class="step-num">4</div>
+            <div class="step-info">
+                <div class="step-title">{ic}&nbsp; Baixar</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        _fmt_btn = {"xml": "XMLs", "pdf": "PDFs", "ambos": "XMLs e PDFs"}
         btn_baixar = st.button(
-            "Baixar XMLs via API NFS-e",
+            f"Baixar {_fmt_btn[fmt_sel]} via API NFS-e",
             disabled=(data_ini > data_fim),
             use_container_width=True,
             type="primary",
@@ -131,16 +188,13 @@ def render():
 
             pfx_bytes, senha = resultado
             progress_bar = st.progress(0, text="Conectando na API NFS-e...")
-
-            # Log em tempo real
             log_placeholder = st.empty()
 
             def atualizar_progress(frac: float):
-                progress_bar.progress(frac, text=f"Baixando XMLs... {int(frac*100)}%")
+                progress_bar.progress(frac, text=f"Processando... {int(frac*100)}%")
 
             def atualizar_log(linhas: list):
-                ultimas = linhas[-30:]  # exibe as últimas 30 linhas para não poluir
-                log_placeholder.code("\n".join(ultimas), language="")
+                log_placeholder.code("\n".join(linhas[-30:]), language="")
 
             try:
                 zip_bytes, log = baixar_xmls_nfse(
@@ -149,19 +203,22 @@ def render():
                     cnpj=cnpj_sel,
                     data_ini=data_ini,
                     data_fim=data_fim,
-                    tipo="tomadas",
+                    tipo=tipo_sel,
+                    formato=fmt_sel,
                     progress_cb=atualizar_progress,
                     log_cb=atualizar_log,
                 )
                 progress_bar.progress(1.0, text="Concluído!")
-                log_placeholder.empty()  # limpa log em tempo real
+                log_placeholder.empty()
 
                 with st.expander("Log de download", expanded=not bool(zip_bytes)):
                     st.code("\n".join(log), language="")
 
                 if zip_bytes:
+                    _tipo_nome = {"tomados": "tomados", "prestados": "prestados", "todos": "todos"}
+                    _fmt_nome  = {"xml": "xml", "pdf": "pdf", "ambos": "xml_pdf"}
                     nome_zip = (
-                        f"nfse_tomadas_{cnpj_sel[:8]}_"
+                        f"nfse_{_tipo_nome[tipo_sel]}_{_fmt_nome[fmt_sel]}_{cnpj_sel[:8]}_"
                         f"{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}.zip"
                     )
                     ic_ok = icon("check-circle", 32, "#1AB87A")
@@ -169,7 +226,7 @@ def render():
                     <div class="result-success">
                         <div class="result-success-icon">{ic_ok}</div>
                         <div>
-                            <div class="result-success-title">XMLs baixados com sucesso!</div>
+                            <div class="result-success-title">Arquivos baixados com sucesso!</div>
                             <div class="result-success-meta">
                                 {round(len(zip_bytes)/1024, 1)} KB &nbsp;&middot;&nbsp; {nome_zip}
                             </div>

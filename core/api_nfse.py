@@ -2,7 +2,7 @@
 core/api_nfse.py — Cliente para a API NFS-e ADN Contribuinte
 Base: https://adn.nfse.gov.br/contribuintes
 Auth: mTLS (certificado A1 .pfx) — sem token, o cert é a autenticação
-Ref:  swagger.json v1 / GET /DFe/{NSU}
+Ref:  swagger.json v1 / GET /DFe/{NSU}, GET /DANFSe/{chaveAcesso}
 """
 
 import io
@@ -144,12 +144,7 @@ def _make_session(cert_path: str, key_path: str) -> requests.Session:
     return s
 
 
-def _consultar_lote(
-    cert_path: str,
-    key_path: str,
-    cnpj: str,
-    nsu: int,
-) -> dict | None:
+def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict | None:
     """
     GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true
     Retorna None quando 404 (sem mais documentos).
@@ -173,21 +168,40 @@ def _consultar_lote(
     raise ultimo_erro
 
 
+def _baixar_danfse(cert_path: str, key_path: str, chave: str) -> bytes | None:
+    """
+    GET /DANFSe/{chaveAcesso} — retorna PDF da nota.
+    Retorna None se não disponível (404 / erro). PDF não é crítico.
+    """
+    url = f"{BASE_URL}/DANFSe/{chave}"
+    for tentativa in range(1, _RETRIES + 1):
+        try:
+            with _make_session(cert_path, key_path) as s:
+                resp = s.get(url, timeout=TIMEOUT)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.content
+        except Exception:
+            if tentativa < _RETRIES:
+                time.sleep(5 * tentativa)
+    return None
+
+
 def baixar_xmls_nfse(
     pfx_bytes: bytes,
     senha: str,
     cnpj: str,
     data_ini: date,
     data_fim: date,
-    tipo: str = "tomadas",   # mantido para compatibilidade, não usado na API
+    tipo: str = "tomados",    # "tomados" | "prestados" | "todos"
+    formato: str = "xml",     # "xml" | "pdf" | "ambos"
     progress_cb=None,
-    log_cb=None,             # callable(list[str]) chamado após cada lote
+    log_cb=None,
 ) -> tuple[bytes, list[str]]:
     """
-    Baixa todas as NFS-e via NSU a partir do NSU 0, filtra pelo período
-    data_ini..data_fim e retorna (zip_bytes, log).
-
-    A API não tem filtro por data — iteramos os NSUs e filtramos localmente.
+    Baixa NFS-e via NSU, filtra por período e tipo (tomados/prestados/todos).
+    Retorna ZIP com pasta xml/ e/ou pdf/ conforme `formato`.
     """
     log: list[str] = []
     cert_path = key_path = None
@@ -200,7 +214,7 @@ def baixar_xmls_nfse(
         cnpj_uso = _limpar_cnpj(cnpj) if cnpj and cnpj.strip() else cnpj_cert
         if not cnpj_uso:
             raise ValueError("CNPJ não encontrado no certificado nem informado.")
-        log.append(f"CNPJ: {cnpj_uso}")
+        log.append(f"CNPJ: {cnpj_uso}  |  Tipo: {tipo}  |  Formato: {formato}")
         log.append("Conectando na API NFS-e (mTLS)...")
         if log_cb: log_cb(log)
 
@@ -261,13 +275,30 @@ def baixar_xmls_nfse(
                         try:
                             _root = _ET2.fromstring(xml_bytes)
 
-                            # Filtra apenas serviços TOMADOS (empresa é tomadora)
-                            _toma_el = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
-                            if _toma_el is not None:
-                                _cnpj_toma = next((e.text for e in _toma_el.iter() if e.tag.endswith("CNPJ")), None)
-                                if _cnpj_toma and re.sub(r"\D", "", _cnpj_toma) != cnpj_uso:
-                                    log.append(f"    → serviço prestado (não tomado), ignorado")
-                                    continue
+                            # ── Filtro tomados / prestados ──────────────────
+                            if tipo != "todos":
+                                _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
+                                _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
+
+                                cnpj_toma  = ""
+                                cnpj_prest = ""
+                                if _toma_el is not None:
+                                    cnpj_toma = re.sub(r"\D", "", next(
+                                        (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
+                                    ))
+                                if _prest_el is not None:
+                                    cnpj_prest = re.sub(r"\D", "", next(
+                                        (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
+                                    ))
+
+                                if tipo == "tomados":
+                                    if cnpj_toma and cnpj_toma != cnpj_uso:
+                                        log.append(f"    → serviço prestado (não tomado), ignorado")
+                                        continue
+                                elif tipo == "prestados":
+                                    if cnpj_prest and cnpj_prest != cnpj_uso:
+                                        log.append(f"    → serviço tomado (não prestado), ignorado")
+                                        continue
 
                             # Filtra pela competência (dCompet) dentro do XML
                             _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
@@ -287,12 +318,27 @@ def baixar_xmls_nfse(
                                 except ValueError:
                                     pass
 
-                        zf.writestr(f"nfse_{chave}.xml", xml_bytes)
+                        # ── Salva XML ───────────────────────────────────────
+                        if formato in ("xml", "ambos"):
+                            zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
+                            log.append(f"    → XML salvo: xml/nfse_{chave}.xml")
+
+                        # ── Salva PDF ───────────────────────────────────────
+                        if formato in ("pdf", "ambos"):
+                            pdf_bytes = _baixar_danfse(cert_path, key_path, chave)
+                            if pdf_bytes:
+                                zf.writestr(f"pdf/nfse_{chave}.pdf", pdf_bytes)
+                                log.append(f"    → PDF salvo: pdf/nfse_{chave}.pdf")
+                            else:
+                                log.append(f"    → PDF não disponível para esta nota")
+
                         total_ok += 1
-                        log.append(f"    → SALVO: nfse_{chave}.xml")
+                        if formato == "xml":
+                            log.append(f"    → SALVO: xml/nfse_{chave}.xml")
+
                     except Exception as e:
                         erros += 1
-                        log.append(f"    → ERRO ao decodificar: {e}")
+                        log.append(f"    → ERRO ao processar: {e}")
 
                 # Avança NSU: usa o maior NSU do lote + 1
                 if nsu_max <= nsu:
