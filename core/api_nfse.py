@@ -280,24 +280,20 @@ def baixar_xmls_nfse(
                                         log.append(f"    -> servico tomado (nao prestado), ignorado")
                                         continue
 
-                            # Filtra pela competencia — usa DataHoraGeracao como fallback
+                            # Filtra pela competencia (dCompet)
                             _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
                             if _el is not None and _el.text:
-                                data_compet = date.fromisoformat(_el.text.strip()[:10])
-                                if not (data_ini <= data_compet <= data_fim):
-                                    log.append(f"    -> competencia {data_compet} fora do periodo — INCLUIDO mesmo assim (portal conta por emissao)")
-                                    # Nao pula: inclui a nota mesmo com competencia fora do range
-                                    # para evitar discrepancia com o portal (que filtra por emissao)
-                        except Exception as parse_err:
-                            log.append(f"    -> aviso parse XML: {parse_err}")
-                            if data_str:
                                 try:
-                                    data_doc = date.fromisoformat(data_str)
-                                    if not (data_ini <= data_doc <= data_fim):
-                                        log.append(f"    -> fora do periodo ({data_ini}..{data_fim}), ignorado")
+                                    data_compet = date.fromisoformat(_el.text.strip()[:10])
+                                    if not (data_ini <= data_compet <= data_fim):
+                                        log.append(f"    -> competencia {data_compet} fora do periodo, ignorado")
                                         continue
                                 except ValueError:
-                                    pass
+                                    # dCompet com formato invalido: inclui a nota (nao descarta por duvida)
+                                    log.append(f"    -> dCompet formato invalido '{_el.text}', incluido")
+                            # Se nao tem dCompet: inclui a nota (nao descarta por duvida)
+                        except Exception as parse_err:
+                            log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
                         if formato in ("xml", "ambos"):
                             zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
