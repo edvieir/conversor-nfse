@@ -315,9 +315,22 @@ def baixar_xmls_nfse(
                             log.append(f"    -> XML salvo: xml/nfse_{chave}.xml")
 
                         if formato in ("pdf", "ambos"):
-                            log.append(f"    -> baixando PDF (DANFSe) chave={chave!r} ({len(chave)} chars)...")
+                            # Tenta extrair chave do proprio XML (campo chNFSe ou cChaveNFSe)
+                            chave_xml = ""
+                            try:
+                                import xml.etree.ElementTree as _ET3
+                                _rx = _ET3.fromstring(xml_bytes)
+                                for _tag in ("chNFSe", "cChaveNFSe", "chAcesso", "chaveAcesso"):
+                                    _el2 = next((e for e in _rx.iter() if e.tag.endswith(_tag)), None)
+                                    if _el2 is not None and _el2.text and len(_el2.text.strip()) >= 40:
+                                        chave_xml = _el2.text.strip()
+                                        break
+                            except Exception:
+                                pass
+                            chave_pdf = chave_xml or chave
+                            log.append(f"    -> baixando PDF chave_json={chave!r} chave_xml={chave_xml!r}")
                             time.sleep(1)  # evita rate limit 429
-                            pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave, log, nsu=nsu_doc)
+                            pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave_pdf, log, nsu=nsu_doc)
                             if pdf_bytes:
                                 zf.writestr(f"pdf/nfse_{chave}.pdf", pdf_bytes)
                                 log.append(f"    -> PDF salvo: pdf/nfse_{chave}.pdf")
