@@ -285,18 +285,21 @@ def baixar_xmls_nfse(
                                         log.append(f"    -> servico tomado (nao prestado), ignorado")
                                         continue
 
-                            # Filtra pela competencia (dCompet)
+                            # Filtra pela competencia (dCompet) — compara apenas ano-mes
                             _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
                             if _el is not None and _el.text:
                                 try:
                                     data_compet = date.fromisoformat(_el.text.strip()[:10])
-                                    if not (data_ini <= data_compet <= data_fim):
-                                        log.append(f"    -> competencia {data_compet} fora do periodo, ignorado")
+                                    # Competencia e mes/ano — ignora o dia
+                                    compet_ym = (data_compet.year, data_compet.month)
+                                    ini_ym    = (data_ini.year,    data_ini.month)
+                                    fim_ym    = (data_fim.year,    data_fim.month)
+                                    if not (ini_ym <= compet_ym <= fim_ym):
+                                        log.append(f"    -> competencia {data_compet.year}-{data_compet.month:02d} fora do periodo, ignorado")
                                         continue
                                 except ValueError:
-                                    # dCompet com formato invalido: inclui a nota (nao descarta por duvida)
                                     log.append(f"    -> dCompet formato invalido '{_el.text}', incluido")
-                            # Se nao tem dCompet: inclui a nota (nao descarta por duvida)
+                            # Se nao tem dCompet: inclui a nota
                         except Exception as parse_err:
                             log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
