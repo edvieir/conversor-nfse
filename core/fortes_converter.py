@@ -185,7 +185,7 @@ def gerar_fortes(
 
     linhas = []
     linhas.append(
-        f"CAB|200|ACFiscal|{hoje}|{nome_empresa}|{periodo_ini}|{periodo_fim}|{observacao}|S"
+        f"CAB|200|ACFiscal|{hoje}|{nome_empresa}|{periodo_ini}|{periodo_fim}|{observacao}|N"
     )
 
     prestadores: dict = {}

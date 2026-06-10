@@ -66,27 +66,36 @@ def render():
 
         col1, col2 = st.columns(2, gap="medium")
         with col1:
-            st.markdown(_label("Código de Serviço Fortes *"), unsafe_allow_html=True)
+            st.markdown(_label("Nome da Empresa"), unsafe_allow_html=True)
+            nome_empresa_input = st.text_input(
+                "nome_empresa",
+                placeholder="ex: POSTO CEARA LTDA",
+                label_visibility="collapsed",
+                key="fortes_nome_empresa",
+            )
+        with col2:
+            st.markdown(_label("Código de Serviço Fortes"), unsafe_allow_html=True)
             cod_servico = st.text_input(
                 "cod_servico",
                 placeholder="ex: 10001",
                 label_visibility="collapsed",
                 key="fortes_cod_servico",
             )
-        with col2:
-            st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
-            observacao = st.text_input(
-                "observacao",
-                value="NFS-e Importacao",
-                label_visibility="collapsed",
-                key="fortes_observacao",
-            )
+
+        st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
+        observacao = st.text_input(
+            "observacao",
+            value="NFS-e Importacao",
+            label_visibility="collapsed",
+            key="fortes_observacao",
+        )
 
         ic_info = icon("info", 13, "#475569")
         st.markdown(
             f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; O nome da empresa é extraído automaticamente dos XMLs. '
-            f'O código de serviço é interno do Fortes (ex.: 10001) — consulte a tabela de atividades '
+            f'{ic_info}&nbsp; O nome da empresa aparecerá no cabeçalho do arquivo. '
+            f'Se deixar em branco, será usado o nome do tomador extraído dos XMLs. '
+            f'O código de serviço é interno do Fortes — consulte a tabela de atividades '
             f'cadastrada no seu sistema.</div>',
             unsafe_allow_html=True,
         )
@@ -136,8 +145,8 @@ def render():
 
             if notas:
                 try:
-                    # Nome da empresa = tomador extraído do XML
-                    nome_empresa = notas[0].get("toma_nome", "") or "EMPRESA"
+                    # Nome da empresa: usa o digitado ou cai no tomador do XML
+                    nome_empresa = nome_empresa_input.strip() or notas[0].get("toma_nome", "") or "EMPRESA"
                     conteudo = gerar_fortes(
                         notas=notas,
                         nome_empresa=nome_empresa,
