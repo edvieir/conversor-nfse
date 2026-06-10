@@ -67,20 +67,29 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         trib_mun = inf_dps.find(f".//{{{_NS}}}tribMun")
         tp_ret_iss = _t(trib_mun, "tpRetISSQN") if trib_mun is not None else ""
 
+    # Chave eletrônica (44 chars) — extraída do Id do infNFSe sem o prefixo "NFS"
+    chave_acesso = ""
+    inf_id = inf.get("Id", "")
+    if inf_id.startswith("NFS"):
+        chave_acesso = inf_id[3:47]   # 44 chars após "NFS"
+    elif len(inf_id) >= 44:
+        chave_acesso = inf_id[:44]
+
     return {
-        "n_nfse":    n_nfse,
-        "d_compet":  d_compet,
-        "emit_cnpj": emit_cnpj,
-        "emit_nome": emit_nome,
-        "emit_im":   emit_im,
-        "emit_uf":   emit_uf or "CE",
-        "toma_cnpj": toma_cnpj,
-        "toma_nome": toma_nome,
-        "v_bc":      v_bc,
-        "v_iss":     v_iss,
-        "v_liq":     v_liq,
-        "p_aliq":    p_aliq,
-        "tp_ret_iss": tp_ret_iss,
+        "n_nfse":       n_nfse,
+        "d_compet":     d_compet,
+        "emit_cnpj":    emit_cnpj,
+        "emit_nome":    emit_nome,
+        "emit_im":      emit_im,
+        "emit_uf":      emit_uf or "CE",
+        "toma_cnpj":    toma_cnpj,
+        "toma_nome":    toma_nome,
+        "v_bc":         v_bc,
+        "v_iss":        v_iss,
+        "v_liq":        v_liq,
+        "p_aliq":       p_aliq,
+        "tp_ret_iss":   tp_ret_iss,
+        "chave_acesso": chave_acesso,
     }
 
 
@@ -109,7 +118,7 @@ def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str) -> str:
     return "|".join(f)
 
 
-def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str) -> str:
+def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str, chave: str = "") -> str:
     f = [""] * 44
     f[0]  = "ESI"
     f[1]  = "0001"
@@ -120,6 +129,17 @@ def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str) -> str:
     f[6]  = "N"
     f[7]  = num_nota
     f[8]  = v_total
+    # f[9]  = data retencao (blank)
+    # f[10] = servico Fortaleza (blank)
+    # f[11] = COFINS retido (blank)
+    # f[12] = PIS retido (blank)
+    # f[13] = CSL retido (blank)
+    # f[14] = IRRF retido (blank)
+    # f[15] = INSS retido (blank)
+    # f[16] = serie (blank)
+    # f[17] = fatura (blank)
+    # f[18] = observacao (blank)
+    f[19] = chave[:44] if chave else ""  # chave eletronica (44 chars)
     f[23] = v_total
     f[25] = "0"
     f[28] = data_emi
@@ -198,7 +218,7 @@ def gerar_fortes(
         v_bc     = n["v_bc"]
         tributacao = "4" if n.get("tp_ret_iss") == "1" else "3"
 
-        linhas.append(_esi_line(par_id, data_emi, num_nota, v_total))
+        linhas.append(_esi_line(par_id, data_emi, num_nota, v_total, n.get("chave_acesso", "")))
         linhas.append(_ies_line(v_total, tributacao, aliq, cod_servico, v_bc))
 
     return "\r\n".join(linhas) + "\r\n"
