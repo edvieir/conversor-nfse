@@ -195,8 +195,7 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""), serie=n.get("serie",""),
         ))
-        serv_code = cod_servico or n.get("c_trib_mun", "")
-        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], serv_code))
+        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], cod_servico))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
     return "\r\n".join(linhas) + "\r\n"
