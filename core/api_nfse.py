@@ -14,6 +14,8 @@ import zipfile
 import tempfile
 import os
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
@@ -169,7 +171,11 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
                 time.sleep(espera)
                 continue
             if resp.status_code in (502, 503):
-                log.append(f"      PDF {resp.status_code} — backend do municipio indisponivel")
+                if tentativa < _RETRIES_DANFSE:
+                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 4s")
+                    time.sleep(4)
+                    continue
+                log.append(f"      PDF {resp.status_code} — backend indisponivel apos {tentativa} tentativas")
                 return None
             if not resp.ok:
                 log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
@@ -181,9 +187,45 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
             return resp.content
         except Exception as e:
             log.append(f"      PDF tentativa {tentativa} falhou: {e}")
-            if tentativa < _RETRIES:
-                time.sleep(5 * tentativa)
+            if tentativa < _RETRIES_DANFSE:
+                time.sleep(4)
     return None
+
+
+_PDF_WORKERS = 4  # downloads paralelos de PDF
+
+
+def _baixar_pdfs_paralelo(
+    cert_path: str,
+    key_path: str,
+    cnpj: str,
+    tarefas: list[tuple],  # [(chave, nome_arquivo), ...]
+    log: list,
+    log_lock: threading.Lock,
+) -> dict[str, bytes]:
+    """Baixa múltiplos PDFs em paralelo. Retorna dict {nome_arquivo: bytes}."""
+    resultados: dict[str, bytes] = {}
+    res_lock = threading.Lock()
+
+    def baixar_um(chave: str, nome: str):
+        local_log: list[str] = []
+        pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
+        with log_lock:
+            log.extend(local_log)
+        if pdf:
+            with res_lock:
+                resultados[nome] = pdf
+
+    with ThreadPoolExecutor(max_workers=_PDF_WORKERS) as pool:
+        futures = {pool.submit(baixar_um, chave, nome): nome for chave, nome in tarefas}
+        for fut in as_completed(futures):
+            try:
+                fut.result()
+            except Exception as e:
+                with log_lock:
+                    log.append(f"      PDF worker erro: {e}")
+
+    return resultados
 
 
 def baixar_xmls_nfse(
@@ -217,140 +259,159 @@ def baixar_xmls_nfse(
         total_ok = 0
         erros    = 0
         lote_num = 0
+        log_lock = threading.Lock()
 
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            while True:
-                lote_num += 1
-                log.append(f"Consultando lote a partir do NSU {nsu}...")
-                resultado = _consultar_lote(cert_path, key_path, cnpj_uso, nsu)
+        # acumula todos os XMLs aprovados antes de baixar PDFs em paralelo
+        xmls_aprovados: list[tuple[str, bytes, str]] = []  # (chave, xml_bytes, chave_pdf)
 
-                if resultado is None:
-                    log.append("Sem mais documentos (fim da fila).")
-                    break
+        import xml.etree.ElementTree as _ET2
 
-                status = resultado.get("StatusProcessamento", "")
-                if status == "NENHUM_DOCUMENTO_LOCALIZADO":
-                    log.append("Sem mais documentos.")
-                    break
-                if status == "REJEICAO":
-                    erros_api = resultado.get("Erros") or []
-                    msgs = "; ".join(e.get("Descricao", "") for e in erros_api)
-                    raise ValueError(f"API rejeitou a consulta: {msgs}")
+        while True:
+            lote_num += 1
+            log.append(f"Consultando lote a partir do NSU {nsu}...")
+            if log_cb: log_cb(log)
+            resultado = _consultar_lote(cert_path, key_path, cnpj_uso, nsu)
 
-                lote = resultado.get("LoteDFe") or []
-                log.append(f"  Lote {lote_num}: {len(lote)} documento(s)")
+            if resultado is None:
+                log.append("Sem mais documentos (fim da fila).")
+                break
 
-                nsu_max = nsu
-                for doc in lote:
-                    nsu_doc = doc.get("NSU") or 0
-                    if nsu_doc > nsu_max:
-                        nsu_max = nsu_doc
+            status = resultado.get("StatusProcessamento", "")
+            if status == "NENHUM_DOCUMENTO_LOCALIZADO":
+                log.append("Sem mais documentos.")
+                break
+            if status == "REJEICAO":
+                erros_api = resultado.get("Erros") or []
+                msgs = "; ".join(e.get("Descricao", "") for e in erros_api)
+                raise ValueError(f"API rejeitou a consulta: {msgs}")
 
-                    tipo_doc = doc.get("TipoDocumento", "")
-                    data_str = (doc.get("DataHoraGeracao") or "")[:10]
+            lote = resultado.get("LoteDFe") or []
+            log.append(f"  Lote {lote_num}: {len(lote)} documento(s)")
 
-                    log.append(f"    NSU={nsu_doc} tipo={tipo_doc} data={data_str}")
+            nsu_max = nsu
+            for doc in lote:
+                nsu_doc = doc.get("NSU") or 0
+                if nsu_doc > nsu_max:
+                    nsu_max = nsu_doc
 
-                    if tipo_doc != "NFSE":
-                        continue
+                tipo_doc = doc.get("TipoDocumento", "")
+                data_str = (doc.get("DataHoraGeracao") or "")[:10]
 
-                    arquivo_b64 = doc.get("ArquivoXml")
-                    if not arquivo_b64:
-                        log.append(f"    -> sem ArquivoXml, ignorado")
-                        continue
+                log.append(f"    NSU={nsu_doc} tipo={tipo_doc} data={data_str}")
 
-                    chave = doc.get("ChaveAcesso") or str(nsu_doc)
+                if tipo_doc != "NFSE":
+                    continue
+
+                arquivo_b64 = doc.get("ArquivoXml")
+                if not arquivo_b64:
+                    log.append(f"    -> sem ArquivoXml, ignorado")
+                    continue
+
+                chave = doc.get("ChaveAcesso") or str(nsu_doc)
+                try:
+                    xml_bytes = _decodificar_xml(arquivo_b64)
+
                     try:
-                        xml_bytes = _decodificar_xml(arquivo_b64)
+                        _root = _ET2.fromstring(xml_bytes)
 
-                        import xml.etree.ElementTree as _ET2
-                        try:
-                            _root = _ET2.fromstring(xml_bytes)
+                        if tipo != "todos":
+                            _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
+                            _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
 
-                            if tipo != "todos":
-                                _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
-                                _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
+                            cnpj_toma  = ""
+                            cnpj_prest = ""
+                            if _toma_el is not None:
+                                cnpj_toma = re.sub(r"\D", "", next(
+                                    (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
+                                ))
+                            if _prest_el is not None:
+                                cnpj_prest = re.sub(r"\D", "", next(
+                                    (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
+                                ))
 
-                                cnpj_toma  = ""
-                                cnpj_prest = ""
-                                if _toma_el is not None:
-                                    cnpj_toma = re.sub(r"\D", "", next(
-                                        (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
-                                    ))
-                                if _prest_el is not None:
-                                    cnpj_prest = re.sub(r"\D", "", next(
-                                        (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
-                                    ))
+                            if tipo == "tomados":
+                                if cnpj_toma and cnpj_toma != cnpj_uso:
+                                    log.append(f"    -> servico prestado (nao tomado), ignorado")
+                                    continue
+                            elif tipo == "prestados":
+                                if cnpj_prest and cnpj_prest != cnpj_uso:
+                                    log.append(f"    -> servico tomado (nao prestado), ignorado")
+                                    continue
 
-                                if tipo == "tomados":
-                                    if cnpj_toma and cnpj_toma != cnpj_uso:
-                                        log.append(f"    -> servico prestado (nao tomado), ignorado")
-                                        continue
-                                elif tipo == "prestados":
-                                    if cnpj_prest and cnpj_prest != cnpj_uso:
-                                        log.append(f"    -> servico tomado (nao prestado), ignorado")
-                                        continue
-
-                            # Filtra pela competencia (dCompet) — compara apenas ano-mes
-                            _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
-                            if _el is not None and _el.text:
-                                try:
-                                    data_compet = date.fromisoformat(_el.text.strip()[:10])
-                                    # Competencia e mes/ano — ignora o dia
-                                    compet_ym = (data_compet.year, data_compet.month)
-                                    ini_ym    = (data_ini.year,    data_ini.month)
-                                    fim_ym    = (data_fim.year,    data_fim.month)
-                                    if not (ini_ym <= compet_ym <= fim_ym):
-                                        log.append(f"    -> competencia {data_compet.year}-{data_compet.month:02d} fora do periodo, ignorado")
-                                        continue
-                                except ValueError:
-                                    log.append(f"    -> dCompet formato invalido '{_el.text}', incluido")
-                            # Se nao tem dCompet: inclui a nota
-                        except Exception as parse_err:
-                            log.append(f"    -> aviso parse XML: {parse_err}, incluido")
-
-                        if formato in ("xml", "ambos"):
-                            zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
-                            log.append(f"    -> XML salvo: xml/nfse_{chave}.xml")
-
-                        if formato in ("pdf", "ambos"):
-                            # Tenta extrair chave do proprio XML (campo chNFSe ou cChaveNFSe)
-                            chave_xml = ""
+                        _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
+                        if _el is not None and _el.text:
                             try:
-                                import xml.etree.ElementTree as _ET3
-                                _rx = _ET3.fromstring(xml_bytes)
-                                for _tag in ("chNFSe", "cChaveNFSe", "chAcesso", "chaveAcesso"):
-                                    _el2 = next((e for e in _rx.iter() if e.tag.endswith(_tag)), None)
-                                    if _el2 is not None and _el2.text and len(_el2.text.strip()) >= 40:
-                                        chave_xml = _el2.text.strip()
-                                        break
-                            except Exception:
-                                pass
-                            chave_pdf = chave_xml or chave
-                            log.append(f"    -> baixando PDF chave_json={chave!r} chave_xml={chave_xml!r}")
-                            time.sleep(3)  # evita throttling no backend
-                            pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave_pdf, log)
-                            if pdf_bytes:
-                                zf.writestr(f"pdf/nfse_{chave}.pdf", pdf_bytes)
-                                log.append(f"    -> PDF salvo: pdf/nfse_{chave}.pdf")
-                            else:
-                                log.append(f"    -> PDF nao baixado (ver linha acima)")
+                                data_compet = date.fromisoformat(_el.text.strip()[:10])
+                                compet_ym = (data_compet.year, data_compet.month)
+                                ini_ym    = (data_ini.year,    data_ini.month)
+                                fim_ym    = (data_fim.year,    data_fim.month)
+                                if not (ini_ym <= compet_ym <= fim_ym):
+                                    log.append(f"    -> competencia {data_compet.year}-{data_compet.month:02d} fora do periodo, ignorado")
+                                    continue
+                            except ValueError:
+                                log.append(f"    -> dCompet formato invalido '{_el.text}', incluido")
+                    except Exception as parse_err:
+                        log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
-                        total_ok += 1
+                    # determina chave para PDF
+                    chave_pdf = chave
+                    if formato in ("pdf", "ambos"):
+                        try:
+                            _rx = _ET2.fromstring(xml_bytes)
+                            for _tag in ("chNFSe", "cChaveNFSe", "chAcesso", "chaveAcesso"):
+                                _el2 = next((e for e in _rx.iter() if e.tag.endswith(_tag)), None)
+                                if _el2 is not None and _el2.text and len(_el2.text.strip()) >= 40:
+                                    chave_pdf = _el2.text.strip()
+                                    break
+                        except Exception:
+                            pass
 
-                    except Exception as e:
-                        erros += 1
-                        log.append(f"    -> ERRO: {e}")
+                    xmls_aprovados.append((chave, xml_bytes, chave_pdf))
+                    total_ok += 1
 
-                if nsu_max <= nsu:
-                    log.append("NSU nao avancou, encerrando.")
-                    if log_cb: log_cb(log)
-                    break
-                nsu = nsu_max + 1
+                except Exception as e:
+                    erros += 1
+                    log.append(f"    -> ERRO: {e}")
 
+            if nsu_max <= nsu:
+                log.append("NSU nao avancou, encerrando.")
+                if log_cb: log_cb(log)
+                break
+            nsu = nsu_max + 1
+
+            if log_cb: log_cb(log)
+            if progress_cb:
+                progress_cb(min(lote_num / (lote_num + 3), 0.5))
+
+        log.append(f"  Total de NFS-e no periodo: {total_ok}")
+        if log_cb: log_cb(log)
+
+        # ── Monta ZIP ────────────────────────────────────────────────────────
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+
+            # salva XMLs
+            if formato in ("xml", "ambos"):
+                for chave, xml_bytes, _ in xmls_aprovados:
+                    zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
+                log.append(f"  {len(xmls_aprovados)} XMLs salvos.")
+                if log_cb: log_cb(log)
+
+            # baixa PDFs em paralelo
+            if formato in ("pdf", "ambos") and xmls_aprovados:
+                tarefas_pdf = [(chave_pdf, f"nfse_{chave}.pdf") for chave, _, chave_pdf in xmls_aprovados]
+                log.append(f"  Baixando {len(tarefas_pdf)} PDFs em paralelo ({_PDF_WORKERS} workers)...")
+                if log_cb: log_cb(log)
+
+                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj_uso, tarefas_pdf, log, log_lock)
+
+                pdf_ok = 0
+                for nome, pdf_bytes in pdfs.items():
+                    zf.writestr(f"pdf/{nome}", pdf_bytes)
+                    pdf_ok += 1
+                log.append(f"  PDFs baixados: {pdf_ok}/{len(tarefas_pdf)}")
                 if log_cb: log_cb(log)
                 if progress_cb:
-                    progress_cb(min(lote_num / (lote_num + 1), 0.95))
+                    progress_cb(0.95)
 
         if progress_cb:
             progress_cb(1.0)
