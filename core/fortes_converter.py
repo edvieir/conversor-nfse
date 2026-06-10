@@ -100,8 +100,8 @@ def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str) -> str:
     f[2]  = nome.upper()[:60]
     f[3]  = uf
     f[4]  = cnpj
-    f[5]  = im       # IM
-    f[6]  = ""       # inscricao estadual
+    f[5]  = ""       # inscricao estadual (nao disponivel no XML)
+    f[6]  = im       # IM (inscricao municipal)
     f[7]  = "N"      # contribuinte ISS
     f[11] = "N"
     f[13] = "N"
@@ -221,4 +221,5 @@ def gerar_fortes(
         linhas.append(_esi_line(par_id, data_emi, num_nota, v_total, n.get("chave_acesso", "")))
         linhas.append(_ies_line(v_total, tributacao, aliq, cod_servico, v_bc))
 
+    linhas.append(f"TRA|{len(linhas)}")
     return "\r\n".join(linhas) + "\r\n"
