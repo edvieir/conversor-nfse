@@ -151,7 +151,7 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
     raise ultimo_erro
 
 
-_DANFSE_URL = "https://adn.nfse.gov.br/DANFSe"
+_DANFSE_URL = "https://adn.nfse.gov.br/danfse"
 
 
 def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list, nsu: int = 0) -> bytes | None:
