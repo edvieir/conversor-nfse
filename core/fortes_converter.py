@@ -121,7 +121,8 @@ def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str) -> str:
 
 
 def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str, chave: str = "") -> str:
-    f = [""] * 44
+    # ESI tem exatamente 21 campos conforme manual v71
+    f = [""] * 21
     f[0]  = "ESI"
     f[1]  = "0001"
     f[2]  = str(par_id)
@@ -131,28 +132,20 @@ def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str, chave: st
     f[6]  = "N"
     f[7]  = num_nota
     f[8]  = v_total
-    # f[9]  = data retencao (blank)
-    # f[10] = servico Fortaleza (blank)
-    # f[11] = COFINS retido (blank)
-    # f[12] = PIS retido (blank)
-    # f[13] = CSL retido (blank)
-    # f[14] = IRRF retido (blank)
-    # f[15] = INSS retido (blank)
-    # f[16] = serie (blank)
+    # f[9]  = data retenção (blank)
+    # f[10] = serviço Fortaleza (blank)
+    # f[11..15] = retenções federais (blank)
+    # f[16] = série (blank)
     # f[17] = fatura (blank)
-    # f[18] = observacao (blank)
-    f[19] = chave[:44] if chave else ""  # chave eletronica (44 chars)
-    f[23] = v_total
-    f[25] = "0"
-    f[28] = data_emi
-    f[31] = "0"
-    f[42] = "N"
-    f[43] = ""   # trailing pipe
+    # f[18] = observação (blank)
+    f[19] = chave[:44] if chave else ""  # chave eletrônica
+    # f[20] = campo reservado (blank)
     return "|".join(f)
 
 
 def _ies_line(v_total: str, tributacao: str, aliq: str, cod_servico: str, v_bc: str) -> str:
-    f = [""] * 59
+    # IES tem exatamente 11 campos conforme manual v71
+    f = [""] * 11
     f[0]  = "IES"
     f[1]  = v_total
     f[2]  = "N"
@@ -162,7 +155,8 @@ def _ies_line(v_total: str, tributacao: str, aliq: str, cod_servico: str, v_bc: 
     f[6]  = cod_servico
     f[7]  = ""
     f[8]  = "98"
-    f[13] = v_bc
+    # f[9]  = blank
+    f[10] = v_bc
     return "|".join(f)
 
 
