@@ -158,9 +158,9 @@ def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str,
     f[17] = nro       # 18: Número
     f[18] = cpl       # 19: Complemento
     f[19] = bairro    # 20: Bairro
-    f[20] = cmun      # 21: Código Município (IBGE)
-    f[21] = xmun      # 22: Nome Município
-    f[22] = uf        # 23: UF endereço
+    f[20] = uf        # 21: UF endereço
+    f[21] = ""        # 22: reservado
+    f[22] = cmun      # 23: Código Município IBGE (somente números)
     # f[23] DDD
     # f[24] Fone
     ddd, tel = (fone[:2], fone[2:]) if len(fone) > 2 else ("", fone)
