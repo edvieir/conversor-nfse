@@ -146,7 +146,7 @@ def _ies_line(v_total, tributacao, aliq, cod_servico):
     return "|".join(f)
 
 
-def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico=""):
+def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico="", mapeamento_servico=None):
     if not notas:
         return ""
 
@@ -195,7 +195,14 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""), serie=n.get("serie",""),
         ))
-        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], cod_servico))
+        # Resolve cod_servico: mapeamento por cTribMun > fallback cod_servico global
+        c_trib = n.get("c_trib_mun", "")
+        serv = (
+            (mapeamento_servico or {}).get(c_trib)
+            or (mapeamento_servico or {}).get(c_trib.lstrip("0") or "0")
+            or cod_servico
+        )
+        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], serv))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
     return "\r\n".join(linhas) + "\r\n"

@@ -66,23 +66,13 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2, gap="medium")
-        with col1:
-            st.markdown(_label("Nome da Empresa (Tomador)"), unsafe_allow_html=True)
-            nome_empresa = st.text_input(
-                "nome_empresa",
-                placeholder="ex: POSTO CEARA LTDA",
-                label_visibility="collapsed",
-                key="fortes_nome_empresa",
-            )
-        with col2:
-            st.markdown(_label("Código de Serviço Fortes"), unsafe_allow_html=True)
-            cod_servico = st.text_input(
-                "cod_servico",
-                placeholder="ex: 10001 (deixe em branco se não souber)",
-                label_visibility="collapsed",
-                key="fortes_cod_servico",
-            )
+        st.markdown(_label("Nome da Empresa (Tomador)"), unsafe_allow_html=True)
+        nome_empresa = st.text_input(
+            "nome_empresa",
+            placeholder="ex: POSTO CEARA LTDA",
+            label_visibility="collapsed",
+            key="fortes_nome_empresa",
+        )
 
         st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
         observacao = st.text_input(
@@ -92,13 +82,35 @@ def render():
             key="fortes_observacao",
         )
 
+        st.markdown(_label("Mapeamento de Código de Serviço (cTribMun → Código Fortes)"), unsafe_allow_html=True)
+        mapeamento_raw = st.text_area(
+            "mapeamento",
+            placeholder="008:1102\n020:1205\n034:1300",
+            height=100,
+            label_visibility="collapsed",
+            key="fortes_mapeamento",
+        )
+
         ic_info = icon("info", 13, "#475569")
         st.markdown(
             f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; O código de serviço é um código interno do sistema Fortes '
-            f'(ex.: 10001, 10013). Consulte a tabela de serviços cadastrada no seu Fortes.</div>',
+            f'{ic_info}&nbsp; Cada linha: <b>código do XML (cTribMun)</b> : <b>código interno do Fortes</b>. '
+            f'Ex: <code>008:1102</code> (vigilância). '
+            f'Deixe vazio para não preencher o campo de serviço.</div>',
             unsafe_allow_html=True,
         )
+
+        # Parse mapeamento into dict
+        mapeamento = {}
+        for linha in mapeamento_raw.splitlines():
+            linha = linha.strip()
+            if ":" in linha:
+                partes = linha.split(":", 1)
+                chave = partes[0].strip().lstrip("0") or "0"
+                valor = partes[1].strip()
+                if chave and valor:
+                    mapeamento[partes[0].strip()] = valor
+                    mapeamento[chave] = valor
 
     # ── Step 3: Gerar ─────────────────────────────────────────────────────
     with st.container(border=True):
@@ -158,7 +170,7 @@ def render():
                         notas=notas,
                         nome_empresa=nome_empresa.strip(),
                         observacao=observacao.strip() or "NFS-e Importacao",
-                        cod_servico=cod_servico.strip(),
+                        mapeamento_servico=mapeamento,
                     )
 
                     hoje = date.today().strftime("%Y%m%d")
