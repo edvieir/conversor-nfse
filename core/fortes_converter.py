@@ -94,27 +94,29 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
 
 
 def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str) -> str:
-    f = [""] * 43
+    # PAR tem exatamente 33 campos conforme manual v71
+    f = [""] * 33
     f[0]  = "PAR"
     f[1]  = str(par_id)
     f[2]  = nome.upper()[:60]
     f[3]  = uf
     f[4]  = cnpj
-    f[5]  = ""       # inscricao estadual (nao disponivel no XML)
-    f[6]  = im       # IM (inscricao municipal)
-    f[7]  = "N"      # contribuinte ISS
-    f[11] = "N"
-    f[13] = "N"
-    f[14] = "N"
-    f[19] = "0"
-    f[26] = "N"
-    f[30] = "N"
-    f[31] = "3"
-    f[33] = "N"
-    f[34] = "N"
-    f[36] = "N"
-    f[37] = "0"
-    f[38] = "N"
+    f[5]  = ""        # 6: Inscrição Estadual (não disponível no XML)
+    f[6]  = im        # 7: Inscrição Municipal
+    f[7]  = "N"       # 8: Informa ISS Digital
+    f[8]  = "N"       # 9: Informa DIEF
+    f[9]  = "N"       # 10: Informa DIC
+    f[10] = "N"       # 11: Informa DEMMS
+    f[11] = "N"       # 12: Órgão Público
+    f[12] = "N"       # 13: Informa Livro Eletrônico
+    f[13] = "N"       # 14: Fornecedor de Prod. Primário
+    f[14] = "N"       # 15: Sociedade Simples
+    # f[15..25] endereço (todos vazios)
+    f[26] = "N"       # 27: Substituto ISS
+    f[29] = "1058"    # 30: País (Brasil)
+    f[30] = "N"       # 31: Exterior
+    f[31] = "N"       # 32: Isento do ICMS
+    # f[32] e-mail (vazio)
     return "|".join(f)
 
 
@@ -185,7 +187,7 @@ def gerar_fortes(
 
     linhas = []
     linhas.append(
-        f"CAB|200|ACFiscal|{hoje}|{nome_empresa}|{periodo_ini}|{periodo_fim}|{observacao}|N"
+        f"CAB|71|ACFiscal|{hoje}|{nome_empresa}|{periodo_ini}|{periodo_fim}|{observacao}|N"
     )
 
     prestadores: dict = {}
