@@ -152,19 +152,20 @@ def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str,
     f[12] = "N"       # 13: Informa Livro Eletrônico
     f[13] = "N"       # 14: Fornecedor de Prod. Primário
     f[14] = "N"       # 15: Sociedade Simples
-    f[15] = cep       # 16: CEP
-    f[16] = ""        # 17: Tipo do Logradouro (não disponível)
-    f[17] = lgr       # 18: Logradouro
-    f[18] = nro       # 19: Número
-    f[19] = cpl       # 20: Complemento
+    f[15] = ""        # 16: Tipo de Logradouro (código — não disponível)
+    f[16] = lgr       # 17: Logradouro
+    f[17] = nro       # 18: Número
+    f[18] = cpl       # 19: Complemento
+    f[19] = ""        # 20: Tipo de Bairro (código — não disponível)
     f[20] = bairro    # 21: Bairro
-    f[21] = uf        # 22: UF endereço
-    f[22] = cmun      # 23: Código Município IBGE (somente números)
-    # f[23] DDD
-    # f[24] Fone
+    # CEP: somente números (remove traço se houver)
+    f[21] = cep.replace("-", "").replace(".", "")  # 22: CEP (N, 8 dígitos)
+    # Município: código IBGE 5 dígitos (sem os 2 primeiros da UF)
+    cmun_5 = cmun[-5:] if len(cmun) >= 5 else cmun
+    f[22] = cmun_5    # 23: Município (N, 5 dígitos)
     ddd, tel = (fone[:2], fone[2:]) if len(fone) > 2 else ("", fone)
-    f[23] = ddd
-    f[24] = tel
+    f[23] = ddd       # 24: DDD
+    f[24] = tel       # 25: Telefone
     f[26] = "N"       # 27: Substituto ISS
     f[29] = "1058"    # 30: País (Brasil)
     f[30] = "N"       # 31: Exterior
