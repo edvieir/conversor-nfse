@@ -321,11 +321,12 @@ def render():
     st.markdown(f"#### {ic_perm}&nbsp; Permissoes por usuario", unsafe_allow_html=True)
 
     ALL_PAGES_PERMS = [
-        ("conversor",    "Conversor XML"),
-        ("baixar_xmls",  "Baixar XML"),
-        ("certificados", "Certificados"),
-        ("milhao",       "Milhão"),
-        ("dashboard",    "Dashboard"),
+        ("conversor",      "Conversor XML"),
+        ("arquivo_fortes", "Arquivo Fortes"),
+        ("baixar_xmls",    "Baixar XML"),
+        ("certificados",   "Certificados"),
+        ("milhao",         "Milhão"),
+        ("dashboard",      "Dashboard"),
     ]
 
     usuarios_nao_admin = [u for u in usuarios if u["role"] != "admin"]

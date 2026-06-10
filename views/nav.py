@@ -4,11 +4,12 @@ from auth.security import current_user, is_admin, logout, has_permission
 
 
 _PAGES = [
-    ("conversor",    "sync",           "Converter"),
-    ("baixar_xmls",  "cloud_download", "Baixar XML"),
-    ("certificados", "verified_user",  "Certificados"),
-    ("milhao",       "receipt_long",   "Notas do Milhão"),
-    ("dashboard",    "monitoring",     "Dashboard"),
+    ("conversor",       "sync",           "Converter"),
+    ("arquivo_fortes",  "description",    "Arquivo Fortes"),
+    ("baixar_xmls",     "cloud_download", "Baixar XML"),
+    ("certificados",    "verified_user",  "Certificados"),
+    ("milhao",          "receipt_long",   "Notas do Milhão"),
+    ("dashboard",       "monitoring",     "Dashboard"),
 ]
 _ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
 
