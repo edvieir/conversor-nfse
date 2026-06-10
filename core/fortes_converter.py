@@ -85,31 +85,32 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
 
 
 def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str) -> str:
-    f = [""] * 49
+    f = [""] * 43
     f[0]  = "PAR"
     f[1]  = str(par_id)
     f[2]  = nome.upper()[:60]
     f[3]  = uf
     f[4]  = cnpj
-    f[5]  = im
-    f[7]  = "N"
-    f[12] = "N"
+    f[5]  = im       # IM
+    f[6]  = ""       # inscricao estadual
+    f[7]  = "N"      # contribuinte ISS
+    f[11] = "N"
+    f[13] = "N"
     f[14] = "N"
-    f[15] = "N"
-    f[21] = "0"
-    f[29] = "N"
+    f[19] = "0"
+    f[26] = "N"
+    f[30] = "N"
+    f[31] = "3"
+    f[33] = "N"
     f[34] = "N"
-    f[35] = "3"
+    f[36] = "N"
+    f[37] = "0"
     f[38] = "N"
-    f[39] = "N"
-    f[42] = "N"
-    f[43] = "0"
-    f[44] = "N"
     return "|".join(f)
 
 
 def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str) -> str:
-    f = [""] * 45
+    f = [""] * 44
     f[0]  = "ESI"
     f[1]  = "0001"
     f[2]  = str(par_id)
@@ -123,8 +124,8 @@ def _esi_line(par_id: int, data_emi: str, num_nota: str, v_total: str) -> str:
     f[25] = "0"
     f[28] = data_emi
     f[31] = "0"
-    f[43] = "N"
-    f[44] = ""
+    f[42] = "N"
+    f[43] = ""   # trailing pipe
     return "|".join(f)
 
 

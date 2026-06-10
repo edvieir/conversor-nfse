@@ -66,35 +66,28 @@ def render():
 
         col1, col2 = st.columns(2, gap="medium")
         with col1:
-            st.markdown(_label("Nome da Empresa (Tomador)"), unsafe_allow_html=True)
-            nome_empresa = st.text_input(
-                "nome_empresa",
-                placeholder="ex: POSTO CEARA LTDA",
-                label_visibility="collapsed",
-                key="fortes_nome_empresa",
-            )
-        with col2:
-            st.markdown(_label("Código de Serviço Fortes"), unsafe_allow_html=True)
+            st.markdown(_label("Código de Serviço Fortes *"), unsafe_allow_html=True)
             cod_servico = st.text_input(
                 "cod_servico",
-                placeholder="ex: 10001 (deixe em branco se não souber)",
+                placeholder="ex: 10001",
                 label_visibility="collapsed",
                 key="fortes_cod_servico",
             )
-
-        st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
-        observacao = st.text_input(
-            "observacao",
-            value="NFS-e Importacao",
-            label_visibility="collapsed",
-            key="fortes_observacao",
-        )
+        with col2:
+            st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
+            observacao = st.text_input(
+                "observacao",
+                value="NFS-e Importacao",
+                label_visibility="collapsed",
+                key="fortes_observacao",
+            )
 
         ic_info = icon("info", 13, "#475569")
         st.markdown(
             f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; O código de serviço é um código interno do sistema Fortes '
-            f'(ex.: 10001, 10013). Consulte a tabela de serviços cadastrada no seu Fortes.</div>',
+            f'{ic_info}&nbsp; O nome da empresa é extraído automaticamente dos XMLs. '
+            f'O código de serviço é interno do Fortes (ex.: 10001) — consulte a tabela de atividades '
+            f'cadastrada no seu sistema.</div>',
             unsafe_allow_html=True,
         )
 
@@ -111,19 +104,11 @@ def render():
 
         btn_gerar = st.button(
             "Gerar Arquivo Fortes (.fs)",
-            disabled=(not arquivos or not nome_empresa.strip()),
+            disabled=(not arquivos),
             use_container_width=True,
             type="primary",
             key="btn_gerar_fortes",
         )
-
-        if not nome_empresa.strip() and arquivos:
-            ic_warn = icon("alert-triangle", 13, "#C97400")
-            st.markdown(
-                f'<div style="color:#C97400;font-size:.75rem;margin-top:4px;">'
-                f'{ic_warn}&nbsp; Preencha o nome da empresa para continuar.</div>',
-                unsafe_allow_html=True,
-            )
 
         if btn_gerar:
             from core.fortes_converter import parse_nfse_xml, gerar_fortes
@@ -151,9 +136,11 @@ def render():
 
             if notas:
                 try:
+                    # Nome da empresa = tomador extraído do XML
+                    nome_empresa = notas[0].get("toma_nome", "") or "EMPRESA"
                     conteudo = gerar_fortes(
                         notas=notas,
-                        nome_empresa=nome_empresa.strip(),
+                        nome_empresa=nome_empresa,
                         observacao=observacao.strip() or "NFS-e Importacao",
                         cod_servico=cod_servico.strip(),
                     )
