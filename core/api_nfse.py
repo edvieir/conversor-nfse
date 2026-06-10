@@ -163,11 +163,14 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
             if resp.status_code == 404:
                 log.append(f"      PDF 404 — chave nao disponivel neste municipio")
                 return None
-            if resp.status_code in (429, 502, 503):
-                espera = 20 * tentativa
-                log.append(f"      PDF {resp.status_code} — aguardando {espera}s (tentativa {tentativa}/{_RETRIES})")
+            if resp.status_code == 429:
+                espera = 15 * tentativa
+                log.append(f"      PDF 429 — aguardando {espera}s")
                 time.sleep(espera)
                 continue
+            if resp.status_code in (502, 503):
+                log.append(f"      PDF {resp.status_code} — backend do municipio indisponivel")
+                return None
             if not resp.ok:
                 log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
                 return None
@@ -325,7 +328,7 @@ def baixar_xmls_nfse(
                                 pass
                             chave_pdf = chave_xml or chave
                             log.append(f"    -> baixando PDF chave_json={chave!r} chave_xml={chave_xml!r}")
-                            time.sleep(1)  # evita rate limit 429
+                            time.sleep(3)  # evita throttling no backend
                             pdf_bytes = _baixar_danfse(cert_path, key_path, cnpj_uso, chave_pdf, log)
                             if pdf_bytes:
                                 zf.writestr(f"pdf/nfse_{chave}.pdf", pdf_bytes)
