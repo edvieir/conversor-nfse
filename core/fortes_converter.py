@@ -64,7 +64,11 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         v_ret_irrf   = _t(inf_dps, "vRetIRRF")   or _t(inf_dps, "vIRRF")
         v_ret_inss   = _t(inf_dps, "vRetInss")   or _t(inf_dps, "vInss")
 
-    cnae = _t(inf_dps, "CNAE") if inf_dps is not None else ""
+    cnae = ""
+    c_trib_mun = ""
+    if inf_dps is not None:
+        cnae = _t(inf_dps, "CNAE") or _t(inf_dps, "cNBS")
+        c_trib_mun = _t(inf_dps, "cTribMun")
 
     d_compet = _tv("dCompet")
     if not d_compet:
@@ -94,7 +98,8 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         "emit_cmun": emit_cmun, "emit_cep": emit_cep, "emit_fone": emit_fone,
         "toma_cnpj": toma_cnpj, "toma_nome": toma_nome,
         "v_bc": v_bc, "v_iss": v_iss, "v_liq": v_liq, "p_aliq": p_aliq,
-        "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso, "cnae": cnae,
+        "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso,
+        "cnae": cnae, "c_trib_mun": c_trib_mun,
         "v_ret_cofins": v_ret_cofins, "v_ret_pis": v_ret_pis,
         "v_ret_csl": v_ret_csl, "v_ret_irrf": v_ret_irrf, "v_ret_inss": v_ret_inss,
     }
@@ -188,7 +193,8 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""),
         ))
-        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], cod_servico,
+        serv_code = cod_servico or n.get("c_trib_mun", "")
+        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], serv_code,
                                 n["v_bc"], cnae=n.get("cnae","")))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
