@@ -158,7 +158,10 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
     url = f"{_DANFSE_URL}/{chave}"
     hdrs_req = {"Accept": "application/pdf"}
     params = {"cnpjConsulta": cnpj}
-    for tentativa in range(1, _RETRIES_DANFSE + 1):
+    tentativa = 0
+    tentativas_429 = 0
+    while tentativa < _RETRIES_DANFSE:
+        tentativa += 1
         try:
             with _make_session(cert_path, key_path) as s:
                 resp = s.get(url, params=params, headers=hdrs_req, timeout=TIMEOUT)
@@ -166,7 +169,9 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
                 log.append(f"      PDF 404 — chave nao disponivel neste municipio")
                 return None
             if resp.status_code == 429:
-                espera = 15 * tentativa
+                tentativas_429 += 1
+                tentativa -= 1  # 429 nao conta como tentativa de 502
+                espera = 10 * tentativas_429
                 log.append(f"      PDF 429 — aguardando {espera}s")
                 time.sleep(espera)
                 continue
