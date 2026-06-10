@@ -21,7 +21,8 @@ from datetime import date
 
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
-_RETRIES  = 3
+_RETRIES       = 3
+_RETRIES_DANFSE = 5
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -155,19 +156,16 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
     url = f"{_DANFSE_URL}/{chave}"
     hdrs_req = {"Accept": "application/pdf"}
     params = {"cnpjConsulta": cnpj}
-    for tentativa in range(1, _RETRIES + 1):
+    for tentativa in range(1, _RETRIES_DANFSE + 1):
         try:
             with _make_session(cert_path, key_path) as s:
                 resp = s.get(url, params=params, headers=hdrs_req, timeout=TIMEOUT)
             if resp.status_code == 404:
                 log.append(f"      PDF 404 — chave nao disponivel neste municipio")
                 return None
-            if resp.status_code == 502:
-                log.append(f"      PDF 502 — backend do municipio temporariamente indisponivel")
-                return None
-            if resp.status_code == 429:
-                espera = 30 * tentativa
-                log.append(f"      PDF 429 — aguardando {espera}s")
+            if resp.status_code in (429, 502, 503):
+                espera = 20 * tentativa
+                log.append(f"      PDF {resp.status_code} — aguardando {espera}s (tentativa {tentativa}/{_RETRIES})")
                 time.sleep(espera)
                 continue
             if not resp.ok:
