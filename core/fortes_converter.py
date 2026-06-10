@@ -221,5 +221,5 @@ def gerar_fortes(
         linhas.append(_esi_line(par_id, data_emi, num_nota, v_total, n.get("chave_acesso", "")))
         linhas.append(_ies_line(v_total, tributacao, aliq, cod_servico, v_bc))
 
-    linhas.append(f"TRA|{len(linhas)}")
+    linhas.append(f"TRA|{len(linhas) + 1}")
     return "\r\n".join(linhas) + "\r\n"
