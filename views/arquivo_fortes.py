@@ -64,23 +64,14 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2, gap="medium")
-        with col1:
-            st.markdown(_label("Nome da Empresa"), unsafe_allow_html=True)
-            nome_empresa_input = st.text_input(
-                "nome_empresa",
-                placeholder="ex: POSTO CEARA LTDA",
-                label_visibility="collapsed",
-                key="fortes_nome_empresa",
-            )
-        with col2:
-            st.markdown(_label("Código de Serviço Fortes"), unsafe_allow_html=True)
-            cod_servico = st.text_input(
-                "cod_servico",
-                placeholder="ex: 10001",
-                label_visibility="collapsed",
-                key="fortes_cod_servico",
-            )
+        st.markdown(_label("Nome da Empresa"), unsafe_allow_html=True)
+        nome_empresa_input = st.text_input(
+            "nome_empresa",
+            placeholder="ex: POSTO CEARA LTDA",
+            label_visibility="collapsed",
+            key="fortes_nome_empresa",
+        )
+        cod_servico = ""
 
         st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
         observacao = st.text_input(
@@ -94,9 +85,7 @@ def render():
         st.markdown(
             f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
             f'{ic_info}&nbsp; O nome da empresa aparecerá no cabeçalho do arquivo. '
-            f'Se deixar em branco, será usado o nome do tomador extraído dos XMLs. '
-            f'O código de serviço é interno do Fortes — consulte a tabela de atividades '
-            f'cadastrada no seu sistema.</div>',
+            f'Se deixar em branco, será usado o nome do tomador extraído dos XMLs.</div>',
             unsafe_allow_html=True,
         )
 
