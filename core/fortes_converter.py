@@ -74,12 +74,11 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     v_ret_irrf   = (_t(ret_fed, "vRetIRRF")   or _t(ret_fed, "vIRRF"))   if ret_fed is not None else ""
     v_ret_inss   = (_t(ret_fed, "vRetInss")   or _t(ret_fed, "vInss"))   if ret_fed is not None else ""
 
-    # CNAE do serviço
+    # CNAE do serviço — tenta vários caminhos possíveis no XML nacional
     cnae = ""
     if inf_dps is not None:
-        serv = inf_dps.find(f".//{{{_NS}}}serv")
-        if serv is not None:
-            cnae = _t(serv, "CNAE") or _t(serv, "cnae")
+        cnae = (_t(inf_dps, "CNAE") or _t(inf_dps, "cNAE") or
+                _t(inf_dps, "cnae") or _t(inf_dps, "codCNAE"))
 
     d_compet = _tv("dCompet")
     if not d_compet:
@@ -154,12 +153,12 @@ def _par_line(par_id: int, nome: str, uf: str, cnpj: str, im: str,
     f[13] = "N"       # 14: Fornecedor de Prod. Primário
     f[14] = "N"       # 15: Sociedade Simples
     f[15] = cep       # 16: CEP
-    f[16] = lgr       # 17: Logradouro
-    f[17] = nro       # 18: Número
-    f[18] = cpl       # 19: Complemento
-    f[19] = bairro    # 20: Bairro
-    f[20] = uf        # 21: UF endereço
-    f[21] = ""        # 22: reservado
+    f[16] = ""        # 17: Tipo do Logradouro (não disponível)
+    f[17] = lgr       # 18: Logradouro
+    f[18] = nro       # 19: Número
+    f[19] = cpl       # 20: Complemento
+    f[20] = bairro    # 21: Bairro
+    f[21] = uf        # 22: UF endereço
     f[22] = cmun      # 23: Código Município IBGE (somente números)
     # f[23] DDD
     # f[24] Fone
