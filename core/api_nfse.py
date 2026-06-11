@@ -14,8 +14,6 @@ import zipfile
 import tempfile
 import os
 import time
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
@@ -23,8 +21,7 @@ from datetime import date
 
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
-_RETRIES       = 3
-_RETRIES_DANFSE = 5
+_RETRIES  = 3
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -32,6 +29,10 @@ def _limpar_cnpj(cnpj: str) -> str:
 
 
 def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
+    """
+    Extrai cert/key do .pfx para arquivos temporários PEM.
+    Retorna (cert_path, key_path, cnpj_extraido).
+    """
     from cryptography.hazmat.primitives.serialization import (
         Encoding, PrivateFormat, NoEncryption,
     )
@@ -44,7 +45,9 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
     senha_bytes = senha.encode() if isinstance(senha, str) else senha
     private_key, certificate, additional_certs = load_key_and_certificates(pfx_bytes, senha_bytes)
 
+    # ── Extrai CNPJ do certificado ──────────────────────────────────────────
     cnpj_cert = ""
+    # Tenta SubjectAltName OID 2.16.76.1.3.3 (CNPJ ICP-Brasil)
     try:
         from cryptography.x509 import SubjectAlternativeName, OtherName
         san_ext = certificate.extensions.get_extension_for_class(SubjectAlternativeName)
@@ -58,6 +61,7 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
         pass
 
     if not cnpj_cert:
+        # Tenta CN: "RAZAO SOCIAL:12345678000199"
         try:
             cn = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
             digits = re.sub(r"\D", "", cn.split(":")[-1])
@@ -75,11 +79,15 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
         except Exception:
             pass
 
+    # ── Salva PEM (inclui cadeia intermediária ICP-Brasil) ──────────────────
     cert_pem = certificate.public_bytes(Encoding.PEM)
     if additional_certs:
         for ac in additional_certs:
             cert_pem += ac.public_bytes(Encoding.PEM)
-    key_pem = private_key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+    # PKCS8 é o formato esperado pela maioria dos servidores mTLS modernos
+    key_pem = private_key.private_bytes(
+        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
+    )
     cert_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
     key_tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
     cert_tmp.write(cert_pem); cert_tmp.flush(); cert_tmp.close()
@@ -89,6 +97,7 @@ def _extrair_cert_pfx(pfx_bytes: bytes, senha: str):
 
 
 def extrair_cnpj_do_pfx(pfx_bytes: bytes, senha: str) -> str:
+    """Utilitário público: retorna apenas o CNPJ extraído do .pfx."""
     try:
         c, k, cnpj = _extrair_cert_pfx(pfx_bytes, senha)
         for p in (c, k):
@@ -100,14 +109,16 @@ def extrair_cnpj_do_pfx(pfx_bytes: bytes, senha: str) -> str:
 
 
 def _decodificar_xml(arquivo_xml_b64: str) -> bytes:
+    """Decodifica ArquivoXml: base64 → gzip decompress → XML bytes."""
     raw = base64.b64decode(arquivo_xml_b64)
     try:
         return gzip.decompress(raw)
     except Exception:
-        return raw
+        return raw  # já era XML puro sem compressão
 
 
 class _MTLSAdapter(HTTPAdapter):
+    """HTTPAdapter com SSLContext configurado para mTLS."""
     def __init__(self, cert_path: str, key_path: str, **kwargs):
         self._cert_path = cert_path
         self._key_path  = key_path
@@ -128,11 +139,17 @@ class _MTLSAdapter(HTTPAdapter):
 
 def _make_session(cert_path: str, key_path: str) -> requests.Session:
     s = requests.Session()
-    s.mount("https://", _MTLSAdapter(cert_path, key_path))
+    adapter = _MTLSAdapter(cert_path, key_path)
+    s.mount("https://", adapter)
     return s
 
 
 def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict | None:
+    """
+    GET /DFe/{NSU}?cnpjConsulta={CNPJ}&lote=true
+    Retorna None quando 404 (sem mais documentos).
+    Tenta até _RETRIES vezes com backoff em caso de timeout.
+    """
     url    = f"{BASE_URL}/DFe/{nsu}"
     params = {"cnpjConsulta": cnpj, "lote": "true"}
     ultimo_erro = None
@@ -147,90 +164,28 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
         except Exception as e:
             ultimo_erro = e
             if tentativa < _RETRIES:
-                time.sleep(5 * tentativa)
+                time.sleep(5 * tentativa)  # 5s, 10s entre tentativas
     raise ultimo_erro
 
 
-_DANFSE_URL = "https://adn.nfse.gov.br/danfse"
-
-
-def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list, nsu: int = 0) -> bytes | None:
-    url = f"{_DANFSE_URL}/{chave}"
-    hdrs_req = {"Accept": "application/pdf"}
-    params = {"cnpjConsulta": cnpj}
-    tentativa = 0
-    tentativas_429 = 0
-    while tentativa < _RETRIES_DANFSE:
-        tentativa += 1
+def _baixar_danfse(cert_path: str, key_path: str, chave: str) -> bytes | None:
+    """
+    GET /DANFSe/{chaveAcesso} — retorna PDF da nota.
+    Retorna None se não disponível (404 / erro). PDF não é crítico.
+    """
+    url = f"{BASE_URL}/DANFSe/{chave}"
+    for tentativa in range(1, _RETRIES + 1):
         try:
             with _make_session(cert_path, key_path) as s:
-                resp = s.get(url, params=params, headers=hdrs_req, timeout=TIMEOUT)
+                resp = s.get(url, timeout=TIMEOUT)
             if resp.status_code == 404:
-                log.append(f"      PDF 404 — chave nao disponivel neste municipio")
                 return None
-            if resp.status_code == 429:
-                tentativas_429 += 1
-                tentativa -= 1  # 429 nao conta como tentativa de 502
-                espera = 10 * tentativas_429
-                log.append(f"      PDF 429 — aguardando {espera}s")
-                time.sleep(espera)
-                continue
-            if resp.status_code in (502, 503):
-                if tentativa < _RETRIES_DANFSE:
-                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 4s")
-                    time.sleep(4)
-                    continue
-                log.append(f"      PDF {resp.status_code} — backend indisponivel apos {tentativa} tentativas")
-                return None
-            if not resp.ok:
-                log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
-                return None
-            ct = resp.headers.get("Content-Type", "")
-            if "pdf" not in ct.lower() and len(resp.content) < 200:
-                log.append(f"      PDF resposta inesperada (ct={ct}): {resp.text[:120]}")
-                return None
+            resp.raise_for_status()
             return resp.content
-        except Exception as e:
-            log.append(f"      PDF tentativa {tentativa} falhou: {e}")
-            if tentativa < _RETRIES_DANFSE:
-                time.sleep(4)
+        except Exception:
+            if tentativa < _RETRIES:
+                time.sleep(5 * tentativa)
     return None
-
-
-_PDF_WORKERS = 4  # downloads paralelos de PDF
-
-
-def _baixar_pdfs_paralelo(
-    cert_path: str,
-    key_path: str,
-    cnpj: str,
-    tarefas: list[tuple],  # [(chave, nome_arquivo), ...]
-    log: list,
-    log_lock: threading.Lock,
-) -> dict[str, bytes]:
-    """Baixa múltiplos PDFs em paralelo. Retorna dict {nome_arquivo: bytes}."""
-    resultados: dict[str, bytes] = {}
-    res_lock = threading.Lock()
-
-    def baixar_um(chave: str, nome: str):
-        local_log: list[str] = []
-        pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
-        with log_lock:
-            log.extend(local_log)
-        if pdf:
-            with res_lock:
-                resultados[nome] = pdf
-
-    with ThreadPoolExecutor(max_workers=_PDF_WORKERS) as pool:
-        futures = {pool.submit(baixar_um, chave, nome): nome for chave, nome in tarefas}
-        for fut in as_completed(futures):
-            try:
-                fut.result()
-            except Exception as e:
-                with log_lock:
-                    log.append(f"      PDF worker erro: {e}")
-
-    return resultados
 
 
 def baixar_xmls_nfse(
@@ -239,11 +194,15 @@ def baixar_xmls_nfse(
     cnpj: str,
     data_ini: date,
     data_fim: date,
-    tipo: str = "tomados",
-    formato: str = "xml",
+    tipo: str = "tomados",    # "tomados" | "prestados" | "todos"
+    formato: str = "xml",     # "xml" | "pdf" | "ambos"
     progress_cb=None,
     log_cb=None,
 ) -> tuple[bytes, list[str]]:
+    """
+    Baixa NFS-e via NSU, filtra por período e tipo (tomados/prestados/todos).
+    Retorna ZIP com pasta xml/ e/ou pdf/ conforme `formato`.
+    """
     log: list[str] = []
     cert_path = key_path = None
 
@@ -254,7 +213,7 @@ def baixar_xmls_nfse(
 
         cnpj_uso = _limpar_cnpj(cnpj) if cnpj and cnpj.strip() else cnpj_cert
         if not cnpj_uso:
-            raise ValueError("CNPJ nao encontrado no certificado nem informado.")
+            raise ValueError("CNPJ não encontrado no certificado nem informado.")
         log.append(f"CNPJ: {cnpj_uso}  |  Tipo: {tipo}  |  Formato: {formato}")
         log.append("Conectando na API NFS-e (mTLS)...")
         if log_cb: log_cb(log)
@@ -264,176 +223,153 @@ def baixar_xmls_nfse(
         total_ok = 0
         erros    = 0
         lote_num = 0
-        log_lock = threading.Lock()
 
-        # acumula todos os XMLs aprovados antes de baixar PDFs em paralelo
-        xmls_aprovados: list[tuple[str, bytes, str]] = []  # (chave, xml_bytes, chave_pdf)
-
-        import xml.etree.ElementTree as _ET2
-
-        while True:
-            lote_num += 1
-            log.append(f"Consultando lote a partir do NSU {nsu}...")
-            if log_cb: log_cb(log)
-            resultado = _consultar_lote(cert_path, key_path, cnpj_uso, nsu)
-
-            if resultado is None:
-                log.append("Sem mais documentos (fim da fila).")
-                break
-
-            status = resultado.get("StatusProcessamento", "")
-            if status == "NENHUM_DOCUMENTO_LOCALIZADO":
-                log.append("Sem mais documentos.")
-                break
-            if status == "REJEICAO":
-                erros_api = resultado.get("Erros") or []
-                msgs = "; ".join(e.get("Descricao", "") for e in erros_api)
-                raise ValueError(f"API rejeitou a consulta: {msgs}")
-
-            lote = resultado.get("LoteDFe") or []
-            log.append(f"  Lote {lote_num}: {len(lote)} documento(s)")
-
-            nsu_max = nsu
-            for doc in lote:
-                nsu_doc = doc.get("NSU") or 0
-                if nsu_doc > nsu_max:
-                    nsu_max = nsu_doc
-
-                tipo_doc = doc.get("TipoDocumento", "")
-                data_str = (doc.get("DataHoraGeracao") or "")[:10]
-
-                log.append(f"    NSU={nsu_doc} tipo={tipo_doc} data={data_str}")
-
-                if tipo_doc != "NFSE":
-                    continue
-
-                arquivo_b64 = doc.get("ArquivoXml")
-                if not arquivo_b64:
-                    log.append(f"    -> sem ArquivoXml, ignorado")
-                    continue
-
-                chave = doc.get("ChaveAcesso") or str(nsu_doc)
-                try:
-                    xml_bytes = _decodificar_xml(arquivo_b64)
-
-                    try:
-                        _root = _ET2.fromstring(xml_bytes)
-
-                        if tipo != "todos":
-                            _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
-                            _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
-
-                            cnpj_toma  = ""
-                            cnpj_prest = ""
-                            if _toma_el is not None:
-                                cnpj_toma = re.sub(r"\D", "", next(
-                                    (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
-                                ))
-                            if _prest_el is not None:
-                                cnpj_prest = re.sub(r"\D", "", next(
-                                    (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
-                                ))
-
-                            if tipo == "tomados":
-                                if cnpj_toma and cnpj_toma != cnpj_uso:
-                                    log.append(f"    -> servico prestado (nao tomado), ignorado")
-                                    continue
-                            elif tipo == "prestados":
-                                if cnpj_prest and cnpj_prest != cnpj_uso:
-                                    log.append(f"    -> servico tomado (nao prestado), ignorado")
-                                    continue
-
-                        _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
-                        if _el is not None and _el.text:
-                            try:
-                                data_compet = date.fromisoformat(_el.text.strip()[:10])
-                                compet_ym = (data_compet.year, data_compet.month)
-                                ini_ym    = (data_ini.year,    data_ini.month)
-                                fim_ym    = (data_fim.year,    data_fim.month)
-                                if not (ini_ym <= compet_ym <= fim_ym):
-                                    log.append(f"    -> competencia {data_compet.year}-{data_compet.month:02d} fora do periodo, ignorado")
-                                    continue
-                            except ValueError:
-                                log.append(f"    -> dCompet formato invalido '{_el.text}', incluido")
-                    except Exception as parse_err:
-                        log.append(f"    -> aviso parse XML: {parse_err}, incluido")
-
-                    # determina chave para PDF
-                    chave_pdf = chave
-                    if formato in ("pdf", "ambos"):
-                        try:
-                            _rx = _ET2.fromstring(xml_bytes)
-                            for _tag in ("chNFSe", "cChaveNFSe", "chAcesso", "chaveAcesso"):
-                                _el2 = next((e for e in _rx.iter() if e.tag.endswith(_tag)), None)
-                                if _el2 is not None and _el2.text and len(_el2.text.strip()) >= 40:
-                                    chave_pdf = _el2.text.strip()
-                                    break
-                        except Exception:
-                            pass
-
-                    xmls_aprovados.append((chave, xml_bytes, chave_pdf))
-                    total_ok += 1
-
-                except Exception as e:
-                    erros += 1
-                    log.append(f"    -> ERRO: {e}")
-
-            if nsu_max <= nsu:
-                log.append("NSU nao avancou, encerrando.")
-                if log_cb: log_cb(log)
-                break
-            nsu = nsu_max + 1
-
-            if log_cb: log_cb(log)
-            if progress_cb:
-                progress_cb(min(lote_num / (lote_num + 3), 0.5))
-
-        log.append(f"  Total de NFS-e no periodo: {total_ok}")
-        if log_cb: log_cb(log)
-
-        # ── Monta ZIP ────────────────────────────────────────────────────────
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            while True:
+                lote_num += 1
+                log.append(f"Consultando lote a partir do NSU {nsu}...")
+                resultado = _consultar_lote(cert_path, key_path, cnpj_uso, nsu)
 
-            # salva XMLs
-            if formato in ("xml", "ambos"):
-                for chave, xml_bytes, _ in xmls_aprovados:
-                    zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
-                log.append(f"  {len(xmls_aprovados)} XMLs salvos.")
-                if log_cb: log_cb(log)
+                # 404 ou status sem documentos = fim
+                if resultado is None:
+                    log.append("Sem mais documentos (fim da fila).")
+                    break
 
-            # gera PDFs localmente a partir do XML
-            if formato in ("pdf", "ambos") and xmls_aprovados:
-                from core.danfse_pdf import gerar_danfse_pdf
-                log.append(f"  Gerando {len(xmls_aprovados)} PDFs localmente...")
-                if log_cb: log_cb(log)
+                status = resultado.get("StatusProcessamento", "")
+                if status == "NENHUM_DOCUMENTO_LOCALIZADO":
+                    log.append("Sem mais documentos.")
+                    break
+                if status == "REJEICAO":
+                    erros_api = resultado.get("Erros") or []
+                    msgs = "; ".join(e.get("Descricao", "") for e in erros_api)
+                    raise ValueError(f"API rejeitou a consulta: {msgs}")
 
-                pdf_ok = 0
-                for chave, xml_b, chave_pdf in xmls_aprovados:
-                    # extrai nNFSe para compor o nome do arquivo
+                lote = resultado.get("LoteDFe") or []
+                log.append(f"  Lote {lote_num}: {len(lote)} documento(s)")
+
+                nsu_max = nsu
+                for doc in lote:
+                    nsu_doc = doc.get("NSU") or 0
+                    if nsu_doc > nsu_max:
+                        nsu_max = nsu_doc
+
+                    tipo_doc = doc.get("TipoDocumento", "")
+                    data_str = (doc.get("DataHoraGeracao") or "")[:10]
+
+                    # Log todos os documentos para diagnóstico
+                    log.append(f"    NSU={nsu_doc} tipo={tipo_doc} data={data_str}")
+
+                    if tipo_doc != "NFSE":
+                        continue
+
+                    arquivo_b64 = doc.get("ArquivoXml")
+                    if not arquivo_b64:
+                        log.append(f"    → sem ArquivoXml, ignorado")
+                        continue
+
+                    chave = doc.get("ChaveAcesso") or str(nsu_doc)
                     try:
-                        import xml.etree.ElementTree as _ET3
-                        _rx = _ET3.fromstring(xml_b)
-                        _n_el = next((e for e in _rx.iter() if e.tag.endswith("nNFSe")), None)
-                        n_nfse = (_n_el.text or "").strip() if _n_el is not None else ""
-                    except Exception:
-                        n_nfse = ""
-                    nome_pdf = f"nfse_{n_nfse}_{chave[:8]}.pdf" if n_nfse else f"nfse_{chave[:8]}.pdf"
-                    try:
-                        pdf_bytes = gerar_danfse_pdf(xml_b)
-                        zf.writestr(f"pdf/{nome_pdf}", pdf_bytes)
-                        pdf_ok += 1
-                        log.append(f"    -> PDF gerado: pdf/{nome_pdf}")
-                    except Exception as pdf_err:
-                        log.append(f"    -> ERRO ao gerar PDF {nome_pdf}: {pdf_err}")
-                log.append(f"  PDFs gerados: {pdf_ok}/{len(xmls_aprovados)}")
+                        xml_bytes = _decodificar_xml(arquivo_b64)
+
+                        import xml.etree.ElementTree as _ET2
+                        try:
+                            _root = _ET2.fromstring(xml_bytes)
+
+                            # ── Filtro tomados / prestados ──────────────────
+                            if tipo != "todos":
+                                _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
+                                _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
+
+                                cnpj_toma  = ""
+                                cnpj_prest = ""
+                                if _toma_el is not None:
+                                    cnpj_toma = re.sub(r"\D", "", next(
+                                        (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
+                                    ))
+                                if _prest_el is not None:
+                                    cnpj_prest = re.sub(r"\D", "", next(
+                                        (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
+                                    ))
+
+                                if tipo == "tomados":
+                                    if cnpj_toma and cnpj_toma != cnpj_uso:
+                                        log.append(f"    → serviço prestado (não tomado), ignorado")
+                                        continue
+                                elif tipo == "prestados":
+                                    if cnpj_prest and cnpj_prest != cnpj_uso:
+                                        log.append(f"    → serviço tomado (não prestado), ignorado")
+                                        continue
+
+                            # Filtra pela competência (dCompet) dentro do XML
+                            _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
+                            if _el is not None and _el.text:
+                                data_compet = date.fromisoformat(_el.text.strip()[:10])
+                                if not (data_ini <= data_compet <= data_fim):
+                                    log.append(f"    → competência {data_compet} fora do período, ignorado")
+                                    continue
+                        except Exception:
+                            # Se não conseguir ler dCompet, usa DataHoraGeracao como fallback
+                            if data_str:
+                                try:
+                                    data_doc = date.fromisoformat(data_str)
+                                    if not (data_ini <= data_doc <= data_fim):
+                                        log.append(f"    → fora do período ({data_ini}..{data_fim}), ignorado")
+                                        continue
+                                except ValueError:
+                                    pass
+
+                        # ── Salva XML ───────────────────────────────────────
+                        if formato in ("xml", "ambos"):
+                            zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
+                            log.append(f"    → XML salvo: xml/nfse_{chave}.xml")
+
+                        # ── Salva PDF (geração local) ────────────────────────
+                        if formato in ("pdf", "ambos"):
+                            from core.danfse_pdf import gerar_danfse_pdf
+                            # extrai nNFSe para compor nome do arquivo
+                            try:
+                                _n_el = next(
+                                    (e for e in _root.iter() if e.tag.endswith("nNFSe")),
+                                    None,
+                                )
+                                n_nfse_pdf = (_n_el.text or "").strip() if _n_el is not None else ""
+                            except Exception:
+                                n_nfse_pdf = ""
+                            nome_pdf = (
+                                f"nfse_{n_nfse_pdf}_{chave[:8]}.pdf"
+                                if n_nfse_pdf
+                                else f"nfse_{chave[:8]}.pdf"
+                            )
+                            try:
+                                pdf_bytes = gerar_danfse_pdf(xml_bytes)
+                                zf.writestr(f"pdf/{nome_pdf}", pdf_bytes)
+                                log.append(f"    → PDF gerado: pdf/{nome_pdf}")
+                            except Exception as pdf_err:
+                                log.append(f"    → ERRO ao gerar PDF {nome_pdf}: {pdf_err}")
+
+                        total_ok += 1
+                        if formato == "xml":
+                            log.append(f"    → SALVO: xml/nfse_{chave}.xml")
+
+                    except Exception as e:
+                        erros += 1
+                        log.append(f"    → ERRO ao processar: {e}")
+
+                # Avança NSU: usa o maior NSU do lote + 1
+                if nsu_max <= nsu:
+                    log.append("NSU não avançou, encerrando.")
+                    if log_cb: log_cb(log)
+                    break
+                nsu = nsu_max + 1
+
                 if log_cb: log_cb(log)
                 if progress_cb:
-                    progress_cb(0.95)
+                    progress_cb(min(lote_num / (lote_num + 1), 0.95))
 
         if progress_cb:
             progress_cb(1.0)
 
-        log.append(f"Concluido. {total_ok} NFS-e no periodo, {erros} erros.")
+        log.append(f"Concluído. {total_ok} NFS-e no período, {erros} erros.")
         buf.seek(0)
         return (buf.read() if total_ok > 0 else b""), log
 

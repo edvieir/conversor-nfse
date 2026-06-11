@@ -60,11 +60,15 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     if inf_dps is not None:
         v_ret_cofins = _t(inf_dps, "vRetCofins") or _t(inf_dps, "vCofins")
         v_ret_pis    = _t(inf_dps, "vRetPis")    or _t(inf_dps, "vPis")
-        v_ret_csl    = _t(inf_dps, "vRetCsll")   or _t(inf_dps, "vCsll")
+        v_ret_csl    = _t(inf_dps, "vRetCSLL")   or _t(inf_dps, "vRetCsll") or _t(inf_dps, "vCsll")
         v_ret_irrf   = _t(inf_dps, "vRetIRRF")   or _t(inf_dps, "vIRRF")
         v_ret_inss   = _t(inf_dps, "vRetInss")   or _t(inf_dps, "vInss")
 
-    cnae = _t(inf_dps, "CNAE") if inf_dps is not None else ""
+    c_trib_mun = ""
+    serie = ""
+    if inf_dps is not None:
+        c_trib_mun = _t(inf_dps, "cTribMun")
+        serie = _t(inf_dps, "serie")
 
     d_compet = _tv("dCompet")
     if not d_compet:
@@ -94,7 +98,8 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         "emit_cmun": emit_cmun, "emit_cep": emit_cep, "emit_fone": emit_fone,
         "toma_cnpj": toma_cnpj, "toma_nome": toma_nome,
         "v_bc": v_bc, "v_iss": v_iss, "v_liq": v_liq, "p_aliq": p_aliq,
-        "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso, "cnae": cnae,
+        "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso,
+        "c_trib_mun": c_trib_mun, "serie": serie,
         "v_ret_cofins": v_ret_cofins, "v_ret_pis": v_ret_pis,
         "v_ret_csl": v_ret_csl, "v_ret_irrf": v_ret_irrf, "v_ret_inss": v_ret_inss,
     }
@@ -123,23 +128,25 @@ def _par_line(par_id, nome, uf, cnpj, im,
 
 
 def _esi_line(par_id, data_emi, num_nota, v_total, chave="",
-              v_cofins="", v_pis="", v_csl="", v_irrf="", v_inss=""):
+              v_cofins="", v_pis="", v_csl="", v_irrf="", v_inss="", serie=""):
     f = [""] * 21
     f[0]="ESI"; f[1]="0001"; f[2]=str(par_id); f[3]=data_emi
     f[4]="S";   f[5]="50";   f[6]="N";         f[7]=num_nota; f[8]=v_total
     f[11]=v_cofins; f[12]=v_pis; f[13]=v_csl; f[14]=v_irrf; f[15]=v_inss
+    f[16]=serie       # campo 17: Série (obrigatório para NFS-e)
     f[19]=chave[:44] if chave else ""
     return "|".join(f)
 
 
-def _ies_line(v_total, tributacao, aliq, cod_servico, v_bc, cnae=""):
+def _ies_line(v_total, tributacao, aliq, cod_servico):
     f = [""] * 11
     f[0]="IES"; f[1]=v_total; f[2]="N"; f[3]=tributacao
-    f[4]=v_total; f[5]=aliq; f[6]=cod_servico; f[7]=cnae; f[8]="98"; f[10]=v_bc
+    f[4]=v_total; f[5]=aliq; f[6]=cod_servico
+    # f[7]=Natureza do Crédito (vazio), f[8]=CST COFINS/PIS, f[9]=Base COFINS/PIS, f[10]=Código da Obra
     return "|".join(f)
 
 
-def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico=""):
+def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico="", mapeamento_servico=None):
     if not notas:
         return ""
 
@@ -186,10 +193,16 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             par_id, data_emi, num_nota, v_total, n.get("chave_acesso",""),
             v_cofins=n.get("v_ret_cofins",""), v_pis=n.get("v_ret_pis",""),
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
-            v_inss=n.get("v_ret_inss",""),
+            v_inss=n.get("v_ret_inss",""), serie=n.get("serie",""),
         ))
-        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], cod_servico,
-                                n["v_bc"], cnae=n.get("cnae","")))
+        # Resolve cod_servico: mapeamento por cTribMun > fallback cod_servico global
+        c_trib = n.get("c_trib_mun", "")
+        serv = (
+            (mapeamento_servico or {}).get(c_trib)
+            or (mapeamento_servico or {}).get(c_trib.lstrip("0") or "0")
+            or cod_servico
+        )
+        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], serv))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
     return "\r\n".join(linhas) + "\r\n"

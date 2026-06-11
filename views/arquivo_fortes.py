@@ -27,6 +27,7 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Step 1: Upload XMLs ────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("upload", 16, "#00CED1")
         st.markdown(f"""
@@ -53,6 +54,7 @@ def render():
                 unsafe_allow_html=True,
             )
 
+    # ── Step 2: Configurações ──────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("settings", 16, "#00CED1")
         st.markdown(f"""
@@ -64,31 +66,28 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown(_label("Nome da Empresa"), unsafe_allow_html=True)
-        nome_empresa_input = st.text_input(
-            "nome_empresa",
-            placeholder="ex: POSTO CEARA LTDA",
-            label_visibility="collapsed",
-            key="fortes_nome_empresa",
-        )
-        cod_servico = ""
+        col1, col2 = st.columns(2, gap="medium")
+        with col1:
+            st.markdown(_label("Nome da Empresa (Tomador)"), unsafe_allow_html=True)
+            nome_empresa = st.text_input(
+                "nome_empresa",
+                placeholder="ex: POSTO CEARA LTDA",
+                label_visibility="collapsed",
+                key="fortes_nome_empresa",
+            )
+        with col2:
+            st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
+            observacao = st.text_input(
+                "observacao",
+                value="NFS-e Importacao",
+                label_visibility="collapsed",
+                key="fortes_observacao",
+            )
 
-        st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
-        observacao = st.text_input(
-            "observacao",
-            value="NFS-e Importacao",
-            label_visibility="collapsed",
-            key="fortes_observacao",
-        )
+        # Parse mapeamento into dict
+        mapeamento = {}
 
-        ic_info = icon("info", 13, "#475569")
-        st.markdown(
-            f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; O nome da empresa aparecerá no cabeçalho do arquivo. '
-            f'Se deixar em branco, será usado o nome do tomador extraído dos XMLs.</div>',
-            unsafe_allow_html=True,
-        )
-
+    # ── Step 3: Gerar ─────────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("download", 16, "#00CED1")
         st.markdown(f"""
@@ -102,11 +101,19 @@ def render():
 
         btn_gerar = st.button(
             "Gerar Arquivo Fortes (.fs)",
-            disabled=(not arquivos),
+            disabled=(not arquivos or not nome_empresa.strip()),
             use_container_width=True,
             type="primary",
             key="btn_gerar_fortes",
         )
+
+        if not nome_empresa.strip() and arquivos:
+            ic_warn = icon("alert-triangle", 13, "#C97400")
+            st.markdown(
+                f'<div style="color:#C97400;font-size:.75rem;margin-top:4px;">'
+                f'{ic_warn}&nbsp; Preencha o nome da empresa para continuar.</div>',
+                unsafe_allow_html=True,
+            )
 
         if btn_gerar:
             from core.fortes_converter import parse_nfse_xml, gerar_fortes
@@ -134,13 +141,11 @@ def render():
 
             if notas:
                 try:
-                    # Nome da empresa: usa o digitado ou cai no tomador do XML
-                    nome_empresa = nome_empresa_input.strip() or notas[0].get("toma_nome", "") or "EMPRESA"
                     conteudo = gerar_fortes(
                         notas=notas,
-                        nome_empresa=nome_empresa,
+                        nome_empresa=nome_empresa.strip(),
                         observacao=observacao.strip() or "NFS-e Importacao",
-                        cod_servico=cod_servico.strip(),
+                        mapeamento_servico=mapeamento,
                     )
 
                     hoje = date.today().strftime("%Y%m%d")
@@ -169,6 +174,7 @@ def render():
                         use_container_width=True,
                     )
 
+                    # Preview
                     with st.expander("Pré-visualização do arquivo (.fs)", expanded=False):
                         preview_lines = conteudo.splitlines()[:40]
                         st.code("\n".join(preview_lines), language="")

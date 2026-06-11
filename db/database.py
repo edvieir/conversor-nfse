@@ -119,13 +119,10 @@ def _init_pg():
                 UNIQUE(usuario, cnpj)
             )
         """)
+        # Add permissoes column if missing (migration for existing DBs)
         cur.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS
             permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'
-        """)
-        cur.execute("""
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS
-            validade DATE DEFAULT NULL
         """)
 
 
@@ -162,12 +159,9 @@ def _init_sqlite():
                 UNIQUE(usuario, cnpj)
             );
         """)
+    # Migration: add permissoes if not exists
     try:
         _exec("ALTER TABLE users ADD COLUMN permissoes TEXT DEFAULT 'conversor,baixar_xmls,certificados,milhao,dashboard'")
-    except Exception:
-        pass
-    try:
-        _exec("ALTER TABLE users ADD COLUMN validade DATE DEFAULT NULL")
     except Exception:
         pass
 
@@ -201,12 +195,16 @@ def _bootstrap_users():
         ("calebe", "calebe123", "Calebe",             "calebe@exemplo.com"),
     ]
 
+    ph = "%s" if _PG else "?"
+    conflict = "ON CONFLICT (username) DO NOTHING" if _PG else "OR IGNORE"
+    insert_kw = "INSERT" if _PG else "INSERT"
+
     for username, senha, nome, email in _FIXOS:
         pw_hash = bcrypt.hashpw(senha.encode(), bcrypt.gensalt(12)).decode()
         if _PG:
             sql = (
                 "INSERT INTO users (username, name, email, password_hash, role) "
-                "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (username) DO NOTHING"
+                f"VALUES (%s,%s,%s,%s,%s) ON CONFLICT (username) DO NOTHING"
             )
         else:
             sql = (
@@ -233,16 +231,6 @@ def _bootstrap_users():
         if not u or not s:
             continue
         pw_hash = bcrypt.hashpw(s.encode(), bcrypt.gensalt(12)).decode()
-        if _PG:
-            sql = (
-                "INSERT INTO users (username, name, email, password_hash, role) "
-                "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (username) DO NOTHING"
-            )
-        else:
-            sql = (
-                "INSERT OR IGNORE INTO users "
-                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)"
-            )
         try:
             _exec(sql, (u, n, e, pw_hash, "user"))
         except Exception:
@@ -255,7 +243,7 @@ def _bootstrap_users():
 def get_user(username: str) -> dict | None:
     ph = "%s" if _PG else "?"
     return _exec(
-        f"SELECT username, name, email, password_hash, role, validade FROM users WHERE username = {ph}",
+        f"SELECT username, name, email, password_hash, role FROM users WHERE username = {ph}",
         (username.strip().lower(),),
         fetch_one=True,
     )
@@ -263,28 +251,22 @@ def get_user(username: str) -> dict | None:
 
 def list_users() -> list[dict]:
     return _exec(
-        "SELECT username, name, email, role, created_at, validade FROM users ORDER BY role DESC, created_at",
+        "SELECT username, name, email, role, created_at FROM users ORDER BY role DESC, created_at",
         fetch_all=True,
     )
 
 
 def create_user(username: str, name: str, email: str,
-                password_hash: str, role: str = "user",
-                validade=None) -> bool:
+                password_hash: str, role: str = "user") -> bool:
     ph = "%s" if _PG else "?"
     try:
         _exec(
-            f"INSERT INTO users (username, name, email, password_hash, role, validade) VALUES ({ph},{ph},{ph},{ph},{ph},{ph})",
-            (username.strip().lower(), name.strip(), email.strip(), password_hash, role, validade),
+            f"INSERT INTO users (username, name, email, password_hash, role) VALUES ({ph},{ph},{ph},{ph},{ph})",
+            (username.strip().lower(), name.strip(), email.strip(), password_hash, role),
         )
         return True
     except Exception:
         return False
-
-
-def update_validade(username: str, validade):
-    ph = "%s" if _PG else "?"
-    _exec(f"UPDATE users SET validade = {ph} WHERE username = {ph}", (validade, username))
 
 
 def delete_user(username: str):
@@ -409,7 +391,7 @@ def get_stats() -> dict:
     mes  = hoje[:7]
 
     if _PG:
-        total  = (_exec("SELECT COUNT(*) AS n FROM conversions", fetch_one=True) or {}).get("n", 0)
+        total  = (_exec("SELECT COUNT(*) AS n FROM conversions", fetch_one=True) or {}).get("n", 0) or (_exec("SELECT COUNT(*) FROM conversions", fetch_one=True) or {}).get("count", 0)
         d_hoje = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s", (f"{hoje}%",), fetch_one=True) or {}).get("n", 0)
         d_mes  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s", (f"{mes}%",), fetch_one=True) or {}).get("n", 0)
         xmls   = (_exec("SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1", fetch_one=True) or {}).get("n", 0)

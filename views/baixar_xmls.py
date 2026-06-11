@@ -19,6 +19,7 @@ def render():
     user  = current_user()
     certs = listar_certificados(user["username"])
 
+    # ── Sem certificados cadastrados ──────────────────────────────────────────
     if not certs:
         with st.container(border=True):
             ic_warn = icon("alert-triangle", 16, "#C97400")
@@ -29,6 +30,7 @@ def render():
                 </div>
                 <div style="color:#475569;font-size:.85rem;">
                     Acesse <b>Certificados</b> no menu para adicionar seu certificado digital.
+                    Você só precisa fazer isso uma vez por empresa.
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -37,6 +39,7 @@ def render():
                 st.rerun()
         return
 
+    # ── ETAPA 1 — Selecionar empresa ─────────────────────────────────────────
     with st.container(border=True):
         ic = icon("shield", 16, "#00CED1")
         st.markdown(f"""
@@ -52,16 +55,21 @@ def render():
             f"{c['razao_social'] or c['cnpj']} — {_fmt_cnpj(c['cnpj'])}": c["cnpj"]
             for c in certs
         }
-        escolha = st.selectbox("empresa", list(opcoes.keys()), label_visibility="collapsed", key="sel_empresa")
+        escolha = st.selectbox(
+            "empresa", list(opcoes.keys()),
+            label_visibility="collapsed",
+            key="sel_empresa",
+        )
         cnpj_sel = opcoes[escolha]
 
         ic_ok = icon("check-circle", 13, "#10B981")
         st.markdown(
             f'<div style="color:#10B981;font-size:.78rem;margin-top:2px;">'
-            f'{ic_ok}&nbsp; Certificado salvo -- sem necessidade de upload</div>',
+            f'{ic_ok}&nbsp; Certificado salvo — sem necessidade de upload</div>',
             unsafe_allow_html=True,
         )
 
+    # ── ETAPA 2 — Período ─────────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("settings", 16, "#00CED1")
         st.markdown(f"""
@@ -79,11 +87,14 @@ def render():
 
         with col_ini:
             st.markdown(_label("Data Inicial"), unsafe_allow_html=True)
-            data_ini = st.date_input("data_ini", value=primeiro_mes, label_visibility="collapsed", key="api_data_ini")
+            data_ini = st.date_input("data_ini", value=primeiro_mes,
+                                     label_visibility="collapsed", key="api_data_ini")
         with col_fim:
             st.markdown(_label("Data Final"), unsafe_allow_html=True)
-            data_fim = st.date_input("data_fim", value=hoje, label_visibility="collapsed", key="api_data_fim")
+            data_fim = st.date_input("data_fim", value=hoje,
+                                     label_visibility="collapsed", key="api_data_fim")
 
+    # ── ETAPA 3 — Opções ──────────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("sliders", 16, "#00CED1")
         st.markdown(f"""
@@ -98,13 +109,17 @@ def render():
         col_tipo, col_fmt = st.columns(2, gap="medium")
 
         with col_tipo:
-            st.markdown(_label("Tipo de Servico"), unsafe_allow_html=True)
+            st.markdown(_label("Tipo de Serviço"), unsafe_allow_html=True)
             tipo_opcoes = {
-                "Servicos Tomados":   "tomados",
-                "Servicos Prestados": "prestados",
+                "Serviços Tomados":   "tomados",
+                "Serviços Prestados": "prestados",
                 "Todos":              "todos",
             }
-            tipo_label = st.selectbox("tipo", list(tipo_opcoes.keys()), label_visibility="collapsed", key="sel_tipo")
+            tipo_label = st.selectbox(
+                "tipo", list(tipo_opcoes.keys()),
+                label_visibility="collapsed",
+                key="sel_tipo",
+            )
             tipo_sel = tipo_opcoes[tipo_label]
 
         with col_fmt:
@@ -114,12 +129,17 @@ def render():
                 "PDF":       "pdf",
                 "XML + PDF": "ambos",
             }
-            fmt_label = st.selectbox("formato", list(fmt_opcoes.keys()), label_visibility="collapsed", key="sel_formato")
+            fmt_label = st.selectbox(
+                "formato", list(fmt_opcoes.keys()),
+                label_visibility="collapsed",
+                key="sel_formato",
+            )
             fmt_sel = fmt_opcoes[fmt_label]
 
+        # Dica contextual
         _dicas = {
-            "tomados":   "Notas onde a empresa figura como <b>tomadora</b> do servico.",
-            "prestados": "Notas onde a empresa figura como <b>prestadora</b> do servico.",
+            "tomados":   "Notas onde a empresa figura como <b>tomadora</b> do serviço.",
+            "prestados": "Notas onde a empresa figura como <b>prestadora</b> do serviço.",
             "todos":     "Todas as notas vinculadas ao CNPJ, sem filtrar papel.",
         }
         ic_info = icon("info", 13, "#475569")
@@ -133,10 +153,11 @@ def render():
             ic_info2 = icon("info", 13, "#475569")
             st.markdown(
                 f'<div style="color:#475569;font-size:.72rem;margin-top:4px;">'
-                f'{ic_info2}&nbsp; PDF (DANFSe) baixado da API -- uma requisicao extra por nota.</div>',
+                f'{ic_info2}&nbsp; PDF (DANFSe) baixado da API — uma requisição extra por nota.</div>',
                 unsafe_allow_html=True,
             )
 
+    # ── ETAPA 4 — Baixar ─────────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("download", 16, "#00CED1")
         st.markdown(f"""
@@ -162,7 +183,7 @@ def render():
 
             resultado = carregar_certificado(user["username"], cnpj_sel)
             if not resultado:
-                st.error("Certificado nao encontrado. Recadastre em Certificados.")
+                st.error("Certificado não encontrado. Recadastre em Certificados.")
                 return
 
             pfx_bytes, senha = resultado
@@ -187,7 +208,7 @@ def render():
                     progress_cb=atualizar_progress,
                     log_cb=atualizar_log,
                 )
-                progress_bar.progress(1.0, text="Concluido!")
+                progress_bar.progress(1.0, text="Concluído!")
                 log_placeholder.empty()
 
                 with st.expander("Log de download", expanded=not bool(zip_bytes)):
@@ -223,7 +244,7 @@ def render():
                     ic_warn = icon("alert-triangle", 15, "#C77D0A")
                     st.markdown(
                         f'<div class="warn-box">{ic_warn}'
-                        f'<span class="box-text">Nenhuma nota encontrada no periodo.</span></div>',
+                        f'<span class="box-text">Nenhuma nota encontrada no período.</span></div>',
                         unsafe_allow_html=True,
                     )
 
