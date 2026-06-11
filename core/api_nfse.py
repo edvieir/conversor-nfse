@@ -401,19 +401,31 @@ def baixar_xmls_nfse(
                 log.append(f"  {len(xmls_aprovados)} XMLs salvos.")
                 if log_cb: log_cb(log)
 
-            # baixa PDFs em paralelo
+            # gera PDFs localmente a partir do XML
             if formato in ("pdf", "ambos") and xmls_aprovados:
-                tarefas_pdf = [(chave_pdf, f"nfse_{chave}.pdf") for chave, _, chave_pdf in xmls_aprovados]
-                log.append(f"  Baixando {len(tarefas_pdf)} PDFs em paralelo ({_PDF_WORKERS} workers)...")
+                from core.danfse_pdf import gerar_danfse_pdf
+                log.append(f"  Gerando {len(xmls_aprovados)} PDFs localmente...")
                 if log_cb: log_cb(log)
 
-                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj_uso, tarefas_pdf, log, log_lock)
-
                 pdf_ok = 0
-                for nome, pdf_bytes in pdfs.items():
-                    zf.writestr(f"pdf/{nome}", pdf_bytes)
-                    pdf_ok += 1
-                log.append(f"  PDFs baixados: {pdf_ok}/{len(tarefas_pdf)}")
+                for chave, xml_b, chave_pdf in xmls_aprovados:
+                    # extrai nNFSe para compor o nome do arquivo
+                    try:
+                        import xml.etree.ElementTree as _ET3
+                        _rx = _ET3.fromstring(xml_b)
+                        _n_el = next((e for e in _rx.iter() if e.tag.endswith("nNFSe")), None)
+                        n_nfse = (_n_el.text or "").strip() if _n_el is not None else ""
+                    except Exception:
+                        n_nfse = ""
+                    nome_pdf = f"nfse_{n_nfse}_{chave[:8]}.pdf" if n_nfse else f"nfse_{chave[:8]}.pdf"
+                    try:
+                        pdf_bytes = gerar_danfse_pdf(xml_b)
+                        zf.writestr(f"pdf/{nome_pdf}", pdf_bytes)
+                        pdf_ok += 1
+                        log.append(f"    -> PDF gerado: pdf/{nome_pdf}")
+                    except Exception as pdf_err:
+                        log.append(f"    -> ERRO ao gerar PDF {nome_pdf}: {pdf_err}")
+                log.append(f"  PDFs gerados: {pdf_ok}/{len(xmls_aprovados)}")
                 if log_cb: log_cb(log)
                 if progress_cb:
                     progress_cb(0.95)
