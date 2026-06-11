@@ -325,8 +325,6 @@ def baixar_xmls_nfse(
 
                         # ── Salva PDF (geração local) ────────────────────────
                         if formato in ("pdf", "ambos"):
-                            from core.danfse_pdf import gerar_danfse_pdf
-                            # extrai nNFSe para compor nome do arquivo
                             try:
                                 _n_el = next(
                                     (e for e in _root.iter() if e.tag.endswith("nNFSe")),
@@ -341,6 +339,7 @@ def baixar_xmls_nfse(
                                 else f"nfse_{chave[:8]}.pdf"
                             )
                             try:
+                                from core.danfse_pdf import gerar_danfse_pdf
                                 pdf_bytes = gerar_danfse_pdf(xml_bytes)
                                 zf.writestr(f"pdf/{nome_pdf}", pdf_bytes)
                                 log.append(f"    → PDF gerado: pdf/{nome_pdf}")
