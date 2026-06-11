@@ -66,9 +66,11 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
 
     c_trib_mun = ""
     serie = ""
+    c_lc116 = ""
     if inf_dps is not None:
         c_trib_mun = _t(inf_dps, "cTribMun")
         serie = _t(inf_dps, "serie")
+        c_lc116 = _t(inf_dps, "cLC116").replace(".", "")
 
     d_compet = _tv("dCompet")
     if not d_compet:
@@ -99,7 +101,7 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         "toma_cnpj": toma_cnpj, "toma_nome": toma_nome,
         "v_bc": v_bc, "v_iss": v_iss, "v_liq": v_liq, "p_aliq": p_aliq,
         "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso,
-        "c_trib_mun": c_trib_mun, "serie": serie,
+        "c_trib_mun": c_trib_mun, "serie": serie, "c_lc116": c_lc116,
         "v_ret_cofins": v_ret_cofins, "v_ret_pis": v_ret_pis,
         "v_ret_csl": v_ret_csl, "v_ret_irrf": v_ret_irrf, "v_ret_inss": v_ret_inss,
     }
@@ -195,10 +197,12 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""), serie=n.get("serie",""),
         ))
-        # Resolve cod_servico: mapeamento por cTribMun > fallback cod_servico global
+        # Resolve cod_servico: cLC116 automático > mapeamento cTribMun > fallback global
+        c_lc116 = n.get("c_lc116", "")
         c_trib = n.get("c_trib_mun", "")
         serv = (
-            (mapeamento_servico or {}).get(c_trib)
+            c_lc116
+            or (mapeamento_servico or {}).get(c_trib)
             or (mapeamento_servico or {}).get(c_trib.lstrip("0") or "0")
             or cod_servico
         )
