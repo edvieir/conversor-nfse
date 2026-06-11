@@ -217,7 +217,8 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     header_table.setStyle(TableStyle([
         ("BACKGROUND",   (0, 0), (-1, -1), DARK_BLUE),
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWPADDING",   (0, 0), (-1, -1), 8),
+        ("TOPPADDING",    (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ("LEFTPADDING",  (0, 0), (0, 0), 10),
         ("RIGHTPADDING", (-1, 0), (-1, 0), 10),
     ]))
