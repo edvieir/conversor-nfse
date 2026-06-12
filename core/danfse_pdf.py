@@ -222,8 +222,10 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     except Exception:
         _ibge_city = ""
     city_name = emit_mun or prest_mun or x_mun_early or _ibge_city or ""
-    emit_mun_uf = (f"{city_name} - {emit_uf}" if city_name and emit_uf
-                   else city_name or emit_uf or "")
+    # Para exibição no campo Município: prefere nome IBGE (título) sobre XML (pode ser caixa alta)
+    _emit_disp = _ibge_city or emit_mun or prest_mun or x_mun_early or ""
+    emit_mun_uf = (f"{_emit_disp} - {emit_uf}" if _emit_disp and emit_uf
+                   else _emit_disp or emit_uf or "")
     uf = emit_uf or ""
 
     toma = inf_dps.find(f".//{{{_NS}}}toma") if inf_dps is not None else None
@@ -288,7 +290,11 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     city = city_name or x_mun_incid or x_mun_prest or ""
     reg_esp_trib = tv("regEspTrib")
     tp_imun      = tv("tpImun")
-    x_mot_sust   = tv("xMotDesonSusp") or tv("motDesonSusp")
+    _susp_raw = (tv("exigSusp") or tv("xMotDesonSusp") or tv("motDesonSusp")
+                 or tv("indExigSusp") or tv("tpSuspExig"))
+    _susp_map = {"1": "Exigibilidade Suspensa", "2": "Não", "S": "Sim", "N": "Não",
+                 "0": "Não", "Não": "Não", "Nao": "Não", "SIM": "Sim", "NAO": "Não"}
+    x_mot_sust = _susp_map.get(_susp_raw, _susp_raw) if _susp_raw else "Não"
     n_proc_susp  = tv("nProcessoSusp")
     c_benef      = tv("cBenef")
     tp_ret_iss   = _t(trib_mun_node, "tpRetISSQN") or tv("tpRetISSQN")
@@ -405,9 +411,9 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         t.setStyle(TableStyle(_BASE_TS + (extra or [])))
         return t
 
-    def lv(label, val, fs=7, lfs=5):
+    def lv(label, val, fs=7, lfs=6):
         return Paragraph(
-            f'<font name="Helvetica-Bold" size="{lfs}" color="#555555">{label.upper()}</font><br/>'
+            f'<font name="Helvetica-Bold" size="{lfs}" color="#555555">{label}</font><br/>'
             f'<font name="Helvetica" size="{fs}">{_dash(val)}</font>',
             ps(f"lv{abs(hash(label))%9999}", leading=max(fs+2, 9), wordWrap="LTR"),
         )
@@ -436,12 +442,38 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     CTR_W   = W - LOGO_W - RIGHT_W
     CW3h    = CTR_W / 3
 
-    logo_p = Paragraph(
-        '<font name="Helvetica-Bold" size="20" color="#1a73e8">NFS</font>'
-        '<font name="Helvetica-Bold" size="12" color="#1a73e8">e</font><br/>'
-        '<font name="Helvetica" size="5.5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
-        ps("logo", alignment=TA_LEFT, leading=16),
+    # Logo NFSe: caixa verde com texto branco + legenda abaixo
+    _NFSE_GREEN = colors.HexColor("#1a8a34")
+    _nfse_box = Table(
+        [[Paragraph(
+            '<font name="Helvetica-Bold" size="15" color="white">NFS'
+            '<font size="10">e</font></font>',
+            ps("nfsebox", alignment=TA_LEFT, leading=17),
+        )]],
+        colWidths=[LOGO_W * 0.72],
     )
+    _nfse_box.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (0, 0), _NFSE_GREEN),
+        ("TOPPADDING",    (0, 0), (0, 0), 2),
+        ("BOTTOMPADDING", (0, 0), (0, 0), 2),
+        ("LEFTPADDING",   (0, 0), (0, 0), 4),
+        ("RIGHTPADDING",  (0, 0), (0, 0), 4),
+    ]))
+    logo_p = Table(
+        [[_nfse_box],
+         [Paragraph(
+             '<font name="Helvetica" size="5.5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
+             ps("logosub", alignment=TA_LEFT, leading=7),
+         )]],
+        colWidths=[LOGO_W - 6],
+    )
+    logo_p.setStyle(TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+    ]))
     title_p = Paragraph(
         '<font name="Helvetica-Bold" size="13">DANFSe v1.0</font><br/>'
         '<font name="Helvetica" size="8">Documento Auxiliar da NFS-e</font>',
@@ -677,7 +709,7 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         pass
 
     val_liq_p = Paragraph(
-        '<font name="Helvetica-Bold" size="5" color="#555555">VALOR LÍQUIDO DA NFS-E</font><br/>'
+        '<font name="Helvetica-Bold" size="6" color="#555555">Valor Líquido da NFS-e</font><br/>'
         f'<font name="Helvetica-Bold" size="8">{_fmt_moeda(data["v_liq"])}</font>',
         ps("vliq", leading=10),
     )
