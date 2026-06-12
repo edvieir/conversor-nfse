@@ -20,7 +20,7 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 _NS = "http://www.sped.fazenda.gov.br/nfse"
 
 # ── Cores ─────────────────────────────────────────────────────────────────────
-DARK_HDR   = colors.HexColor("#2d2d2d")   # cabeçalhos de seção
+DARK_HDR   = colors.HexColor("#1a3764")   # cabeçalhos de seção (azul escuro nacional)
 LIGHT_GRAY = colors.HexColor("#f5f5f5")   # fundo das células
 BOX_BORDER = colors.HexColor("#aaaaaa")   # bordas
 WHITE      = colors.white
@@ -185,12 +185,22 @@ def _parse_xml(xml_bytes: bytes) -> dict:
         emit_end_parts.append(p)
     emit_end = ", ".join(emit_end_parts)
 
-    emit_mun_uf = emit_mun
-    if emit_uf:
-        emit_mun_uf = f"{emit_mun} - {emit_uf}" if emit_mun else emit_uf
-
     op_sn    = tv("opSN") or tv("optSN")
     reg_trib = tv("regTrib")
+
+    # Fallback para nome do município: tenta elemento prest e xMunIncid antecipadamente
+    prest_el = inf_dps.find(f"{{{_NS}}}prest") if inf_dps is not None else None
+    prest_mun = _t(prest_el, "xMun") if prest_el is not None else ""
+    trib_mun_early = inf_dps.find(f".//{{{_NS}}}tribMun") if inf_dps is not None else None
+    x_mun_incid_early = (
+        (_t(trib_mun_early, "xMunIncid") if trib_mun_early is not None else "")
+        or tv("xMunIncid") or tv("xMunPrest")
+    )
+
+    city_name = emit_mun or prest_mun or x_mun_incid_early or ""
+    emit_mun_uf = city_name
+    if emit_uf:
+        emit_mun_uf = f"{city_name} - {emit_uf}" if city_name else emit_uf
 
     uf   = emit_uf  or ""
 
@@ -237,7 +247,7 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     tp_trib       = _t(trib_mun_node, "tpTrib") or tv("tpTrib")
     x_pais_res    = tv("xPaisResultado") or tv("cPaisResultado")
     x_mun_incid   = tv("xMunIncid") or tv("cMunIncid")
-    city = emit_mun or x_mun_incid or x_mun_prest or ""
+    city = city_name or x_mun_incid or x_mun_prest or ""
     reg_esp_trib  = tv("regEspTrib")
     tp_imun       = tv("tpImun")
     x_mot_sust    = tv("xMotDesonSusp") or tv("motDesonSusp")
