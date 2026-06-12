@@ -42,3 +42,6 @@ desktop.ini
 # Arquivos temporários
 *.tmp
 *.log
+
+# Pacotes Python baixados
+*.whl
