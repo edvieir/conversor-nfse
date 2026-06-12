@@ -33,20 +33,32 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
             v = _t(inf_dps, tag)
         return v
 
-    emit = inf.find(f"{{{_NS}}}emit")
-    emit_cnpj   = _t(emit, "CNPJ")    if emit is not None else ""
+    # Emitente: busca como <emit>, <prest> ou <infEmit> em qualquer nível
+    emit = (
+        inf.find(f"{{{_NS}}}emit")
+        or inf.find(f".//{{{_NS}}}emit")
+        or (inf_dps.find(f".//{{{_NS}}}prest") if inf_dps is not None else None)
+        or inf.find(f".//{{{_NS}}}infEmit")
+    )
+    # Endereço pode estar em subelemento <end>
+    emit_end = (emit.find(f"{{{_NS}}}end") if emit is not None else None) or emit
+    emit_cnpj   = (_t(emit, "CNPJ") or _t(emit, "CPF")) if emit is not None else ""
     emit_nome   = _t(emit, "xNome")   if emit is not None else ""
     emit_im     = _t(emit, "IM")      if emit is not None else ""
-    emit_uf     = _t(emit, "UF")      if emit is not None else "CE"
-    emit_lgr    = _t(emit, "xLgr")   if emit is not None else ""
-    emit_nro    = _t(emit, "nro")     if emit is not None else ""
-    emit_cpl    = _t(emit, "xCpl")   if emit is not None else ""
-    emit_bairro = _t(emit, "xBairro") if emit is not None else ""
-    emit_cmun   = _t(emit, "cMun")   if emit is not None else ""
-    emit_cep    = _t(emit, "CEP")    if emit is not None else ""
-    emit_fone   = _t(emit, "fone")   if emit is not None else ""
+    emit_uf     = (_t(emit_end, "UF") or _t(emit, "UF")) if emit is not None else "CE"
+    emit_lgr    = _t(emit_end, "xLgr")    if emit_end is not None else ""
+    emit_nro    = _t(emit_end, "nro")     if emit_end is not None else ""
+    emit_cpl    = _t(emit_end, "xCpl")    if emit_end is not None else ""
+    emit_bairro = _t(emit_end, "xBairro") if emit_end is not None else ""
+    emit_cmun   = (_t(emit_end, "cMun") or _t(emit, "cMun")) if emit is not None else ""
+    emit_cep    = _t(emit_end, "CEP")     if emit_end is not None else ""
+    emit_fone   = (_t(emit, "fone") or _t(emit, "tel")) if emit is not None else ""
 
-    toma = inf_dps.find(f"{{{_NS}}}toma") if inf_dps is not None else None
+    toma = (
+        (inf_dps.find(f".//{{{_NS}}}toma") if inf_dps is not None else None)
+        or (inf_dps.find(f".//{{{_NS}}}infTomador") if inf_dps is not None else None)
+        or inf.find(f".//{{{_NS}}}infTomador")
+    )
     toma_cnpj = (_t(toma, "CNPJ") or _t(toma, "CPF")) if toma is not None else ""
     toma_nome = _t(toma, "xNome") if toma is not None else ""
 
@@ -64,13 +76,11 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         v_ret_irrf   = _t(inf_dps, "vRetIRRF")   or _t(inf_dps, "vIRRF")
         v_ret_inss   = _t(inf_dps, "vRetInss")   or _t(inf_dps, "vInss")
 
-    c_trib_mun = ""
-    serie = ""
-    c_lc116 = ""
-    if inf_dps is not None:
-        c_trib_mun = _t(inf_dps, "cTribMun")
-        serie = _t(inf_dps, "serie")
-        c_lc116 = _t(inf_dps, "cLC116").replace(".", "")
+    # cLC116: busca ampla — infDPS, infNFSe e qualquer subnó
+    c_trib_mun = _tv("cTribMun")
+    serie      = _tv("serie") or (_t(inf_dps, "serDPS") if inf_dps is not None else "")
+    _lc116_raw = _tv("cLC116")
+    c_lc116    = _lc116_raw.replace(".", "") if _lc116_raw else ""
 
     d_compet = _tv("dCompet")
     if not d_compet:
