@@ -105,8 +105,41 @@ def _map_ret_iss(v: str) -> str:
 
 
 def _map_op_sn(v: str) -> str:
-    m = {"1": "Optante", "2": "Não Optante"}
+    m = {"1": "Optante - ME/EPP", "2": "Não Optante", "3": "MEI - Optante"}
     return m.get(v, _dash(v))
+
+
+def _map_reg_trib(v: str) -> str:
+    m = {
+        "1": "Regime de apuração dos tributos federais e municipal pelo Simples Nacional",
+        "2": "Estimativa",
+        "3": "Sociedade de Profissionais",
+        "4": "Cooperativa",
+        "5": "MEI - Simples Nacional",
+        "6": "ME EPP - Simples Nacional",
+    }
+    return m.get(v, _dash(v))
+
+
+def _fmt_c_trib_nac(v: str) -> str:
+    d = "".join(c for c in v if c.isdigit())
+    if len(d) == 6:
+        return f"{d[:2]}.{d[2:4]}.{d[4:]}"
+    return v or "-"
+
+
+_UF_IBGE = {
+    "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA",
+    "16": "AP", "17": "TO", "21": "MA", "22": "PI", "23": "CE",
+    "24": "RN", "25": "PB", "26": "PE", "27": "AL", "28": "SE",
+    "29": "BA", "31": "MG", "32": "ES", "33": "RJ", "35": "SP",
+    "41": "PR", "42": "SC", "43": "RS", "50": "MS", "51": "MT",
+    "52": "GO", "53": "DF",
+}
+
+
+def _uf_from_ibge(code: str) -> str:
+    return _UF_IBGE.get(code[:2], "") if code and len(code) >= 2 else ""
 
 
 def _parse_xml(xml_bytes: bytes) -> dict:
@@ -154,7 +187,7 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     emit_cpl   = _t(emit, "xCpl")  if emit is not None else ""
     emit_bairro= _t(emit, "xBairro") if emit is not None else ""
     emit_mun   = _t(emit, "xMun")  if emit is not None else ""
-    emit_uf    = _t(emit, "UF")    if emit is not None else ""
+    emit_uf    = (_t(emit, "UF") or _uf_from_ibge(_t(emit, "cMun") if emit is not None else "")) if emit is not None else ""
     emit_cep   = _t(emit, "CEP")   if emit is not None else ""
 
     end_parts = [emit_lgr]
@@ -217,7 +250,7 @@ def _parse_xml(xml_bytes: bytes) -> dict:
         toma_mun = toma_mun_raw or _ibge_lookup2(toma_cmun) or ""
     except Exception:
         toma_mun = toma_mun_raw
-    toma_uf    = _t(toma, "UF")   if toma is not None else ""
+    toma_uf    = (_t(toma, "UF") or _uf_from_ibge(toma_cmun)) if toma is not None else ""
     toma_cep   = _t(toma, "CEP")  if toma is not None else ""
     toma_end_parts = [toma_lgr]
     if toma_nro: toma_end_parts.append(toma_nro)
@@ -229,8 +262,15 @@ def _parse_xml(xml_bytes: bytes) -> dict:
 
     c_trib_nac = tv("cTribNac")
     x_trib_nac = tv("xTribNac")
-    c_trib_nac_fmt = (f"{c_trib_nac} - {x_trib_nac}" if c_trib_nac and x_trib_nac
-                      else _dash(c_trib_nac or x_trib_nac))
+    c_lc116    = tv("cLC116")
+    c_lc116_d  = c_lc116.replace(".", "") if c_lc116 else ""
+    _cnac_code = _fmt_c_trib_nac(c_trib_nac) if c_trib_nac else ""
+    if _cnac_code and c_lc116_d and x_trib_nac:
+        c_trib_nac_fmt = f"{_cnac_code} - {c_lc116_d} / {x_trib_nac}"
+    elif _cnac_code and x_trib_nac:
+        c_trib_nac_fmt = f"{_cnac_code} - {x_trib_nac}"
+    else:
+        c_trib_nac_fmt = _dash(_cnac_code or x_trib_nac)
     c_trib_mun   = tv("cTribMun")
     x_mun_prest  = tv("xMunPrest") or tv("cMunPrest")
     x_pais_prest = tv("xPaisPrest") or tv("cPaisPrest")
@@ -385,33 +425,28 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     CWE = [W * 0.20, W * 0.37, W * 0.25, W * 0.18]
 
     # ═══════════════════════════════════════════════════════════════
-    # BLOCO SUPERIOR UNIFICADO
-    # Estrutura: 5 colunas [logo | c1 | c2 | c3 | right]
-    #   Logo  → span linhas 0-3
-    #   Título → span cols 1-3 na linha 0
-    #   Chave  → span cols 1-3 na linha 1
-    #   Números → cols 1-3 nas linhas 2-3
-    #   Right  → span linhas 0-3 (prefeitura + QR + auth)
+    # BLOCO SUPERIOR — tabela externa 3 colunas: logo | centro | right
+    # A coluna centro usa nested tables (título / chave / números)
+    # A coluna right abrange toda a altura com prefeitura + QR + auth
     # ═══════════════════════════════════════════════════════════════
     qr_buf = _make_qr(data["chave_acesso"] or "")
 
-    LOGO_W  = W * 0.13
+    LOGO_W  = W * 0.14
     RIGHT_W = W * 0.27
-    MID_W   = W - LOGO_W - RIGHT_W
-    CW      = MID_W / 3   # largura de cada sub-coluna central
+    CTR_W   = W - LOGO_W - RIGHT_W
+    CW3h    = CTR_W / 3
 
     logo_p = Paragraph(
-        '<font name="Helvetica-Bold" size="18" color="#1a73e8">NFS</font>'
-        '<font name="Helvetica-Bold" size="11" color="#1a73e8">e</font><br/>'
-        '<font name="Helvetica" size="5">Nota Fiscal de<br/>Serviço Eletrônico</font>',
-        ps("logo", alignment=TA_LEFT, leading=15),
+        '<font name="Helvetica-Bold" size="20" color="#1a73e8">NFS</font>'
+        '<font name="Helvetica-Bold" size="12" color="#1a73e8">e</font><br/>'
+        '<font name="Helvetica" size="5.5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
+        ps("logo", alignment=TA_LEFT, leading=16),
     )
     title_p = Paragraph(
         '<font name="Helvetica-Bold" size="13">DANFSe v1.0</font><br/>'
         '<font name="Helvetica" size="8">Documento Auxiliar da NFS-e</font>',
         ps("title", alignment=TA_CENTER, leading=14),
     )
-
     city_up = (data["city"] or "").upper()
     uf_up   = (data["uf"]   or "").upper()
     pref_p = Paragraph(
@@ -421,22 +456,61 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ps("pref", alignment=TA_RIGHT, leading=10),
     )
     auth_p = Paragraph(
-        '<font name="Helvetica" size="5" color="#555555">'
+        '<font name="Helvetica" size="4.5" color="#555555">'
         'A autenticidade desta NFS-e pode ser<br/>'
         'verificada pela leitura deste código QR ou<br/>'
         'pela consulta da chave de acesso no portal'
         '</font>',
-        ps("auth", alignment=TA_RIGHT, leading=6),
+        ps("auth", alignment=TA_RIGHT, leading=5.5),
     )
 
-    # Célula direita: prefeitura + QR + auth (sem bordas internas)
+    # Nested: números (3 colunas iguais)
+    _nb = [
+        ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+    ]
+    nums_tbl = Table([
+        [lv("Número da NFS-e",                data["n_nfse"]),
+         lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
+         lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"]))],
+        [lv("Número da DPS",                  data["n_dps"]),
+         lv("Série da DPS",                   data["serie"]),
+         lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"]))],
+    ], colWidths=[CW3h, CW3h, CW3h])
+    nums_tbl.setStyle(TableStyle(_nb))
+
+    # Nested: coluna centro (título / chave / números)
+    ctr_tbl = Table([
+        [title_p],
+        [lv("Chave de Acesso da NFS-e", data["chave_acesso"] or "-")],
+        [nums_tbl],
+    ], colWidths=[CTR_W])
+    ctr_tbl.setStyle(TableStyle([
+        ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("ALIGN",         (0, 0), (0, 0), "CENTER"),
+        ("VALIGN",        (0, 0), (0, 0), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+        ("TOPPADDING",    (0, 0), (0, 0), 5),
+        ("BOTTOMPADDING", (0, 0), (0, 0), 5),
+    ]))
+
+    # Nested: coluna direita (prefeitura + QR + auth)
     if qr_buf:
         from reportlab.platypus import Image as RLImage
         qr_sz = 22 * mm
-        right_inner = Table(
-            [[pref_p], [RLImage(qr_buf, width=qr_sz, height=qr_sz)], [auth_p]],
-            colWidths=[RIGHT_W - 4],
-        )
+        right_inner = Table([
+            [pref_p],
+            [RLImage(qr_buf, width=qr_sz, height=qr_sz)],
+            [auth_p],
+        ], colWidths=[RIGHT_W - 6])
         right_inner.setStyle(TableStyle([
             ("ALIGN",         (0, 0), (-1, -1), "RIGHT"),
             ("VALIGN",        (0, 0), (-1, -1), "TOP"),
@@ -449,55 +523,21 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     else:
         right_cell = pref_p
 
-    # Tabela única unificada (logo + título/chave/números + QR)
-    top_tbl = Table(
-        [
-            # linha 0: logo | título (span c1-c3) | right
-            [logo_p, title_p, "", "", right_cell],
-            # linha 1: logo cont | chave (span c1-c3) | right cont
-            ["", lv("Chave de Acesso da NFS-e", data["chave_acesso"] or "-"), "", "", ""],
-            # linha 2: logo cont | NFS-e | Competência | Data Hora | right cont
-            ["",
-             lv("Número da NFS-e",                data["n_nfse"]),
-             lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
-             lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"])),
-             ""],
-            # linha 3: logo cont | DPS | Série | Data Hora DPS | right cont
-            ["",
-             lv("Número da DPS",                 data["n_dps"]),
-             lv("Série da DPS",                  data["serie"]),
-             lv("Data e Hora da emissão da DPS", _fmt_dt(data["dh_emi_dps"])),
-             ""],
-        ],
-        colWidths=[LOGO_W, CW, CW, CW, RIGHT_W],
-    )
-    top_tbl.setStyle(TableStyle([
+    # Tabela externa principal
+    hdr = Table([[logo_p, ctr_tbl, right_cell]],
+                colWidths=[LOGO_W, CTR_W, RIGHT_W])
+    hdr.setStyle(TableStyle([
         ("BOX",           (0, 0), (-1, -1), 0.5, BRD),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
         ("BACKGROUND",    (0, 0), (-1, -1), WBG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        # logo centralizado verticalmente
-        ("VALIGN",        (0, 0), (0, 3), "MIDDLE"),
-        ("ALIGN",         (0, 0), (0, 3), "CENTER"),
-        # título centralizado
-        ("ALIGN",         (1, 0), (3, 0), "CENTER"),
-        ("VALIGN",        (1, 0), (3, 0), "MIDDLE"),
-        # right alinhado à direita
-        ("ALIGN",         (4, 0), (4, 3), "RIGHT"),
-        # spans
-        ("SPAN",          (0, 0), (0, 3)),   # logo: todas as linhas
-        ("SPAN",          (1, 0), (3, 0)),   # título: cols 1-3 na linha 0
-        ("SPAN",          (1, 1), (3, 1)),   # chave: cols 1-3 na linha 1
-        ("SPAN",          (4, 0), (4, 3)),   # right: todas as linhas
-        # padding
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("VALIGN",        (0, 0), (0, 0), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING",   (0, 0), (-1, -1), 3),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-        ("TOPPADDING",    (1, 0), (3, 0), 6),
-        ("BOTTOMPADDING", (1, 0), (3, 0), 6),
     ]))
-    story.append(top_tbl)
+    story.append(hdr)
 
     # ═══════════════════════════════════════════════════════════════
     # EMITENTE DA NFS-e
@@ -517,7 +557,7 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
          lv("CEP", _fmt_cep(data["emit_cep"]))],
         # Simples (span 2) | Regime (span 2)
         [lv("Simples Nacional na Data de Competência", _map_op_sn(data["op_sn"])), "",
-         lv("Regime de Apuração Tributária pelo SN", _dash(data["reg_trib"])), ""],
+         lv("Regime de Apuração Tributária pelo SN", _map_reg_trib(data["reg_trib"])), ""],
     ], CWE, [
         ("BACKGROUND", (0, 0), (3, 0), SBG),
         ("SPAN",       (0, 1), (2, 1)),
