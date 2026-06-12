@@ -19,13 +19,14 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
 _NS = "http://www.sped.fazenda.gov.br/nfse"
 
-# ── Cores ─────────────────────────────────────────────────────────────────────
-DARK_HDR   = colors.HexColor("#1a3764")   # cabeçalhos de seção (azul escuro nacional)
-LIGHT_GRAY = colors.HexColor("#f5f5f5")   # fundo das células
-BOX_BORDER = colors.HexColor("#aaaaaa")   # bordas
-WHITE      = colors.white
-BLACK      = colors.black
-LABEL_CLR  = colors.HexColor("#555555")
+# ── Cores padrão DANFSe Nacional ─────────────────────────────────────────────
+SEC_HDR_BG  = colors.HexColor("#d9d9d9")  # fundo dos cabeçalhos de seção (cinza)
+SEC_HDR_TXT = colors.HexColor("#1a1a1a")  # texto dos cabeçalhos (quase preto)
+DATA_BG     = colors.white                # fundo das células de dados
+BOX_BORDER  = colors.HexColor("#808080")  # bordas
+WHITE       = colors.white
+BLACK       = colors.black
+LABEL_CLR   = colors.HexColor("#555555")
 
 
 def _t(el, tag: str) -> str:
@@ -372,7 +373,7 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         topMargin=10 * mm,
         bottomMargin=10 * mm,
     )
-    W = A4[0] - 20 * mm  # largura útil
+    W = A4[0] - 20 * mm
 
     styles = getSampleStyleSheet()
 
@@ -380,20 +381,21 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         return ParagraphStyle(name, parent=styles["Normal"], **kw)
 
     # ── Estilos ───────────────────────────────────────────────────────────────
-    s_val   = ps("val",  fontSize=8,  textColor=BLACK,    fontName="Helvetica",
-                  leading=10, wordWrap="LTR")
-    s_val_b = ps("valb", fontSize=9,  textColor=BLACK,    fontName="Helvetica-Bold",
-                  leading=11)
-    s_sec   = ps("sec",  fontSize=7,  textColor=WHITE,    fontName="Helvetica-Bold",
-                  alignment=TA_LEFT,  leading=9)
-    s_ctr   = ps("ctr",  fontSize=7,  textColor=BLACK,    fontName="Helvetica-Bold",
-                  alignment=TA_CENTER, leading=9)
+    s_lbl = ps("lbl", fontSize=6, textColor=colors.HexColor("#555555"),
+                fontName="Helvetica-Bold", leading=7)
+    s_val = ps("val", fontSize=8, textColor=BLACK, fontName="Helvetica",
+                leading=10, wordWrap="LTR")
+    s_val_b = ps("valb", fontSize=8, textColor=BLACK, fontName="Helvetica-Bold",
+                  leading=10)
+    s_sec = ps("sec", fontSize=7, textColor=SEC_HDR_TXT, fontName="Helvetica-Bold",
+                alignment=TA_LEFT, leading=9)
+    s_ctr = ps("ctr", fontSize=7, textColor=SEC_HDR_TXT, fontName="Helvetica-Bold",
+                alignment=TA_CENTER, leading=9)
 
-    # ── Base TableStyle para células de dados ─────────────────────────────────
     BASE_TS = TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
@@ -402,82 +404,102 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     ])
 
     def lv(label: str, value: str, bold_val: bool = False) -> Paragraph:
-        """Parágrafo com label pequeno acima e valor abaixo."""
         val_font = "Helvetica-Bold" if bold_val else "Helvetica"
-        val_size = "10" if bold_val else "8"
+        val_size = "9" if bold_val else "8"
         txt = (
-            f'<font name="Helvetica-Bold" size="6" color="#555555">'
-            f'{label.upper()}</font><br/>'
-            f'<font name="{val_font}" size="{val_size}">'
-            f'{_dash(value)}</font>'
+            f'<font name="Helvetica-Bold" size="6" color="#555555">{label.upper()}</font><br/>'
+            f'<font name="{val_font}" size="{val_size}">{_dash(value)}</font>'
         )
-        return Paragraph(txt, s_val_b if bold_val else s_val)
+        return Paragraph(txt, s_val)
 
-    def sec_hdr(title: str) -> Table:
-        """Faixa escura de seção."""
-        t = Table([[Paragraph(title, s_sec)]], colWidths=[W])
+    def sec_hdr(title: str, subtitle: str = "") -> Table:
+        """Cabeçalho de seção cinza claro com texto escuro (padrão nacional)."""
+        inner = f'<font name="Helvetica-Bold" size="7">{title}</font>'
+        if subtitle:
+            inner += f'<br/><font name="Helvetica" size="6">{subtitle}</font>'
+        t = Table([[Paragraph(inner, s_sec)]], colWidths=[W])
         t.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), DARK_HDR),
+            ("BACKGROUND",    (0, 0), (-1, -1), SEC_HDR_BG),
             ("TOPPADDING",    (0, 0), (-1, -1), 2),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
             ("LEFTPADDING",   (0, 0), (-1, -1), 4),
             ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+            ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ]))
         return t
 
     story = []
+    cw3 = W / 3
+    cw4 = W / 4
 
     # ═════════════════════════════════════════════════════════════════════════
-    # HEADER ROW: Logo NFS-e | DANFSe v1.0 | Prefeitura + QR
+    # CABEÇALHO: Logo NFS-e | DANFSe v1.0 | Prefeitura + QR
     # ═════════════════════════════════════════════════════════════════════════
     qr_img = _make_qr(data["chave_acesso"] or "")
 
-    nfse_logo_txt = (
-        '<font name="Helvetica-Bold" size="9">NFS-e</font><br/>'
-        '<font name="Helvetica" size="7">Nota Fiscal de<br/>Serviço Eletrônica</font>'
+    # Logo oficial NFSe (letras coloridas N=azul, F=verde, S=laranja, e=azul)
+    logo_txt = (
+        '<font name="Helvetica-Bold" size="16" color="#0066cc">N</font>'
+        '<font name="Helvetica-Bold" size="16" color="#009933">F</font>'
+        '<font name="Helvetica-Bold" size="16" color="#ff6600">S</font>'
+        '<font name="Helvetica-Bold" size="16" color="#0066cc">e</font><br/>'
+        '<font name="Helvetica" size="6">Nota Fiscal Eletrônica</font>'
     )
-    left_cell = Paragraph(nfse_logo_txt, ps("logo", alignment=TA_CENTER, leading=10))
+    left_cell = Paragraph(logo_txt, ps("logo", alignment=TA_CENTER, leading=14))
 
     center_cell = Paragraph(
-        '<font name="Helvetica-Bold" size="14">DANFSe v1.0</font><br/>'
+        '<font name="Helvetica-Bold" size="13">DANFSe v1.0</font><br/>'
         '<font name="Helvetica" size="8">Documento Auxiliar da NFS-e</font>',
         ps("dc", alignment=TA_CENTER, leading=14),
     )
 
+    city_txt = data["city"].upper() if data["city"] else ""
+    uf_txt   = data["uf"].upper()   if data["uf"]   else ""
     pref_txt = (
-        f'<font name="Helvetica-Bold" size="7">PREFEITURA MUNICIPAL DE</font><br/>'
-        f'<font name="Helvetica-Bold" size="8">{data["city"]}</font><br/>'
-        f'<font name="Helvetica-Bold" size="7">{data["uf"]}</font>'
+        '<font name="Helvetica-Bold" size="6">PREFEITURA MUNICIPAL DE</font><br/>'
+        f'<font name="Helvetica-Bold" size="7">{city_txt}</font><br/>'
+        f'<font name="Helvetica-Bold" size="6">{uf_txt}</font>'
     )
-    right_top = Paragraph(pref_txt, ps("pref", alignment=TA_CENTER, leading=9))
+    pref_p = Paragraph(pref_txt, ps("pref", alignment=TA_CENTER, leading=8))
+
+    auth_txt = (
+        '<font name="Helvetica" size="5" color="#555555">'
+        'A autenticidade desta NFS-e pode ser<br/>'
+        'verificada pela leitura deste código QR ou<br/>'
+        'pela consulta da chave de acesso no portal'
+        '</font>'
+    )
+    auth_p = Paragraph(auth_txt, ps("auth", alignment=TA_CENTER, leading=6))
 
     if qr_img:
         from reportlab.platypus import Image as RLImage
-        qr_size = 18 * mm
+        qr_size = 16 * mm
         right_inner = Table(
-            [[right_top], [RLImage(qr_img, width=qr_size, height=qr_size)]],
-            colWidths=[W * 0.25],
+            [[pref_p], [RLImage(qr_img, width=qr_size, height=qr_size)], [auth_p]],
+            colWidths=[W * 0.28],
         )
         right_inner.setStyle(TableStyle([
             ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ]))
         right_cell = right_inner
     else:
-        right_cell = right_top
+        right_cell = pref_p
 
     hdr_table = Table(
         [[left_cell, center_cell, right_cell]],
-        colWidths=[W * 0.20, W * 0.55, W * 0.25],
+        colWidths=[W * 0.14, W * 0.58, W * 0.28],
     )
     hdr_table.setStyle(TableStyle([
         ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.4, BOX_BORDER),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     story.append(hdr_table)
 
@@ -485,48 +507,39 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     # CHAVE DE ACESSO
     # ═════════════════════════════════════════════════════════════════════════
     chave_val = data["chave_acesso"] or "-"
-    chave_table = Table(
-        [[lv("Chave de Acesso da NFS-e", chave_val)]],
-        colWidths=[W],
-    )
-    chave_table.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+    chave_t = Table([[lv("Chave de Acesso da NFS-e", chave_val)]], colWidths=[W])
+    chave_t.setStyle(TableStyle([
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING",   (0, 0), (-1, -1), 3),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
     ]))
-    story.append(chave_table)
+    story.append(chave_t)
 
     # ═════════════════════════════════════════════════════════════════════════
-    # IDs DA NFS-e e DPS
+    # IDs NFS-e / DPS
     # ═════════════════════════════════════════════════════════════════════════
-    cw3  = W / 3
-    cw4  = W / 4
-
-    ids_table = Table(
+    ids_t = Table([
         [
-            [
-                lv("Número da NFS-e",                data["n_nfse"]),
-                lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
-                lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"])),
-            ],
-            [
-                lv("Número da DPS",                  data["n_dps"]),
-                lv("Série da DPS",                   data["serie"]),
-                lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"])),
-            ],
+            lv("Número da NFS-e",                data["n_nfse"]),
+            lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
+            lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"])),
         ],
-        colWidths=[cw3, cw3, cw3],
-    )
-    ids_table.setStyle(BASE_TS)
-    story.append(ids_table)
+        [
+            lv("Número da DPS",                  data["n_dps"]),
+            lv("Série da DPS",                   data["serie"]),
+            lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"])),
+        ],
+    ], colWidths=[cw3, cw3, cw3])
+    ids_t.setStyle(BASE_TS)
+    story.append(ids_t)
 
     # ═════════════════════════════════════════════════════════════════════════
-    # EMITENTE DA NFS-e
+    # EMITENTE
     # ═════════════════════════════════════════════════════════════════════════
-    story.append(sec_hdr("EMITENTE DA NFS-e"))
+    story.append(sec_hdr("EMITENTE DA NFS-e", "Prestador do Serviço"))
 
     emit_cnpj_fmt = _fmt_cnpj(data["emit_cnpj"]) if data["emit_cnpj"] else "-"
     emit_cep_fmt  = _fmt_cep(data["emit_cep"])   if data["emit_cep"]  else "-"
@@ -544,37 +557,36 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ],
         [
             lv("Endereço", data["emit_end"]),
-            lv("", ""),
             lv("Município", data["emit_mun_uf"]),
+            lv("CEP", emit_cep_fmt),
         ],
         [
             lv("Simples Nacional na Data de Competência", _map_op_sn(data["op_sn"])),
             lv("Regime de Apuração Tributária pelo SN",   _dash(data["reg_trib"])),
-            lv("CEP", emit_cep_fmt),
+            lv("", ""),
         ],
     ], colWidths=[cw3, cw3, cw3])
     emit_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING",   (0, 0), (-1, -1), 3),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-        ("SPAN",          (0, 1), (1, 1)),  # Nome spans col 0-1
-        ("SPAN",          (0, 2), (1, 2)),  # Endereço spans col 0-1
+        ("SPAN",          (0, 1), (1, 1)),
+        ("SPAN",          (0, 2), (0, 2)),
     ]))
     story.append(emit_t)
 
     # ═════════════════════════════════════════════════════════════════════════
-    # TOMADOR DO SERVIÇO
+    # TOMADOR
     # ═════════════════════════════════════════════════════════════════════════
-    toma_cnpj_fmt = _fmt_cnpj(data["toma_doc"]) if data["toma_doc"] else "-"
-    toma_sec_title = f"TOMADOR DO SERVIÇO   CNPJ/CPF: {toma_cnpj_fmt}"
-    story.append(sec_hdr(toma_sec_title))
+    story.append(sec_hdr("TOMADOR DO SERVIÇO"))
 
-    toma_cep_fmt = _fmt_cep(data["toma_cep"]) if data["toma_cep"] else "-"
+    toma_cnpj_fmt = _fmt_cnpj(data["toma_doc"]) if data["toma_doc"] else "-"
+    toma_cep_fmt  = _fmt_cep(data["toma_cep"])  if data["toma_cep"]  else "-"
 
     toma_t = Table([
         [
@@ -585,7 +597,7 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         [
             lv("Nome / Nome Empresarial",  data["toma_nome"]),
             lv("", ""),
-            lv("E-mail",                   data["toma_email"]),
+            lv("E-mail", data["toma_email"]),
         ],
         [
             lv("Endereço",  data["toma_end"]),
@@ -594,28 +606,26 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ],
     ], colWidths=[cw3, cw3, cw3])
     toma_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING",   (0, 0), (-1, -1), 3),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-        ("SPAN",          (0, 1), (1, 1)),  # Nome spans col 0-1
+        ("SPAN",          (0, 1), (1, 1)),
     ]))
     story.append(toma_t)
 
-    # ═════════════════════════════════════════════════════════════════════════
-    # INTERMEDIÁRIO
-    # ═════════════════════════════════════════════════════════════════════════
+    # Intermediário
     interm_t = Table(
         [[Paragraph("INTERMEDIÁRIO DO SERVIÇO NÃO IDENTIFICADO NA NFS-e", s_ctr)]],
         colWidths=[W],
     )
     interm_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
         ("TOPPADDING",    (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
@@ -644,9 +654,9 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ],
     ], colWidths=[cw4, cw4, cw4, cw4])
     serv_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
@@ -695,7 +705,6 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     # ═════════════════════════════════════════════════════════════════════════
     story.append(sec_hdr("TRIBUTAÇÃO FEDERAL"))
 
-    # Descrição Contrib. Sociais: lista PIS+COFINS+CSLL retidos
     parts_csll = []
     if data["v_ret_pis"]:    parts_csll.append(f"PIS: {_fmt_moeda(data['v_ret_pis'])}")
     if data["v_ret_cofins"]: parts_csll.append(f"COFINS: {_fmt_moeda(data['v_ret_cofins'])}")
@@ -717,35 +726,28 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ],
     ], colWidths=[cw4, cw4, cw4, cw4])
     trib_fed_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING",   (0, 0), (-1, -1), 3),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-        ("SPAN",          (0, 1), (1, 1)),  # PIS spans 2 cols
-        ("SPAN",          (2, 1), (3, 1)),  # COFINS spans 2 cols
+        ("SPAN",          (0, 1), (1, 1)),
+        ("SPAN",          (2, 1), (3, 1)),
     ]))
     story.append(trib_fed_t)
 
     # ═════════════════════════════════════════════════════════════════════════
-    # VALOR TOTAL DA NFS-E
+    # VALOR TOTAL
     # ═════════════════════════════════════════════════════════════════════════
     story.append(sec_hdr("VALOR TOTAL DA NFS-E"))
 
-    # Total retenções federais (soma)
     v_tot_ret_fed = ""
     try:
-        tots = [
-            float(data["v_ret_irrf"]   or 0),
-            float(data["v_ret_cp"]     or 0),
-            float(data["v_ret_csll"]   or 0),
-            float(data["v_ret_pis"]    or 0),
-            float(data["v_ret_cofins"] or 0),
-        ]
-        s = sum(tots)
+        s = sum(float(data[k] or 0) for k in
+                ("v_ret_irrf", "v_ret_cp", "v_ret_csll", "v_ret_pis", "v_ret_cofins"))
         v_tot_ret_fed = str(s) if s > 0 else ""
     except (ValueError, TypeError):
         pass
@@ -778,15 +780,15 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ],
     ], colWidths=[cw4, cw4, cw4, cw4])
     val_tot_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING",   (0, 0), (-1, -1), 3),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-        ("SPAN",          (1, 1), (2, 1)),  # PIS/COFINS spans 2 cols
+        ("SPAN",          (1, 1), (2, 1)),
     ]))
     story.append(val_tot_t)
 
@@ -819,8 +821,8 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         colWidths=[W],
     )
     inf_compl_t.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.4, BOX_BORDER),
-        ("BACKGROUND",    (0, 0), (-1, -1), LIGHT_GRAY),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BOX_BORDER),
+        ("BACKGROUND",    (0, 0), (-1, -1), DATA_BG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
