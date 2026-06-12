@@ -60,7 +60,7 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     if inf_dps is not None:
         v_ret_cofins = _t(inf_dps, "vRetCofins") or _t(inf_dps, "vCofins")
         v_ret_pis    = _t(inf_dps, "vRetPis")    or _t(inf_dps, "vPis")
-        v_ret_csl    = _t(inf_dps, "vRetCsll")   or _t(inf_dps, "vCsll")
+        v_ret_csl    = _t(inf_dps, "vRetCSLL")   or _t(inf_dps, "vCSLL") or _t(inf_dps, "vRetCsll") or _t(inf_dps, "vCsll")
         v_ret_irrf   = _t(inf_dps, "vRetIRRF")   or _t(inf_dps, "vIRRF")
         v_ret_inss   = _t(inf_dps, "vRetInss")   or _t(inf_dps, "vInss")
 
