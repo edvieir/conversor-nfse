@@ -16,9 +16,10 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 _NS = "http://www.sped.fazenda.gov.br/nfse"
 
 # ── Cores ─────────────────────────────────────────────────────────────────────
-BRD = colors.HexColor("#999999")   # bordas
-SBG = colors.HexColor("#d9d9d9")   # fundo cabeçalho de seção
-WBG = colors.white
+BRD  = colors.HexColor("#aaaaaa")   # bordas internas
+OBRD = colors.HexColor("#333333")   # borda externa principal (mais escura/grossa)
+SBG  = colors.HexColor("#d4d4d4")   # fundo cabeçalho de seção
+WBG  = colors.white
 
 
 def _t(el, tag: str) -> str:
@@ -444,7 +445,7 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     _BASE_TS = [
-        ("BOX",           (0, 0), (-1, -1), 0.5, BRD),
+        ("BOX",           (0, 0), (-1, -1), 0.8, OBRD),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
         ("BACKGROUND",    (0, 0), (-1, -1), WBG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
@@ -457,20 +458,23 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     def mk(rows, cws, extra=None):
         t = Table(rows, colWidths=cws)
         t.setStyle(TableStyle(_BASE_TS + (extra or [])))
+        t.hAlign = "LEFT"
+        t.spaceAfter = 0
+        t.spaceBefore = 0
         return t
 
-    def lv(label, val, fs=7, lfs=6):
+    def lv(label, val, fs=7, lfs=5.5):
         return Paragraph(
             f'<font name="Helvetica-Bold" size="{lfs}" color="#555555">{label}</font><br/>'
             f'<font name="Helvetica" size="{fs}">{_dash(val)}</font>',
-            ps(f"lv{abs(hash(label))%9999}", leading=max(fs+2, 9), wordWrap="LTR"),
+            ps(f"lv{abs(hash(label))%9999}", leading=max(fs+1.5, 8.5), wordWrap="LTR"),
         )
 
     def sec(title, subtitle=""):
-        txt = f'<font name="Helvetica-Bold" size="7">{title}</font>'
+        txt = f'<font name="Helvetica-Bold" size="6.5">{title}</font>'
         if subtitle:
-            txt += f'<br/><font name="Helvetica" size="5.5" color="#444444">{subtitle}</font>'
-        return Paragraph(txt, ps("sec", leading=9))
+            txt += f'<br/><font name="Helvetica" size="5" color="#444444">{subtitle}</font>'
+        return Paragraph(txt, ps("sec", leading=8))
 
     story = []
     cw3 = [W / 3] * 3
@@ -488,14 +492,38 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     RIGHT_W = W * 0.26
     CW_C    = (W - LOGO_W - RIGHT_W) / 3   # largura de cada col central
 
-    # Conteúdo da coluna logo
+    # Conteúdo da coluna logo: caixa verde com texto branco + legenda
     _NFSE_GREEN = colors.HexColor("#1a8a34")
-    logo_content = Paragraph(
-        '<font name="Helvetica-Bold" size="16" color="#1a8a34">NFS</font>'
-        '<font name="Helvetica-Bold" size="11" color="#1a8a34">e</font><br/>'
-        '<font name="Helvetica" size="5.5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
-        ps("logo", alignment=TA_LEFT, leading=18),
+    _nfse_box = Table(
+        [[Paragraph(
+            '<font name="Helvetica-Bold" size="14" color="white">NFS'
+            '<font size="9">e</font></font>',
+            ps("nfsebox", alignment=TA_LEFT, leading=16),
+        )]],
+        colWidths=[LOGO_W * 0.78],
     )
+    _nfse_box.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (0, 0), _NFSE_GREEN),
+        ("TOPPADDING",    (0, 0), (0, 0), 3),
+        ("BOTTOMPADDING", (0, 0), (0, 0), 3),
+        ("LEFTPADDING",   (0, 0), (0, 0), 5),
+        ("RIGHTPADDING",  (0, 0), (0, 0), 3),
+    ]))
+    logo_content = Table(
+        [[_nfse_box],
+         [Paragraph(
+             '<font name="Helvetica" size="5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
+             ps("logosub", alignment=TA_LEFT, leading=6.5),
+         )]],
+        colWidths=[LOGO_W - 4],
+    )
+    logo_content.setStyle(TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+    ]))
 
     title_p = Paragraph(
         '<font name="Helvetica-Bold" size="13">DANFSe v1.0</font><br/>'
@@ -558,8 +586,10 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
          ""],
     ], colWidths=[LOGO_W, CW_C, CW_C, CW_C, RIGHT_W])
 
+    hdr.spaceAfter = 0
+    hdr.spaceBefore = 0
     hdr.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 0.5, BRD),
+        ("BOX",           (0, 0), (-1, -1), 0.8, OBRD),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
         ("BACKGROUND",    (0, 0), (-1, -1), WBG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
@@ -747,15 +777,23 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     # ═══════════════════════════════════════════════════════════════
     # TOTAIS APROXIMADOS DOS TRIBUTOS
     # ═══════════════════════════════════════════════════════════════
+    def _lv_center(label, val, fs=7.5, lfs=5.5):
+        return Paragraph(
+            f'<font name="Helvetica-Bold" size="{lfs}" color="#555555">{label}</font><br/>'
+            f'<font name="Helvetica" size="{fs}">{_dash(val)}</font>',
+            ps(f"lvc{abs(hash(label))%9999}", alignment=TA_CENTER,
+               leading=max(fs+1.5, 9), wordWrap="LTR"),
+        )
     story.append(mk([
         [sec("TOTAIS APROXIMADOS DOS TRIBUTOS"), "", ""],
-        [lv("Federais",   _fmt_moeda(data["v_trib_fed"]), fs=8),
-         lv("Estaduais",  _fmt_moeda(data["v_trib_est"]), fs=8),
-         lv("Municipais", _fmt_moeda(data["v_trib_mun2"]), fs=8)],
+        [_lv_center("Federais",   _fmt_moeda(data["v_trib_fed"])),
+         _lv_center("Estaduais",  _fmt_moeda(data["v_trib_est"])),
+         _lv_center("Municipais", _fmt_moeda(data["v_trib_mun2"]))],
     ], cw3, [
         ("BACKGROUND", (0, 0), (2, 0), SBG),
         ("SPAN",       (0, 0), (2, 0)),
         ("ALIGN",      (0, 1), (2, 1), "CENTER"),
+        ("VALIGN",     (0, 1), (2, 1), "MIDDLE"),
     ]))
 
     # ═══════════════════════════════════════════════════════════════
