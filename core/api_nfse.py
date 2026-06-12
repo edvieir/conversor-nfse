@@ -204,17 +204,29 @@ def _baixar_pdfs_paralelo(
     cert_path: str,
     key_path: str,
     cnpj: str,
-    tarefas: list[tuple],  # [(chave, nome_arquivo), ...]
+    tarefas: list[tuple],  # [(chave, nome_arquivo, xml_bytes), ...]
     log: list,
     log_lock: threading.Lock,
 ) -> dict[str, bytes]:
-    """Baixa múltiplos PDFs em paralelo. Retorna dict {nome_arquivo: bytes}."""
+    """Baixa PDFs via API; se falhar, gera do XML local (DANFSe v1.0)."""
+    try:
+        from core.conversor_pdf import gerar_pdf_bytes as _gerar_pdf
+        _pdf_gen_ok = True
+    except Exception:
+        _pdf_gen_ok = False
+
     resultados: dict[str, bytes] = {}
     res_lock = threading.Lock()
 
-    def baixar_um(chave: str, nome: str):
+    def baixar_um(chave: str, nome: str, xml_bytes: bytes):
         local_log: list[str] = []
         pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
+        if pdf is None and _pdf_gen_ok and xml_bytes:
+            try:
+                pdf = _gerar_pdf(xml_bytes)
+                local_log.append(f"      PDF gerado do XML (API indisponivel)")
+            except Exception as eg:
+                local_log.append(f"      Fallback PDF falhou: {eg}")
         with log_lock:
             log.extend(local_log)
         if pdf:
@@ -222,7 +234,10 @@ def _baixar_pdfs_paralelo(
                 resultados[nome] = pdf
 
     with ThreadPoolExecutor(max_workers=_PDF_WORKERS) as pool:
-        futures = {pool.submit(baixar_um, chave, nome): nome for chave, nome in tarefas}
+        futures = {
+            pool.submit(baixar_um, chave, nome, xml_b): nome
+            for chave, nome, xml_b in tarefas
+        }
         for fut in as_completed(futures):
             try:
                 fut.result()
@@ -403,7 +418,7 @@ def baixar_xmls_nfse(
 
             # baixa PDFs em paralelo
             if formato in ("pdf", "ambos") and xmls_aprovados:
-                tarefas_pdf = [(chave_pdf, f"nfse_{chave}.pdf") for chave, _, chave_pdf in xmls_aprovados]
+                tarefas_pdf = [(chave_pdf, f"nfse_{chave}.pdf", xml_b) for chave, xml_b, chave_pdf in xmls_aprovados]
                 log.append(f"  Baixando {len(tarefas_pdf)} PDFs em paralelo ({_PDF_WORKERS} workers)...")
                 if log_cb: log_cb(log)
 
