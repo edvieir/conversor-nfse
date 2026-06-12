@@ -488,41 +488,43 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     # ═══════════════════════════════════════════════════════════════
     qr_buf = _make_qr(data["chave_acesso"] or "")
 
-    LOGO_W  = W * 0.13
-    RIGHT_W = W * 0.26
-    CW_C    = (W - LOGO_W - RIGHT_W) / 3   # largura de cada col central
+    # Padrão nacional:
+    # col0=logo | col1..3=centro (3 iguais) | col4=direita
+    #
+    # row0: [logo+subtitle]  | [DANFSe v1.0 centralizado, span c1-c3]       | [PREFEITURA]
+    # row1: [""]             | [Chave de Acesso, span c1-c3]                 | [QR, span r1-r3]
+    # row2: [""]             | [Nº NFS-e] [Comp] [Data NFS-e]               | [QR span]
+    # row3: [""]             | [Nº DPS]   [Série] [Data DPS]                | [QR span]
+    # (auth text fica dentro da célula QR abaixo do código)
 
-    # Conteúdo da coluna logo: caixa verde com texto branco + legenda
+    LOGO_W  = W * 0.145
+    RIGHT_W = W * 0.25
+    CW_C    = (W - LOGO_W - RIGHT_W) / 3
+
     _NFSE_GREEN = colors.HexColor("#1a8a34")
-    _nfse_box = Table(
-        [[Paragraph(
-            '<font name="Helvetica-Bold" size="14" color="white">NFS'
-            '<font size="9">e</font></font>',
-            ps("nfsebox", alignment=TA_LEFT, leading=16),
-        )]],
-        colWidths=[LOGO_W * 0.78],
+
+    # Logo: caixa verde "NFSe" + texto de legenda (inline horizontal)
+    _nfse_txt = Paragraph(
+        '<font name="Helvetica-Bold" size="15" color="white">NFS</font>'
+        '<font name="Helvetica-Bold" size="10" color="white">e</font>',
+        ps("nfsetxt", alignment=TA_CENTER, leading=17),
     )
-    _nfse_box.setStyle(TableStyle([
+    _nfse_sub = Paragraph(
+        '<font name="Helvetica" size="5" color="#222222">Nota Fiscal de<br/>Serviço Eletrônica</font>',
+        ps("nfsesub", alignment=TA_LEFT, leading=6.5),
+    )
+    # Tabela interna: [caixa verde | legenda] numa linha
+    _logo_inner = Table(
+        [[_nfse_txt, _nfse_sub]],
+        colWidths=[LOGO_W * 0.52, LOGO_W * 0.45],
+    )
+    _logo_inner.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (0, 0), _NFSE_GREEN),
-        ("TOPPADDING",    (0, 0), (0, 0), 3),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 3),
-        ("LEFTPADDING",   (0, 0), (0, 0), 5),
-        ("RIGHTPADDING",  (0, 0), (0, 0), 3),
-    ]))
-    logo_content = Table(
-        [[_nfse_box],
-         [Paragraph(
-             '<font name="Helvetica" size="5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
-             ps("logosub", alignment=TA_LEFT, leading=6.5),
-         )]],
-        colWidths=[LOGO_W - 4],
-    )
-    logo_content.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (0, 0), 4),
+        ("BOTTOMPADDING", (0, 0), (0, 0), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
     ]))
 
     title_p = Paragraph(
@@ -535,10 +537,11 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     uf_up   = (data["uf"]   or "").upper()
     pref_p = Paragraph(
         '<font name="Helvetica-Bold" size="6">PREFEITURA MUNICIPAL DE</font><br/>'
-        f'<font name="Helvetica-Bold" size="7.5">{city_up}</font><br/>'
+        f'<font name="Helvetica-Bold" size="7">{city_up}</font><br/>'
         f'<font name="Helvetica-Bold" size="6">{uf_up}</font>',
-        ps("pref", alignment=TA_RIGHT, leading=10),
+        ps("pref", alignment=TA_RIGHT, leading=9),
     )
+
     auth_p = Paragraph(
         '<font name="Helvetica" size="4.5" color="#555555">'
         'A autenticidade desta NFS-e pode ser<br/>'
@@ -548,42 +551,41 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ps("auth", alignment=TA_RIGHT, leading=5.5),
     )
 
-    # Conteúdo da coluna direita: prefeitura + QR + auth em lista vertical
     from reportlab.platypus import Image as RLImage
     if qr_buf:
-        qr_sz = 20 * mm
-        right_content = [
-            pref_p,
-            Paragraph("", ps("sp1", leading=3)),
-            RLImage(qr_buf, width=qr_sz, height=qr_sz),
-            Paragraph("", ps("sp2", leading=2)),
-            auth_p,
-        ]
+        qr_sz = 19 * mm
+        # QR cell: imagem alinhada à direita + auth abaixo
+        _qr_img = RLImage(qr_buf, width=qr_sz, height=qr_sz)
+        _qr_tbl = Table(
+            [[_qr_img], [auth_p]],
+            colWidths=[RIGHT_W - 4],
+        )
+        _qr_tbl.setStyle(TableStyle([
+            ("ALIGN",         (0, 0), (-1, -1), "RIGHT"),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ]))
+        qr_cell = _qr_tbl
     else:
-        right_content = pref_p
+        qr_cell = auth_p
 
-    # Tabela plana: 4 linhas x 5 colunas
-    # row0: logo | título(span c1-c3) | direita(span r0-r3)
-    # row1: logo | chave(span c1-c3)  | …
-    # row2: logo | Nº NFS-e | Competência | Data NFS-e | …
-    # row3: logo | Nº DPS   | Série DPS   | Data DPS   | …
+    # Estrutura padrão nacional:
+    # row0: [logo c0] [title c1-c3 span] [pref c4]
+    # row1: [Chave c0-c3 span]           [QR c4, span r1-r3]
+    # row2: [Nº NFS-e c0] [Comp c1] [Data NFS-e c2-c3 span] [QR span]
+    # row3: [Nº DPS c0]   [Série c1] [Data DPS c2-c3 span]  [QR span]
     hdr = Table([
-        [logo_content,
-         title_p, "", "",
-         right_content],
-        ["",
-         lv("Chave de Acesso da NFS-e", data["chave_acesso"] or "-"), "", "",
-         ""],
-        ["",
-         lv("Número da NFS-e",                data["n_nfse"]),
+        [_logo_inner, title_p, "", "", pref_p],
+        [lv("Chave de Acesso da NFS-e", data["chave_acesso"] or "-"), "", "", "", qr_cell],
+        [lv("Número da NFS-e",                data["n_nfse"]),
          lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
-         lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"])),
-         ""],
-        ["",
-         lv("Número da DPS",                  data["n_dps"]),
+         lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"])), "", ""],
+        [lv("Número da DPS",                  data["n_dps"]),
          lv("Série da DPS",                   data["serie"]),
-         lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"])),
-         ""],
+         lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"])), "", ""],
     ], colWidths=[LOGO_W, CW_C, CW_C, CW_C, RIGHT_W])
 
     hdr.spaceAfter = 0
@@ -597,22 +599,27 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("LEFTPADDING",   (0, 0), (-1, -1), 2),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
-        # Logo: centralizado verticalmente, ocupa as 4 linhas
-        ("SPAN",   (0, 0), (0, 3)),
-        ("VALIGN", (0, 0), (0, 3), "MIDDLE"),
-        ("ALIGN",  (0, 0), (0, 3), "CENTER"),
-        # Título: span nas 3 colunas centrais, centralizado
+        # row0 logo: alinhado à esquerda, centralizado verticalmente
+        ("VALIGN", (0, 0), (0, 0), "MIDDLE"),
+        # row0 título: span c1-c3, centralizado
         ("SPAN",   (1, 0), (3, 0)),
         ("ALIGN",  (1, 0), (3, 0), "CENTER"),
         ("VALIGN", (1, 0), (3, 0), "MIDDLE"),
-        ("TOPPADDING",    (1, 0), (3, 0), 6),
-        ("BOTTOMPADDING", (1, 0), (3, 0), 6),
-        # Chave: span nas 3 colunas centrais
-        ("SPAN",   (1, 1), (3, 1)),
-        # Coluna direita: span nas 4 linhas
-        ("SPAN",   (4, 0), (4, 3)),
-        ("ALIGN",  (4, 0), (4, 3), "RIGHT"),
-        ("VALIGN", (4, 0), (4, 3), "TOP"),
+        ("TOPPADDING",    (1, 0), (3, 0), 5),
+        ("BOTTOMPADDING", (1, 0), (3, 0), 5),
+        # row0 prefeitura: direita
+        ("ALIGN",  (4, 0), (4, 0), "RIGHT"),
+        ("VALIGN", (4, 0), (4, 0), "MIDDLE"),
+        # row1 chave: span TODA a largura esquerda c0-c3
+        ("SPAN",   (0, 1), (3, 1)),
+        # row2 Data NFS-e: span c2-c3
+        ("SPAN",   (2, 2), (3, 2)),
+        # row3 Data DPS: span c2-c3
+        ("SPAN",   (2, 3), (3, 3)),
+        # col4 rows 1-3: QR span
+        ("SPAN",   (4, 1), (4, 3)),
+        ("ALIGN",  (4, 1), (4, 3), "RIGHT"),
+        ("VALIGN", (4, 1), (4, 3), "TOP"),
     ]))
     story.append(hdr)
 
