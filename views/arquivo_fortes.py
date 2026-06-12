@@ -71,7 +71,13 @@ def render():
             label_visibility="collapsed",
             key="fortes_nome_empresa",
         )
-        cod_servico = ""
+        st.markdown(_label("Código do Serviço (Fortes)"), unsafe_allow_html=True)
+        cod_servico = st.text_input(
+            "cod_servico",
+            placeholder="ex: 1102  (LC 116/2003 sem ponto — 11.02 → 1102)",
+            label_visibility="collapsed",
+            key="fortes_cod_servico",
+        )
 
         st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
         observacao = st.text_input(

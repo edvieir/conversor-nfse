@@ -196,8 +196,8 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""),
         ))
-        # prioridade: código municipal do XML > código nacional > parâmetro global
-        _cod = n.get("cod_trib_mun") or n.get("cod_trib_nac") or cod_servico
+        # prioridade: campo manual > código municipal do XML > código nacional
+        _cod = cod_servico or n.get("cod_trib_mun") or n.get("cod_trib_nac") or ""
         linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], _cod,
                                 n["v_bc"], cnae=n.get("cnae","")))
 
