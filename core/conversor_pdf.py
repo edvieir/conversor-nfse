@@ -407,11 +407,11 @@ def _grid(cols_data: list[tuple[str,str]], widths: list[float],
     return t
 
 
-def _qr_image(chave: str):
+def _qr_image(chave: str, size_mm: float = 25):
     if not _QR_OK or not chave or chave == "-":
         return None
     try:
-        qr = qrcode.QRCode(box_size=2, border=1,
+        qr = qrcode.QRCode(box_size=6, border=2,
                            error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(chave)
         qr.make(fit=True)
@@ -420,7 +420,7 @@ def _qr_image(chave: str):
         img_pil.save(buf, format="PNG")
         buf.seek(0)
         from reportlab.platypus import Image as RLImage
-        return RLImage(buf, width=22 * mm, height=22 * mm)
+        return RLImage(buf, width=size_mm * mm, height=size_mm * mm)
     except Exception:
         return None
 
@@ -464,9 +464,8 @@ def gerar_danfse(xml_bytes: bytes) -> bytes:
     story.append(hdr)
 
     # ── 2. CHAVE DE ACESSO + QR ───────────────────────────────────────────────
-    # Estrutura: coluna esquerda (chave label + número) | coluna direita (note + qr)
     qr = _qr_image(d["chave"])
-    qr_col_w = 30 * mm
+    qr_col_w = 28 * mm
     chave_w  = W - qr_col_w
 
     note_p = Paragraph(
@@ -475,23 +474,28 @@ def gerar_danfse(xml_bytes: bytes) -> bytes:
         "pela consulta da chave de acesso no portal",
         S_NOTE,
     )
-    qr_cell = qr if qr else Paragraph("", S_VAL)
+
+    # Coluna direita: nota + QR juntos em célula única (SPAN das 2 linhas)
+    # Colocamos [note_p, qr] como lista na célula (1,0); (1,1) fica vazia pelo SPAN.
+    right_cell = [note_p, qr] if qr else note_p
 
     chave_table = Table(
         [
-            [Paragraph("<b>Chave de Acesso da NFS-e</b>", S_LBL), note_p],
-            [Paragraph(d["chave"], S_VAL),                         qr_cell],
+            [Paragraph("<b>Chave de Acesso da NFS-e</b>", S_LBL), right_cell],
+            [Paragraph(d["chave"], S_VAL),                         ""],
         ],
         colWidths=[chave_w, qr_col_w],
     )
     chave_table.setStyle(TableStyle([
-        ("SPAN",          (1,0), (1,1)),          # QR ocupa as 2 linhas da coluna direita
-        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-        ("ALIGN",         (1,0), (1,-1), "CENTER"),
+        ("SPAN",          (1,0), (1,1)),          # coluna direita: célula única
+        ("VALIGN",        (0,0), (0,-1), "MIDDLE"),
+        ("VALIGN",        (1,0), (1,0),  "MIDDLE"),
+        ("ALIGN",         (1,0), (1,0),  "CENTER"),
         ("BOX",           (0,0), (-1,-1), 0.3, C_BRD),
         ("INNERGRID",     (0,0), (-1,-1), 0.3, C_BRD),
-        ("BACKGROUND",    (0,0), (0,0),  C_LBL),
-        ("BACKGROUND",    (0,1), (0,1),  C_WHT),
+        ("BACKGROUND",    (0,0), (0,0),  C_LBL),   # só a célula do label: azul claro
+        ("BACKGROUND",    (0,1), (0,1),  C_WHT),   # célula do valor: branco
+        ("BACKGROUND",    (1,0), (1,0),  C_WHT),   # coluna direita: branco
         ("TOPPADDING",    (0,0), (-1,-1), 1.5),
         ("BOTTOMPADDING", (0,0), (-1,-1), 1.5),
         ("LEFTPADDING",   (0,0), (-1,-1), 2.5),
