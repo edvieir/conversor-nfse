@@ -166,19 +166,34 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     op_sn    = tv("opSN") or tv("optSN")
     reg_trib = tv("regTrib")
 
-    prest_el = inf_dps.find(f"{{{_NS}}}prest") if inf_dps is not None else None
+    prest_el = inf_dps.find(f".//{{{_NS}}}prest") if inf_dps is not None else None
     prest_mun = _t(prest_el, "xMun") if prest_el is not None else ""
+    prest_cmun = _t(prest_el, "cMun") if prest_el is not None else ""
+    emit_cmun  = _t(emit, "cMun")    if emit is not None else ""
     trib_early = inf_dps.find(f".//{{{_NS}}}tribMun") if inf_dps is not None else None
     x_mun_early = (
         (_t(trib_early, "xMunIncid") if trib_early is not None else "")
         or tv("xMunIncid") or tv("xMunPrest")
     )
-    city_name = emit_mun or prest_mun or x_mun_early or ""
+    # IBGE code → city name fallback
+    try:
+        from core.ibge_municipios import IBGE_MUNICIPIOS as _IBGE
+        def _ibge_lookup(code: str) -> str:
+            if not code:
+                return ""
+            try:
+                return _IBGE.get(int(code)) or _IBGE.get(code) or ""
+            except (ValueError, TypeError):
+                return _IBGE.get(code) or ""
+        _ibge_city = _ibge_lookup(emit_cmun) or _ibge_lookup(prest_cmun) or ""
+    except Exception:
+        _ibge_city = ""
+    city_name = emit_mun or prest_mun or x_mun_early or _ibge_city or ""
     emit_mun_uf = (f"{city_name} - {emit_uf}" if city_name and emit_uf
                    else city_name or emit_uf or "")
     uf = emit_uf or ""
 
-    toma = inf_dps.find(f"{{{_NS}}}toma") if inf_dps is not None else None
+    toma = inf_dps.find(f".//{{{_NS}}}toma") if inf_dps is not None else None
     toma_doc   = (_t(toma, "CNPJ") or _t(toma, "CPF")) if toma is not None else ""
     toma_im    = _t(toma, "IM")    if toma is not None else ""
     toma_fone  = (_t(toma, "fone") or _t(toma, "tel")) if toma is not None else ""
@@ -188,7 +203,20 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     toma_nro   = _t(toma, "nro")  if toma is not None else ""
     toma_cpl   = _t(toma, "xCpl") if toma is not None else ""
     toma_bairro= _t(toma, "xBairro") if toma is not None else ""
-    toma_mun   = _t(toma, "xMun") if toma is not None else ""
+    toma_mun_raw = _t(toma, "xMun") if toma is not None else ""
+    toma_cmun    = _t(toma, "cMun") if toma is not None else ""
+    try:
+        from core.ibge_municipios import IBGE_MUNICIPIOS as _IBGE2
+        def _ibge_lookup2(code: str) -> str:
+            if not code:
+                return ""
+            try:
+                return _IBGE2.get(int(code)) or _IBGE2.get(code) or ""
+            except (ValueError, TypeError):
+                return _IBGE2.get(code) or ""
+        toma_mun = toma_mun_raw or _ibge_lookup2(toma_cmun) or ""
+    except Exception:
+        toma_mun = toma_mun_raw
     toma_uf    = _t(toma, "UF")   if toma is not None else ""
     toma_cep   = _t(toma, "CEP")  if toma is not None else ""
     toma_end_parts = [toma_lgr]
