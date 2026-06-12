@@ -67,10 +67,13 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     cnae = _t(inf_dps, "CNAE") if inf_dps is not None else ""
 
     # código e descrição do serviço (dentro de <cServ> no DPS)
-    c_serv     = inf_dps.find(f".//{{{_NS}}}cServ") if inf_dps is not None else None
+    c_serv       = inf_dps.find(f".//{{{_NS}}}cServ") if inf_dps is not None else None
     cod_trib_mun = _t(c_serv, "cTribMun") if c_serv is not None else ""
     cod_trib_nac = _t(c_serv, "cTribNac") if c_serv is not None else ""
     desc_serv    = _t(c_serv, "xDescServ") if c_serv is not None else ""
+    # cTribNac tem 6 dígitos no padrão LLSSDD (lista LC116 + sub-item + desdobramento).
+    # Os primeiros 4 dígitos = código LC 116/2003 sem ponto (ex: "110201" → "1102" = item 11.02).
+    cod_lc116 = cod_trib_nac[:4] if len(cod_trib_nac) >= 4 else cod_trib_nac
 
     d_compet = _tv("dCompet")
     if not d_compet:
@@ -104,7 +107,7 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         "v_ret_cofins": v_ret_cofins, "v_ret_pis": v_ret_pis,
         "v_ret_csl": v_ret_csl, "v_ret_irrf": v_ret_irrf, "v_ret_inss": v_ret_inss,
         "cod_trib_mun": cod_trib_mun, "cod_trib_nac": cod_trib_nac,
-        "desc_serv": desc_serv,
+        "cod_lc116": cod_lc116, "desc_serv": desc_serv,
     }
 
 
@@ -196,8 +199,8 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""),
         ))
-        # prioridade: campo manual > código municipal do XML > código nacional
-        _cod = cod_servico or n.get("cod_trib_mun") or n.get("cod_trib_nac") or ""
+        # prioridade: campo manual (override global) > LC 116 derivado do cTribNac > cTribMun
+        _cod = cod_servico or n.get("cod_lc116") or n.get("cod_trib_mun") or ""
         linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], _cod,
                                 n["v_bc"], cnae=n.get("cnae","")))
 

@@ -71,10 +71,10 @@ def render():
             label_visibility="collapsed",
             key="fortes_nome_empresa",
         )
-        st.markdown(_label("Código do Serviço (Fortes)"), unsafe_allow_html=True)
+        st.markdown(_label("Código do Serviço (Fortes) — opcional"), unsafe_allow_html=True)
         cod_servico = st.text_input(
             "cod_servico",
-            placeholder="ex: 1102  (LC 116/2003 sem ponto — 11.02 → 1102)",
+            placeholder="Preenchido automaticamente pelo XML. Informe só para forçar um código fixo.",
             label_visibility="collapsed",
             key="fortes_cod_servico",
         )
