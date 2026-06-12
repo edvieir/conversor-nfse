@@ -416,19 +416,30 @@ def baixar_xmls_nfse(
                 log.append(f"  {len(xmls_aprovados)} XMLs salvos.")
                 if log_cb: log_cb(log)
 
-            # baixa PDFs em paralelo
+            # gera PDFs do XML (DANFSe v1.0 — padrao nacional)
             if formato in ("pdf", "ambos") and xmls_aprovados:
-                tarefas_pdf = [(chave_pdf, f"nfse_{chave}.pdf", xml_b) for chave, xml_b, chave_pdf in xmls_aprovados]
-                log.append(f"  Baixando {len(tarefas_pdf)} PDFs em paralelo ({_PDF_WORKERS} workers)...")
+                try:
+                    from core.conversor_pdf import gerar_pdf_bytes as _gerar_pdf
+                    _pdf_gen_ok = True
+                except Exception:
+                    _pdf_gen_ok = False
+
+                log.append(f"  Gerando {len(xmls_aprovados)} PDFs (DANFSe v1.0)...")
                 if log_cb: log_cb(log)
 
-                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj_uso, tarefas_pdf, log, log_lock)
-
                 pdf_ok = 0
-                for nome, pdf_bytes in pdfs.items():
-                    zf.writestr(f"pdf/{nome}", pdf_bytes)
-                    pdf_ok += 1
-                log.append(f"  PDFs baixados: {pdf_ok}/{len(tarefas_pdf)}")
+                for chave, xml_b, _ in xmls_aprovados:
+                    nome_pdf = f"nfse_{chave}.pdf"
+                    if _pdf_gen_ok and xml_b:
+                        try:
+                            pdf_bytes = _gerar_pdf(xml_b)
+                            zf.writestr(f"pdf/{nome_pdf}", pdf_bytes)
+                            pdf_ok += 1
+                        except Exception as eg:
+                            log.append(f"    -> PDF erro ({chave[:20]}...): {eg}")
+                    else:
+                        log.append(f"    -> PDF gerador indisponivel: {nome_pdf}")
+                log.append(f"  PDFs gerados: {pdf_ok}/{len(xmls_aprovados)}")
                 if log_cb: log_cb(log)
                 if progress_cb:
                     progress_cb(0.95)
