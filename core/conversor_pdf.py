@@ -1,351 +1,330 @@
 """
-core/conversor_pdf.py — Geração de DANFSe v1.0 a partir de XML NFSe nacional
-Layout idêntico ao modelo nacional (Padrão SPED/NFSe).
+core/conversor_pdf.py — DANFSe v1.0 a partir de XML NFSe nacional
+Layout idêntico ao modelo nacional (padrão SPED/NFSe).
 """
 from __future__ import annotations
 import io
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-    HRFlowable, KeepTogether
-)
-from reportlab.graphics.shapes import Drawing, Rect, String, Circle
-from reportlab.graphics import renderPDF
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.platypus.flowables import Flowable
 
 try:
     import qrcode
-    from PIL import Image as PILImage
-    import tempfile, os
     _QR_OK = True
 except ImportError:
     _QR_OK = False
 
-# ── Cores DANFSe nacional ──────────────────────────────────────────────────────
-COR_HEADER_BG   = colors.HexColor("#1F3864")   # azul escuro cabeçalho de seção
-COR_HEADER_TEXT = colors.white
-COR_LABEL_BG    = colors.HexColor("#DDEEFF")   # azul claro rótulos
-COR_BORDA       = colors.HexColor("#AAAAAA")
-COR_VERDE_NFS   = colors.HexColor("#00AA44")
-COR_DARK_LOGO   = colors.HexColor("#1F3864")
-
-NS = {"nfse": "http://www.sped.fazenda.gov.br/nfse"}
+# ── Cores ──────────────────────────────────────────────────────────────────────
+C_SEC  = colors.HexColor("#1F3864")   # cabeçalho de seção (azul escuro)
+C_LBL  = colors.HexColor("#E8EEF4")   # fundo linha de rótulos (azul bem claro)
+C_BRD  = colors.HexColor("#AAAAAA")   # bordas
+C_WHT  = colors.white
+C_BLK  = colors.black
+C_GRN  = colors.HexColor("#00AA44")   # verde do "e" no logo
 
 PAGE_W, PAGE_H = A4
-MARGIN = 12 * mm
+M = 10 * mm   # margem
+USABLE = PAGE_W - 2 * M
 
 
 # ── Helpers XML ───────────────────────────────────────────────────────────────
 
-def _tag(root: ET.Element, *tags: str) -> str:
-    """Busca o primeiro texto encontrado para qualquer das tags (sem namespace)."""
+def _t(el, *tags):
+    """Busca texto de qualquer tag (sem namespace) dentro de el."""
+    if el is None:
+        return "-"
     for tag in tags:
-        for el in root.iter():
-            local = el.tag.split("}")[-1] if "}" in el.tag else el.tag
-            if local == tag and el.text and el.text.strip():
-                return el.text.strip()
+        for e in el.iter():
+            loc = e.tag.split("}")[-1] if "}" in e.tag else e.tag
+            if loc == tag and e.text and e.text.strip():
+                return e.text.strip()
     return "-"
 
 
-def _fmt_cnpj(s: str) -> str:
-    d = "".join(c for c in s if c.isdigit())
-    if len(d) == 14:
-        return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
-    return s
+def _fmt_cnpj(s):
+    d = "".join(c for c in (s or "") if c.isdigit())
+    return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}" if len(d) == 14 else (s or "-")
 
 
-def _fmt_cep(s: str) -> str:
-    d = "".join(c for c in s if c.isdigit())
-    if len(d) == 8:
-        return f"{d[:5]}-{d[5:]}"
-    return s
+def _fmt_cep(s):
+    d = "".join(c for c in (s or "") if c.isdigit())
+    return f"{d[:5]}-{d[5:]}" if len(d) == 8 else (s or "-")
 
 
-def _fmt_data(s: str) -> str:
-    """ISO 8601 → dd/MM/yyyy HH:mm:ss"""
+def _fmt_dt(s):
     if not s or s == "-":
         return "-"
     try:
-        s2 = s[:19].replace("T", " ")
-        dt = datetime.strptime(s2, "%Y-%m-%d %H:%M:%S")
-        return dt.strftime("%d/%m/%Y %H:%M:%S")
+        return datetime.strptime(s[:19].replace("T", " "), "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        return s[:19]
+
+
+def _fmt_dc(s):
+    if not s or s == "-":
+        return "-"
+    try:
+        return datetime.strptime(s[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
     except Exception:
         return s
 
 
-def _fmt_data_curta(s: str) -> str:
-    """ISO 8601 yyyy-MM-dd → dd/MM/yyyy"""
+def _fmt_val(s):
     if not s or s == "-":
         return "-"
     try:
-        dt = datetime.strptime(s[:10], "%Y-%m-%d")
-        return dt.strftime("%d/%m/%Y")
+        return "R$ {:,.2f}".format(float(s)).replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return s
 
 
-def _fmt_valor(s: str) -> str:
-    if not s or s == "-":
-        return "-"
-    try:
-        return f"R$ {float(s):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return s
+_MUN = {
+    "2307601": "LIMOEIRO DO NORTE", "2304400": "FORTALEZA",
+    "3550308": "SÃO PAULO", "3304557": "RIO DE JANEIRO",
+    "5300108": "BRASÍLIA", "2304659": "JUAZEIRO DO NORTE",
+}
+
+def _mun(cod, uf=""):
+    nome = _MUN.get(cod, cod or "-")
+    return f"{nome.title()} - {uf}" if uf else nome
 
 
-def _municipio_nome(cod: str, uf: str = "") -> str:
-    tabela = {
-        "2307601": "Limoeiro do Norte", "2304400": "Fortaleza",
-        "3550308": "São Paulo", "3304557": "Rio de Janeiro",
-        "5300108": "Brasília",
-    }
-    nome = tabela.get(cod, cod)
-    return f"{nome} - {uf}" if uf else nome
+def _mun_upper(cod):
+    return _MUN.get(cod, cod or "-")
 
 
-def _opcao_simpnac(cod: str) -> str:
-    mapa = {
-        "1": "Não optante",
-        "2": "Não optante - Excluído no ano-calendário",
-        "3": "Optante - ME/EPP",
-        "4": "Optante - MEI",
-    }
-    return mapa.get(cod, cod if cod else "-")
+def _simp(cod):
+    return {
+        "1": "Não optante", "2": "Não optante - Excluído",
+        "3": "Optante - ME/EPP", "4": "Optante - MEI",
+    }.get(cod, cod or "-")
 
 
-def _reg_trib_sn(cod: str) -> str:
-    mapa = {
+def _reg_sn(cod):
+    return {
         "1": "Regime de apuração dos tributos federais e municipal pelo Simples Nacional",
         "2": "Regime de apuração dos tributos federais pelo Simples Nacional e tributação municipal fora do Simples Nacional",
         "3": "Regime de apuração dos tributos municipais pelo Simples Nacional e tributação federal fora do Simples Nacional",
-    }
-    return mapa.get(cod, cod if cod else "-")
+    }.get(cod, cod or "-")
 
 
-def _retencao_issqn(cod: str) -> str:
-    return {"1": "Não Retido", "2": "Retido", "3": "Retido pelo Intermediário"}.get(cod, cod if cod else "-")
+def _ret_iss(cod):
+    return {"1": "Não Retido", "2": "Retido", "3": "Retido pelo Intermediário"}.get(cod, cod or "-")
 
 
-def _tributacao_issqn(cod: str) -> str:
-    return {"1": "Operação Tributável", "2": "Imune", "3": "Isenta", "4": "Exportação",
-            "5": "Não Incidência", "6": "Suspensa - Decisão Judicial",
-            "7": "Suspensa - Processo Administrativo"}.get(cod, cod if cod else "-")
+def _trib_iss(cod):
+    return {
+        "1": "Operação Tributável", "2": "Imune", "3": "Isenta",
+        "4": "Exportação", "5": "Não Incidência",
+        "6": "Suspensa - Decisão Judicial", "7": "Suspensa - Processo Adm.",
+    }.get(cod, cod or "-")
 
 
-def _cod_trib_nac(cod: str) -> str:
-    """Formata código de tributação nacional: '010801' → '01.08.01'"""
-    c = "".join(ch for ch in (cod or "") if ch.isdigit())
-    if len(c) == 6:
-        return f"{c[:2]}.{c[2:4]}.{c[4:]}"
-    return cod if cod else "-"
+def _cod_nac(s):
+    d = "".join(c for c in (s or "") if c.isdigit())
+    return f"{d[:2]}.{d[2:4]}.{d[4:]}" if len(d) == 6 else (s or "-")
 
 
-# ── Extração de dados do XML ───────────────────────────────────────────────────
+# ── Parse XML ─────────────────────────────────────────────────────────────────
 
-def _parse_xml(xml_bytes: bytes) -> dict:
+def _parse(xml_bytes: bytes) -> dict:
     root = ET.fromstring(xml_bytes)
-    g = lambda *tags: _tag(root, *tags)
 
-    # DPS
-    dps_el = next((e for e in root.iter() if e.tag.split("}")[-1] == "DPS"), None)
-    dps = dps_el if dps_el is not None else root
-
-    # Emitente (NFSe level)
-    emit_el = next((e for e in root.iter() if e.tag.split("}")[-1] == "emit"), root)
-
-    # Endereço emitente
-    ender_el = next((e for e in emit_el.iter() if e.tag.split("}")[-1] in ("enderNac", "enderExt")), None)
-    def _ender_txt(el) -> tuple[str, str, str]:
-        if el is None:
-            return "-", "-", "-"
-        xLgr  = _tag(el, "xLgr")
-        nro   = _tag(el, "nro")
-        xCpl  = _tag(el, "xCpl")
-        bairro= _tag(el, "xBairro")
-        cMun  = _tag(el, "cMun")
-        uf    = _tag(el, "UF")
-        cep   = _fmt_cep(_tag(el, "CEP"))
-        partes = [p for p in [xLgr, nro, xCpl, bairro] if p and p != "-"]
-        end_str = ", ".join(partes)
-        mun_str = _municipio_nome(cMun, uf)
-        return end_str, mun_str, cep
-
-    emit_end, emit_mun, emit_cep = _ender_txt(ender_el)
-
-    # Tomador
-    toma_el = next((e for e in root.iter() if e.tag.split("}")[-1] == "toma"), None)
-    toma_cnpj_raw = _tag(toma_el, "CNPJ", "CPF") if toma_el else "-"
-    toma_end_el = next((e for e in (toma_el or root).iter() if e.tag.split("}")[-1] in ("endNac", "endExt", "end")), None)
-    # end dentro de toma
-    if toma_el is not None:
-        # xLgr pode estar direto em toma_el ou dentro de end
-        toma_xLgr   = _tag(toma_el, "xLgr")
-        toma_nro    = _tag(toma_el, "nro")
-        toma_xCpl   = _tag(toma_el, "xCpl")
-        toma_bairro = _tag(toma_el, "xBairro")
-        inner_end   = next((e for e in toma_el.iter() if e.tag.split("}")[-1] in ("endNac","endExt")), None)
-        toma_cMun   = _tag(inner_end or toma_el, "cMun")
-        toma_uf     = _tag(toma_el, "UF") or _tag(inner_end or toma_el, "UF")
-        toma_cep    = _fmt_cep(_tag(inner_end or toma_el, "CEP"))
-        partes_t = [p for p in [toma_xLgr, toma_nro, toma_xCpl, toma_bairro] if p and p != "-"]
-        toma_end_str = ", ".join(partes_t) if partes_t else "-"
-        toma_mun     = _municipio_nome(toma_cMun, toma_uf) if toma_cMun != "-" else "-"
-    else:
-        toma_end_str = toma_mun = toma_cep = "-"
-
-    # Serviço
-    serv_el  = next((e for e in root.iter() if e.tag.split("}")[-1] == "serv"), None)
-    cServ_el = next((e for e in (serv_el or root).iter() if e.tag.split("}")[-1] == "cServ"), None)
-
-    # Tributação
-    trib_el    = next((e for e in root.iter() if e.tag.split("}")[-1] == "trib"), None)
-    tribMun_el = next((e for e in (trib_el or root).iter() if e.tag.split("}")[-1] == "tribMun"), None)
-    totTrib_el = next((e for e in (trib_el or root).iter() if e.tag.split("}")[-1] == "totTrib"), None)
-
-    # regTrib (emitente)
-    regTrib_el = next((e for e in root.iter() if e.tag.split("}")[-1] == "regTrib"), None)
-    opSimpNac  = _tag(regTrib_el, "opSimpNac") if regTrib_el else "-"
-    regApTribSN= _tag(regTrib_el, "regApTribSN") if regTrib_el else "-"
-    regEspTrib = _tag(regTrib_el, "regEspTrib") if regTrib_el else "-"
-
-    # valores NFSe (nivel raiz)
-    vals_el = next((e for e in root.iter() if e.tag.split("}")[-1] == "valores"
-                    and any(c.tag.split("}")[-1] == "vBC" for c in e)), None)
-    # valores DPS
-    vals_dps = next((e for e in (dps or root).iter() if e.tag.split("}")[-1] == "valores"
-                     and any(c.tag.split("}")[-1] in ("vServPrest",) for c in e)), None)
-    vServ_el = next((e for e in (vals_dps or root).iter() if e.tag.split("}")[-1] == "vServPrest"), None)
-
-    # chave de acesso — Id do infNFSe
+    # chave de acesso
     chave = "-"
     for el in root.iter():
-        local = el.tag.split("}")[-1]
-        if local == "infNFSe":
-            id_attr = el.get("Id", "")
-            if id_attr.startswith("NFS"):
-                chave = id_attr[3:]
+        if el.tag.split("}")[-1] == "infNFSe":
+            id_ = el.get("Id", "")
+            chave = id_[3:] if id_.startswith("NFS") else id_
             break
 
-    # locPrest
-    locPrest_el = next((e for e in root.iter() if e.tag.split("}")[-1] == "locPrest"), None)
-    cLocPrest = _tag(locPrest_el, "cLocPrestacao") if locPrest_el else "-"
-    xLocPrest = _municipio_nome(cLocPrest) if cLocPrest != "-" else _tag(root, "xLocPrestacao")
+    # emitente (nível NFSe)
+    emit = next((e for e in root.iter() if e.tag.split("}")[-1] == "emit"), root)
+    ender_e = next((e for e in emit.iter() if e.tag.split("}")[-1] in ("enderNac","enderExt")), None)
+    cMun_e = _t(ender_e, "cMun"); uf_e = _t(ender_e, "UF")
 
-    pAliq_raw = (_tag(tribMun_el, "pAliq") if tribMun_el else None) or _tag(vals_el, "pAliqAplic") if vals_el else "-"
+    # DPS
+    dps = next((e for e in root.iter() if e.tag.split("}")[-1] == "DPS"), root)
+
+    # regTrib
+    reg = next((e for e in root.iter() if e.tag.split("}")[-1] == "regTrib"), None)
+
+    # tomador
+    toma = next((e for e in root.iter() if e.tag.split("}")[-1] == "toma"), None)
+    toma_ender_nac = next((e for e in (toma or root).iter() if e.tag.split("}")[-1] in ("endNac","enderNac")), None)
+    cMun_t = _t(toma_ender_nac, "cMun"); uf_t = _t(toma_ender_nac, "UF")
+    # UF do tomador pode estar em nível toma direto
+    if uf_t == "-":
+        uf_t = _t(toma, "UF") if toma is not None else "-"
+    toma_xLgr   = _t(toma, "xLgr")
+    toma_nro    = _t(toma, "nro")
+    toma_xCpl   = _t(toma, "xCpl")
+    toma_bairro = _t(toma, "xBairro")
+    partes_t = [p for p in [toma_xLgr, toma_nro, toma_xCpl, toma_bairro] if p != "-"]
+    toma_end = ", ".join(partes_t) if partes_t else "-"
+
+    # serviço
+    serv  = next((e for e in root.iter() if e.tag.split("}")[-1] == "serv"), None)
+    cServ = next((e for e in (serv or root).iter() if e.tag.split("}")[-1] == "cServ"), None)
+    locPrest = next((e for e in (serv or root).iter() if e.tag.split("}")[-1] == "locPrest"), None)
+    cLocPrest = _t(locPrest, "cLocPrestacao")
+
+    # tributação
+    trib    = next((e for e in root.iter() if e.tag.split("}")[-1] == "trib"), None)
+    tribMun = next((e for e in (trib or root).iter() if e.tag.split("}")[-1] == "tribMun"), None)
+    totTrib = next((e for e in (trib or root).iter() if e.tag.split("}")[-1] == "totTrib"), None)
+
+    # valores nível NFSe (vBC, pAliqAplic, vISSQN, vLiq)
+    vals_nfse = next(
+        (e for e in root.iter()
+         if e.tag.split("}")[-1] == "valores"
+         and any(c.tag.split("}")[-1] in ("vBC", "vLiq") for c in e)),
+        None
+    )
+    # valores nível DPS (vServ dentro de vServPrest)
+    vals_dps  = next(
+        (e for e in (dps or root).iter()
+         if e.tag.split("}")[-1] == "valores"
+         and any(c.tag.split("}")[-1] == "vServPrest" for c in e)),
+        None
+    )
+    vServPrest = next((e for e in (vals_dps or root).iter() if e.tag.split("}")[-1] == "vServPrest"), None)
+    vServ_raw  = _t(vServPrest, "vServ")
+    vBC_raw    = _t(vals_nfse, "vBC") if vals_nfse else vServ_raw
+    vISSQN_raw = _t(vals_nfse, "vISSQN") if vals_nfse else "-"
+    vLiq_raw   = _t(vals_nfse, "vLiq") if vals_nfse else vServ_raw
+
+    pAliq_raw = _t(tribMun, "pAliq") if tribMun else _t(vals_nfse, "pAliqAplic")
     try:
         pAliq_fmt = f"{float(pAliq_raw):.2f}%"
     except Exception:
-        pAliq_fmt = pAliq_raw if pAliq_raw else "-"
+        pAliq_fmt = pAliq_raw or "-"
 
-    vServ_raw = _tag(vServ_el, "vServ") if vServ_el else (_tag(vals_el, "vBC") if vals_el else "-")
-    vISSQN_raw= _tag(vals_el, "vISSQN") if vals_el else "-"
-    vLiq_raw  = _tag(vals_el, "vLiq") if vals_el else vServ_raw
-    vBC_raw   = _tag(vals_el, "vBC") if vals_el else vServ_raw
+    cTribNac_raw  = _t(cServ, "cTribNac")
+    xTribNac_desc = _t(root, "xTribNac")
+    cTribNac_fmt  = _cod_nac(cTribNac_raw)
+    cod_nac_label = f"{cTribNac_fmt} - {xTribNac_desc}" if xTribNac_desc != "-" else cTribNac_fmt
 
-    indTotTrib = _tag(totTrib_el, "indTotTrib") if totTrib_el else "0"
+    xLocEmi = _t(root, "xLocEmi")
+    uf_emit  = uf_e if uf_e != "-" else "CE"
 
-    cTribNac_raw = _tag(cServ_el, "cTribNac") if cServ_el else g("cTribNac")
-    cTribNac_fmt = _cod_trib_nac(cTribNac_raw)
-    xTribNac_desc = g("xTribNac")
-    # Formata como "01.08.01 - 108 / descrição"
-    if xTribNac_desc and xTribNac_desc != "-":
-        cod_trib_label = f"{cTribNac_fmt} - {xTribNac_desc}"
-    else:
-        cod_trib_label = cTribNac_fmt
+    # endereço emitente
+    xLgr_e = _t(ender_e, "xLgr"); nro_e = _t(ender_e, "nro")
+    xCpl_e = _t(ender_e, "xCpl"); bairro_e = _t(ender_e, "xBairro")
+    partes_e = [p for p in [xLgr_e, nro_e, xCpl_e, bairro_e] if p != "-"]
+    emit_end = ", ".join(partes_e) if partes_e else "-"
+
+    indTotTrib = _t(totTrib, "indTotTrib") if totTrib else "0"
 
     return {
-        "chave":         chave,
-        "nNFSe":         g("nNFSe"),
-        "competencia":   _fmt_data_curta(g("dCompet")),
-        "dhProc":        _fmt_data(g("dhProc")),
-        "nDPS":          g("nDPS", "nDFSe"),
-        "serie":         g("serie"),
-        "dhEmi":         _fmt_data(g("dhEmi")),
+        "chave":       chave,
+        "nNFSe":       _t(root, "nNFSe"),
+        "competencia": _fmt_dc(_t(dps, "dCompet")),
+        "dhProc":      _fmt_dt(_t(root, "dhProc")),
+        "nDPS":        _t(root, "nDPS", "nDFSe"),
+        "serie":       _t(dps, "serie"),
+        "dhEmi":       _fmt_dt(_t(dps, "dhEmi")),
         # emitente
-        "emit_cnpj":     _fmt_cnpj(g("CNPJ") if _tag(emit_el,"CNPJ") != "-" else g("CNPJ")),
-        "emit_im":       _tag(emit_el, "IM"),
-        "emit_nome":     _tag(emit_el, "xNome"),
-        "emit_email":    _tag(emit_el, "email"),
-        "emit_end":      emit_end,
-        "emit_mun":      emit_mun,
-        "emit_cep":      emit_cep,
-        "emit_fone":     _tag(emit_el, "fone"),
-        "opSimpNac":     _opcao_simpnac(opSimpNac),
-        "regApTribSN":   _reg_trib_sn(regApTribSN),
+        "emit_cnpj":   _fmt_cnpj(_t(emit, "CNPJ", "CPF")),
+        "emit_im":     _t(emit, "IM"),
+        "emit_nome":   _t(emit, "xNome"),
+        "emit_email":  _t(emit, "email"),
+        "emit_fone":   _t(emit, "fone"),
+        "emit_end":    emit_end,
+        "emit_mun":    _mun(cMun_e, uf_e),
+        "emit_cep":    _fmt_cep(_t(ender_e, "CEP")),
+        "opSimpNac":   _simp(_t(reg, "opSimpNac")),
+        "regApTribSN": _reg_sn(_t(reg, "regApTribSN")),
         # tomador
-        "toma_cnpj":     _fmt_cnpj(toma_cnpj_raw),
-        "toma_im":       _tag(toma_el, "IM") if toma_el else "-",
-        "toma_nome":     _tag(toma_el, "xNome") if toma_el else "-",
-        "toma_email":    _tag(toma_el, "email") if toma_el else "-",
-        "toma_end":      toma_end_str,
-        "toma_mun":      toma_mun,
-        "toma_cep":      toma_cep,
-        "toma_fone":     _tag(toma_el, "fone") if toma_el else "-",
+        "toma_cnpj":   _fmt_cnpj(_t(toma, "CNPJ", "CPF")),
+        "toma_im":     _t(toma, "IM"),
+        "toma_nome":   _t(toma, "xNome"),
+        "toma_email":  _t(toma, "email"),
+        "toma_fone":   _t(toma, "fone"),
+        "toma_end":    toma_end,
+        "toma_mun":    _mun(cMun_t, uf_t),
+        "toma_cep":    _fmt_cep(_t(toma_ender_nac, "CEP")),
         # serviço
-        "cod_trib_nac":  cod_trib_label,
-        "cod_trib_mun":  g("xTribMun") or "-",
-        "loc_prest":     xLocPrest,
-        "pais_prest":    g("xPaisPrestacao", "cPaisPrestacao"),
-        "desc_serv":     _tag(cServ_el, "xDescServ") if cServ_el else g("xDescServ"),
-        "cNBS":          _tag(cServ_el, "cNBS") if cServ_el else g("cNBS"),
-        # trib municipal
-        "tribISSQN":     _tributacao_issqn(_tag(tribMun_el, "tribISSQN") if tribMun_el else "-"),
-        "paisResult":    g("cPaisResult"),
-        "munIncid":      _municipio_nome(_tag(tribMun_el, "cMunFG") if tribMun_el else cLocPrest),
-        "regEspTrib":    regEspTrib,
-        "tipoImun":      g("tpImunidade"),
-        "suspExig":      "Não",
-        "numProc":       g("nProcesso"),
-        "benMun":        g("xBenMun"),
-        "vServ":         _fmt_valor(vServ_raw),
-        "descIncond":    _fmt_valor(g("vDescIncond")),
-        "totDed":        _fmt_valor(g("vDedRed")),
-        "calcBM":        _fmt_valor(g("vCalcBM")),
-        "vBC":           _fmt_valor(vBC_raw),
-        "pAliq":         pAliq_fmt,
-        "retISSQN":      _retencao_issqn(_tag(tribMun_el, "tpRetISSQN") if tribMun_el else "-"),
-        "vISSQN":        _fmt_valor(vISSQN_raw),
-        # trib federal
-        "irrf":          _fmt_valor(g("vIRRF")),
-        "contribPrev":   _fmt_valor(g("vCP")),
-        "contribSoc":    _fmt_valor(g("vCSLL","vPISPASEP")),
-        "descContrib":   g("xContribSoc"),
-        "pis":           _fmt_valor(g("vPIS")),
-        "cofins":        _fmt_valor(g("vCOFINS")),
+        "cod_nac":     cod_nac_label,
+        "cod_mun":     _t(root, "xTribMun"),
+        "loc_prest":   _mun_upper(cLocPrest) if cLocPrest != "-" else _t(root, "xLocPrestacao"),
+        "pais_prest":  _t(root, "xPaisPrestacao"),
+        "desc_serv":   _t(cServ, "xDescServ"),
+        "cNBS":        _t(cServ, "cNBS"),
+        # trib mun
+        "tribISSQN":   _trib_iss(_t(tribMun, "tribISSQN")),
+        "paisResult":  _t(tribMun, "cPaisResult"),
+        "munIncid":    _mun_upper(cLocPrest) if cLocPrest != "-" else _t(root, "xLocIncid"),
+        "regEsp":      _t(tribMun, "regEspTrib") or "0",
+        "tipoImun":    _t(tribMun, "tpImunidade"),
+        "suspExig":    "Não",
+        "numProc":     _t(root, "nProcesso"),
+        "benMun":      _t(root, "xBenMun"),
+        "vServ":       _fmt_val(vServ_raw),
+        "descIncond":  _fmt_val(_t(vals_dps or root, "vDescIncond")),
+        "totDed":      _fmt_val(_t(vals_dps or root, "vDedRed")),
+        "calcBM":      _fmt_val(_t(vals_dps or root, "vCalcBM")),
+        "vBC":         _fmt_val(vBC_raw),
+        "pAliq":       pAliq_fmt,
+        "retISSQN":    _ret_iss(_t(tribMun, "tpRetISSQN")),
+        "vISSQN":      _fmt_val(vISSQN_raw),
+        # trib fed
+        "irrf":        _fmt_val(_t(root, "vIRRF")),
+        "contPrev":    _fmt_val(_t(root, "vCP")),
+        "contSoc":     _fmt_val(_t(root, "vCSLL")),
+        "descCont":    _t(root, "xContribSoc"),
+        "pis":         _fmt_val(_t(root, "vPIS")),
+        "cofins":      _fmt_val(_t(root, "vCOFINS")),
         # valor total
-        "vServTotal":    _fmt_valor(vServ_raw),
-        "descCond":      _fmt_valor(g("vDescCond")),
-        "descIncondT":   _fmt_valor(g("vDescIncond")),
-        "issqnRetido":   _fmt_valor(g("vISSRet")),
-        "totRetFed":     _fmt_valor(g("vTotRet")),
-        "pisCofins":     "-",
-        "vLiq":          _fmt_valor(vLiq_raw),
+        "vServT":      _fmt_val(vServ_raw),
+        "descCond":    _fmt_val(_t(root, "vDescCond")),
+        "descIncondT": _fmt_val(_t(root, "vDescIncond")),
+        "issqnRet":    _fmt_val(_t(root, "vISSRet")),
+        "totRetFed":   _fmt_val(_t(root, "vTotRet")),
+        "pisCofins":   "-",
+        "vLiq":        _fmt_val(vLiq_raw),
         # tributos aproximados
-        "tribFed":       "-" if indTotTrib == "0" else _fmt_valor(g("vTotFed")),
-        "tribEst":       "-" if indTotTrib == "0" else _fmt_valor(g("vTotEst")),
-        "tribMun_val":   "-" if indTotTrib == "0" else _fmt_valor(g("vTotMun")),
+        "tbFed": "-" if indTotTrib == "0" else _fmt_val(_t(root, "vTotFed")),
+        "tbEst": "-" if indTotTrib == "0" else _fmt_val(_t(root, "vTotEst")),
+        "tbMun": "-" if indTotTrib == "0" else _fmt_val(_t(root, "vTotMun")),
         # info complementar
-        "cNBS_fmt":      f"NBS: {_tag(cServ_el, 'cNBS')}" if cServ_el and _tag(cServ_el,"cNBS") != "-" else "",
-        # prefeitura
-        "xLocEmi":       g("xLocEmi"),
-        "uf_emit":       g("UF") or "CE",
+        "infoComp":  f"NBS: {_t(cServ, 'cNBS')}" if _t(cServ, "cNBS") != "-" else "-",
+        "xLocEmi":   xLocEmi,
+        "uf_emit":   uf_emit,
     }
 
 
-# ── Logo NFS-e (vetorial) ──────────────────────────────────────────────────────
+# ── Estilos ───────────────────────────────────────────────────────────────────
+
+def _ps(name, **kw):
+    defaults = dict(fontName="Helvetica", fontSize=7, leading=8.5, textColor=C_BLK)
+    defaults.update(kw)
+    return ParagraphStyle(name, **defaults)
+
+
+S_LBL  = _ps("lbl",  fontSize=6,   leading=7.5, textColor=colors.HexColor("#444444"))
+S_VAL  = _ps("val",  fontSize=7,   leading=8.5)
+S_VAL_B= _ps("valb", fontSize=8.5, leading=10,  fontName="Helvetica-Bold")
+S_SEC  = _ps("sec",  fontSize=7.5, leading=9,   fontName="Helvetica-Bold", textColor=C_WHT)
+S_TTL  = _ps("ttl",  fontSize=13,  leading=16,  fontName="Helvetica-Bold", alignment=TA_CENTER)
+S_SUB  = _ps("sub",  fontSize=8.5, leading=10,  alignment=TA_CENTER)
+S_PRF  = _ps("prf",  fontSize=7,   leading=9,   fontName="Helvetica-Bold", alignment=TA_RIGHT)
+S_NOTE = _ps("note", fontSize=5.5, leading=7,   textColor=colors.HexColor("#555555"), alignment=TA_RIGHT)
+S_INTER= _ps("int",  fontSize=7,   leading=9,   fontName="Helvetica-Bold", alignment=TA_CENTER)
+
+
+# ── Logo NFS-e vetorial ───────────────────────────────────────────────────────
 
 class NfseLogo(Flowable):
-    """Logo vetorial do DANFSe idêntico ao modelo nacional."""
-    W = 52 * mm
-    H = 14 * mm
+    W = 46 * mm
+    H = 13 * mm
 
     def __init__(self):
         super().__init__()
@@ -354,64 +333,91 @@ class NfseLogo(Flowable):
 
     def draw(self):
         c = self.canv
-        w, h = self.W, self.H
+        bw = self.W * 0.42   # largura do bloco escuro
         # fundo azul escuro
-        c.setFillColor(COR_DARK_LOGO)
-        c.rect(0, 0, w * 0.35, h, fill=1, stroke=0)
-        # texto "NFS" branco
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(2 * mm, h * 0.32, "NFS")
+        c.setFillColor(C_SEC)
+        c.rect(0, 0, bw, self.H, fill=1, stroke=0)
+        # "NFS" branco
+        c.setFillColor(C_WHT)
+        c.setFont("Helvetica-Bold", 15)
+        c.drawString(1.5 * mm, self.H * 0.28, "NFS")
         # círculo verde com "e"
-        cx = w * 0.35 - 5 * mm
-        cy = h * 0.52
-        r  = 4 * mm
-        c.setFillColor(COR_VERDE_NFS)
+        cx = bw - 4 * mm
+        cy = self.H * 0.55
+        r  = 3.8 * mm
+        c.setFillColor(C_GRN)
         c.circle(cx, cy, r, fill=1, stroke=0)
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-BoldOblique", 10)
-        c.drawCentredString(cx, cy - 3.5, "e")
-        # texto lateral
-        c.setFillColor(colors.black)
-        c.setFont("Helvetica", 5.5)
-        c.drawString(w * 0.36, h * 0.72, "Nota Fiscal de")
-        c.drawString(w * 0.36, h * 0.48, "Serviço")
-        c.drawString(w * 0.36, h * 0.24, "Eletrônica")
+        c.setFillColor(C_WHT)
+        c.setFont("Helvetica-BoldOblique", 9)
+        c.drawCentredString(cx, cy - 3, "e")
+        # textos laterais
+        c.setFillColor(C_BLK)
+        c.setFont("Helvetica", 5)
+        tx = bw + 1.5 * mm
+        c.drawString(tx, self.H * 0.72, "Nota Fiscal de")
+        c.drawString(tx, self.H * 0.50, "Serviço")
+        c.drawString(tx, self.H * 0.28, "Eletrônica")
 
 
-# ── Estilos de parágrafo ───────────────────────────────────────────────────────
+# ── Helpers de tabela ──────────────────────────────────────────────────────────
 
-def _styles():
-    label = ParagraphStyle("label", fontName="Helvetica", fontSize=6.5, leading=8,
-                           textColor=colors.HexColor("#444444"))
-    value = ParagraphStyle("value", fontName="Helvetica", fontSize=7.5, leading=9.5,
-                           textColor=colors.black)
-    sec   = ParagraphStyle("sec", fontName="Helvetica-Bold", fontSize=7.5, leading=9.5,
-                           textColor=COR_HEADER_TEXT)
-    title = ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=13, leading=16,
-                           textColor=colors.black, alignment=TA_CENTER)
-    sub   = ParagraphStyle("sub", fontName="Helvetica", fontSize=8.5, leading=10,
-                           textColor=colors.black, alignment=TA_CENTER)
-    pref  = ParagraphStyle("pref", fontName="Helvetica-Bold", fontSize=7.5, leading=9.5,
-                           textColor=colors.black, alignment=TA_RIGHT)
-    big   = ParagraphStyle("big", fontName="Helvetica-Bold", fontSize=9, leading=11,
-                           textColor=colors.black)
-    return label, value, sec, title, sub, pref, big
+_STD = TableStyle([
+    ("FONTNAME",      (0,0), (-1,-1), "Helvetica"),
+    ("FONTSIZE",      (0,0), (-1,-1), 7),
+    ("TOPPADDING",    (0,0), (-1,-1), 1.5),
+    ("BOTTOMPADDING", (0,0), (-1,-1), 1.5),
+    ("LEFTPADDING",   (0,0), (-1,-1), 2.5),
+    ("RIGHTPADDING",  (0,0), (-1,-1), 2),
+    ("VALIGN",        (0,0), (-1,-1), "TOP"),
+    ("BOX",           (0,0), (-1,-1), 0.3, C_BRD),
+    ("INNERGRID",     (0,0), (-1,-1), 0.3, C_BRD),
+])
 
 
-# ── Construção do PDF ──────────────────────────────────────────────────────────
+def _sec_bar(label: str) -> Table:
+    t = Table([[Paragraph(f"<b>{label}</b>", S_SEC)]], colWidths=[USABLE])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,-1), C_SEC),
+        ("TOPPADDING",    (0,0), (-1,-1), 2.5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2.5),
+        ("LEFTPADDING",   (0,0), (-1,-1), 3),
+        ("BOX",           (0,0), (-1,-1), 0.3, C_BRD),
+    ]))
+    return t
+
+
+def _grid(cols_data: list[tuple[str,str]], widths: list[float],
+          bold_last=False) -> Table:
+    """
+    cols_data: [(label, value), ...]
+    Gera 2 linhas: linha de rótulos (fundo C_LBL) + linha de valores.
+    """
+    lbl_row = [Paragraph(l, S_LBL) for l, _ in cols_data]
+    val_row = []
+    for i, (_, v) in enumerate(cols_data):
+        s = S_VAL_B if (bold_last and i == len(cols_data)-1) else S_VAL
+        val_row.append(Paragraph(v, s))
+
+    t = Table([lbl_row, val_row], colWidths=widths)
+    style = TableStyle(list(_STD.getCommands()) + [
+        ("BACKGROUND", (0,0), (-1,0), C_LBL),
+        ("BACKGROUND", (0,1), (-1,1), C_WHT),
+    ])
+    t.setStyle(style)
+    return t
+
 
 def _qr_image(chave: str):
-    if not _QR_OK or chave == "-":
+    if not _QR_OK or not chave or chave == "-":
         return None
     try:
         qr = qrcode.QRCode(box_size=2, border=1,
                            error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(chave)
         qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
+        img_pil = qr.make_image(fill_color="black", back_color="white")
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img_pil.save(buf, format="PNG")
         buf.seek(0)
         from reportlab.platypus import Image as RLImage
         return RLImage(buf, width=22 * mm, height=22 * mm)
@@ -419,335 +425,234 @@ def _qr_image(chave: str):
         return None
 
 
-def _sec_header(label: str, sec_style) -> Table:
-    """Linha de cabeçalho de seção (fundo azul escuro, texto branco em negrito)."""
-    p = Paragraph(f"<b>{label}</b>", sec_style)
-    t = Table([[p]], colWidths=[PAGE_W - 2 * MARGIN])
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), COR_HEADER_BG),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("BOX", (0, 0), (-1, -1), 0.3, COR_BORDA),
-    ]))
-    return t
-
-
-def _grid(rows: list[list], col_widths: list[float],
-          label_style, value_style,
-          highlight_last_value: bool = False) -> Table:
-    """
-    Constrói uma tabela de grid com rótulo (linha 0) e valor (linha 1)
-    para cada grupo de colunas passado como [[label, value], ...].
-
-    rows: lista de linhas, cada linha é lista de (label, value).
-    """
-    usable = PAGE_W - 2 * MARGIN
-    total_cols = len(col_widths)
-    assert sum(col_widths) <= usable + 1, f"colunas excedem largura: {sum(col_widths)} > {usable}"
-
-    tbl_rows = []
-    for row in rows:
-        label_row = []
-        value_row = []
-        for lbl, val in row:
-            label_row.append(Paragraph(lbl, label_style))
-            if highlight_last_value and (lbl, val) == row[-1]:
-                value_row.append(Paragraph(f"<b>{val}</b>",
-                    ParagraphStyle("bv", parent=value_style, fontSize=9)))
-            else:
-                value_row.append(Paragraph(val, value_style))
-        tbl_rows.append(label_row)
-        tbl_rows.append(value_row)
-
-    t = Table(tbl_rows, colWidths=col_widths)
-    style_cmds = [
-        ("FONTNAME",  (0, 0), (-1, -1), "Helvetica"),
-        ("FONTSIZE",  (0, 0), (-1, -1), 7),
-        ("TOPPADDING",    (0, 0), (-1, -1), 1.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
-        ("VALIGN",    (0, 0), (-1, -1), "TOP"),
-        ("BOX",       (0, 0), (-1, -1), 0.3, COR_BORDA),
-        ("INNERGRID", (0, 0), (-1, -1), 0.3, COR_BORDA),
-        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [COR_LABEL_BG, colors.white]),
-    ]
-    t.setStyle(TableStyle(style_cmds))
-    return t
-
+# ── Geração do PDF ────────────────────────────────────────────────────────────
 
 def gerar_danfse(xml_bytes: bytes) -> bytes:
-    """Recebe bytes de um XML NFSe nacional e retorna bytes do PDF DANFSe v1.0."""
-    d = _parse_xml(xml_bytes)
-    label_s, value_s, sec_s, title_s, sub_s, pref_s, big_s = _styles()
+    d = _parse(xml_bytes)
     buf = io.BytesIO()
-    usable = PAGE_W - 2 * MARGIN
 
     doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=MARGIN, rightMargin=MARGIN,
-        topMargin=MARGIN,  bottomMargin=MARGIN,
+        buf, pagesize=A4,
+        leftMargin=M, rightMargin=M,
+        topMargin=M,  bottomMargin=M,
         title=f"DANFSe - NFS-e {d['nNFSe']}",
     )
 
     story = []
+    W = USABLE
 
-    # ── CABEÇALHO ──────────────────────────────────────────────────────────────
-    qr = _qr_image(d["chave"])
-    qr_cell = qr if qr else Paragraph("", value_s)
-
-    logo_cell = NfseLogo()
-
-    title_cell = [
-        Paragraph("DANFSe v1.0", title_s),
-        Paragraph("Documento Auxiliar da NFS-e", sub_s),
-    ]
-
+    # ── 1. CABEÇALHO ─────────────────────────────────────────────────────────
+    # [Logo | Título | Prefeitura]
     pref_txt = (f"PREFEITURA MUNICIPAL DE<br/>"
                 f"<b>{d['xLocEmi'].upper()}</b><br/>{d['uf_emit']}")
-    pref_cell = Paragraph(pref_txt, pref_s)
-
-    header_table = Table(
-        [[logo_cell, title_cell, pref_cell]],
-        colWidths=[52 * mm, usable - 52 * mm - 35 * mm, 35 * mm],
+    hdr = Table(
+        [[NfseLogo(),
+          [Paragraph("DANFSe v1.0", S_TTL),
+           Paragraph("Documento Auxiliar da NFS-e", S_SUB)],
+          Paragraph(pref_txt, S_PRF)]],
+        colWidths=[46*mm, W - 46*mm - 38*mm, 38*mm],
     )
-    header_table.setStyle(TableStyle([
-        ("VALIGN",  (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",   (1, 0), (1, 0),   "CENTER"),
-        ("ALIGN",   (2, 0), (2, 0),   "RIGHT"),
-        ("BOX",     (0, 0), (-1, -1), 0.5, COR_BORDA),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+    hdr.setStyle(TableStyle([
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",         (2,0), (2,0),   "RIGHT"),
+        ("BOX",           (0,0), (-1,-1), 0.5, C_BRD),
+        ("TOPPADDING",    (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING",   (0,0), (-1,-1), 3),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 3),
     ]))
-    story.append(header_table)
+    story.append(hdr)
 
-    # ── CHAVE DE ACESSO + QR ───────────────────────────────────────────────────
-    qr_note = Paragraph(
-        "<i>A autenticidade desta NFS-e pode ser<br/>"
+    # ── 2. CHAVE DE ACESSO + QR ───────────────────────────────────────────────
+    # Estrutura: coluna esquerda (chave label + número) | coluna direita (note + qr)
+    qr = _qr_image(d["chave"])
+    qr_col_w = 30 * mm
+    chave_w  = W - qr_col_w
+
+    note_p = Paragraph(
+        "A autenticidade desta NFS-e pode ser<br/>"
         "verificada pela leitura deste código QR ou<br/>"
-        "pela consulta da chave de acesso no portal</i>",
-        ParagraphStyle("qrnote", fontName="Helvetica", fontSize=5.8, leading=7.5,
-                       alignment=TA_RIGHT, textColor=colors.HexColor("#555555")),
+        "pela consulta da chave de acesso no portal",
+        S_NOTE,
     )
-    qr_block = [[qr_note], [qr_cell]] if qr else [[qr_note]]
-    chave_w = usable - 42 * mm
+    qr_cell = qr if qr else Paragraph("", S_VAL)
 
     chave_table = Table(
-        [[Paragraph(f"<b>Chave de Acesso da NFS-e</b>", label_s),
-          Table(qr_block, colWidths=[42 * mm])],
-         [Paragraph(d["chave"], value_s), ""]],
-        colWidths=[chave_w, 42 * mm],
-        rowHeights=[None, None],
+        [
+            [Paragraph("<b>Chave de Acesso da NFS-e</b>", S_LBL), note_p],
+            [Paragraph(d["chave"], S_VAL),                         qr_cell],
+        ],
+        colWidths=[chave_w, qr_col_w],
     )
     chave_table.setStyle(TableStyle([
-        ("SPAN",    (1, 0), (1, 1)),
-        ("VALIGN",  (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",   (1, 0), (1, -1), "CENTER"),
-        ("BOX",     (0, 0), (-1, -1), 0.3, COR_BORDA),
-        ("INNERGRID",(0, 0), (-1, -1), 0.3, COR_BORDA),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
-        ("BACKGROUND", (0, 0), (0, 0), COR_LABEL_BG),
-        ("BACKGROUND", (0, 1), (0, 1), colors.white),
+        ("SPAN",          (1,0), (1,1)),          # QR ocupa as 2 linhas da coluna direita
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",         (1,0), (1,-1), "CENTER"),
+        ("BOX",           (0,0), (-1,-1), 0.3, C_BRD),
+        ("INNERGRID",     (0,0), (-1,-1), 0.3, C_BRD),
+        ("BACKGROUND",    (0,0), (0,0),  C_LBL),
+        ("BACKGROUND",    (0,1), (0,1),  C_WHT),
+        ("TOPPADDING",    (0,0), (-1,-1), 1.5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 1.5),
+        ("LEFTPADDING",   (0,0), (-1,-1), 2.5),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 2),
     ]))
     story.append(chave_table)
 
-    # ── LINHA: Número NFS-e / Competência / Emissão NFS-e ─────────────────────
-    w4 = usable / 4
-    grid1 = _grid(
-        [[("Número da NFS-e", d["nNFSe"]),
-          ("Competência da NFS-e", d["competencia"]),
-          ("Data e Hora da emissão da NFS-e", d["dhProc"]),
-          ("", "")]],
-        [w4, w4, w4, w4], label_s, value_s,
-    )
-    story.append(grid1)
+    # ── 3. NÚMEROS NFS-e e DPS ────────────────────────────────────────────────
+    w4 = W / 4
+    story.append(_grid([
+        ("Número da NFS-e",              d["nNFSe"]),
+        ("Competência da NFS-e",         d["competencia"]),
+        ("Data e Hora da emissão da NFS-e", d["dhProc"]),
+        ("",                             ""),
+    ], [w4]*4))
+    story.append(_grid([
+        ("Número da DPS",               d["nDPS"]),
+        ("Série da DPS",                d["serie"]),
+        ("Data e Hora da emissão da DPS", d["dhEmi"]),
+        ("",                            ""),
+    ], [w4]*4))
 
-    grid2 = _grid(
-        [[("Número da DPS", d["nDPS"]),
-          ("Série da DPS", d["serie"]),
-          ("Data e Hora da emissão da DPS", d["dhEmi"]),
-          ("", "")]],
-        [w4, w4, w4, w4], label_s, value_s,
-    )
-    story.append(grid2)
+    # ── 4. EMITENTE ───────────────────────────────────────────────────────────
+    story.append(_sec_bar("EMITENTE DA NFS-e"))
+    story.append(_grid([
+        ("Prestador do Serviço", ""),
+        ("CNPJ / CPF / NIF",    d["emit_cnpj"]),
+        ("Inscrição Municipal",  d["emit_im"]),
+        ("Telefone",             d["emit_fone"]),
+    ], [W*0.22, W*0.30, W*0.28, W*0.20]))
+    story.append(_grid([
+        ("Nome / Nome Empresarial", d["emit_nome"]),
+        ("E-mail",                  d["emit_email"]),
+    ], [W*0.65, W*0.35]))
+    story.append(_grid([
+        ("Endereço",  d["emit_end"]),
+        ("Município", d["emit_mun"]),
+        ("CEP",       d["emit_cep"]),
+    ], [W*0.55, W*0.30, W*0.15]))
+    story.append(_grid([
+        ("Simples Nacional na Data de Competência", d["opSimpNac"]),
+        ("Regime de Apuração Tributária pelo SN",   d["regApTribSN"]),
+    ], [W*0.38, W*0.62]))
 
-    # ── EMITENTE ───────────────────────────────────────────────────────────────
-    story.append(_sec_header("EMITENTE DA NFS-e", sec_s))
-    w3 = usable / 3
-    story.append(_grid(
-        [[("Prestador do Serviço", ""),
-          ("CNPJ / CPF / NIF", d["emit_cnpj"]),
-          ("Inscrição Municipal", d["emit_im"]),
-          ("Telefone", d["emit_fone"])]],
-        [w3 * 0.3, w3 * 0.7, w3 * 0.6, w3 * 0.4],
-        label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Nome / Nome Empresarial", d["emit_nome"]),
-          ("E-mail", d["emit_email"])]],
-        [usable * 0.65, usable * 0.35], label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Endereço", d["emit_end"]),
-          ("Município", d["emit_mun"]),
-          ("CEP", d["emit_cep"])]],
-        [usable * 0.55, usable * 0.30, usable * 0.15], label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Simples Nacional na Data de Competência", d["opSimpNac"]),
-          ("Regime de Apuração Tributária pelo SN", d["regApTribSN"])]],
-        [usable * 0.40, usable * 0.60], label_s, value_s,
-    ))
+    # ── 5. TOMADOR ────────────────────────────────────────────────────────────
+    story.append(_sec_bar("TOMADOR DO SERVIÇO"))
+    story.append(_grid([
+        ("",                    ""),
+        ("CNPJ / CPF / NIF",   d["toma_cnpj"]),
+        ("Inscrição Municipal", d["toma_im"]),
+        ("Telefone",            d["toma_fone"]),
+    ], [W*0.22, W*0.30, W*0.28, W*0.20]))
+    story.append(_grid([
+        ("Nome / Nome Empresarial", d["toma_nome"]),
+        ("E-mail",                  d["toma_email"]),
+    ], [W*0.65, W*0.35]))
+    story.append(_grid([
+        ("Endereço",  d["toma_end"]),
+        ("Município", d["toma_mun"]),
+        ("CEP",       d["toma_cep"]),
+    ], [W*0.55, W*0.30, W*0.15]))
 
-    # ── TOMADOR ────────────────────────────────────────────────────────────────
-    story.append(_sec_header("TOMADOR DO SERVIÇO", sec_s))
-    story.append(_grid(
-        [[("", ""),
-          ("CNPJ / CPF / NIF", d["toma_cnpj"]),
-          ("Inscrição Municipal", d["toma_im"]),
-          ("Telefone", d["toma_fone"])]],
-        [w3 * 0.3, w3 * 0.7, w3 * 0.6, w3 * 0.4],
-        label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Nome / Nome Empresarial", d["toma_nome"]),
-          ("E-mail", d["toma_email"])]],
-        [usable * 0.65, usable * 0.35], label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Endereço", d["toma_end"]),
-          ("Município", d["toma_mun"]),
-          ("CEP", d["toma_cep"])]],
-        [usable * 0.55, usable * 0.30, usable * 0.15], label_s, value_s,
-    ))
-
-    # ── INTERMEDIÁRIO ──────────────────────────────────────────────────────────
-    inter = Table(
-        [[Paragraph("INTERMEDIÁRIO DO SERVIÇO NÃO IDENTIFICADO NA NFS-e",
-                    ParagraphStyle("inter", fontName="Helvetica-Bold", fontSize=7,
-                                   alignment=TA_CENTER, textColor=colors.black, leading=9))]],
-        colWidths=[usable],
-    )
-    inter.setStyle(TableStyle([
-        ("BOX",  (0, 0), (-1, -1), 0.3, COR_BORDA),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    # ── 6. INTERMEDIÁRIO ──────────────────────────────────────────────────────
+    t = Table([[Paragraph("INTERMEDIÁRIO DO SERVIÇO NÃO IDENTIFICADO NA NFS-e", S_INTER)]],
+              colWidths=[W])
+    t.setStyle(TableStyle([
+        ("BOX",           (0,0),(-1,-1), 0.3, C_BRD),
+        ("TOPPADDING",    (0,0),(-1,-1), 2.5),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 2.5),
     ]))
-    story.append(inter)
+    story.append(t)
 
-    # ── SERVIÇO PRESTADO ───────────────────────────────────────────────────────
-    story.append(_sec_header("SERVIÇO PRESTADO", sec_s))
-    story.append(_grid(
-        [[("Código de Tributação Nacional", d["cod_trib_nac"]),
-          ("Código de Tributação Municipal", d["cod_trib_mun"]),
-          ("Local da Prestação", d["loc_prest"]),
-          ("País da Prestação", d["pais_prest"])]],
-        [usable * 0.35, usable * 0.25, usable * 0.25, usable * 0.15],
-        label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Descrição do Serviço", d["desc_serv"])]],
-        [usable], label_s, value_s,
-    ))
+    # ── 7. SERVIÇO PRESTADO ───────────────────────────────────────────────────
+    story.append(_sec_bar("SERVIÇO PRESTADO"))
+    story.append(_grid([
+        ("Código de Tributação Nacional", d["cod_nac"]),
+        ("Código de Tributação Municipal", d["cod_mun"]),
+        ("Local da Prestação",            d["loc_prest"]),
+        ("País da Prestação",             d["pais_prest"]),
+    ], [W*0.33, W*0.27, W*0.25, W*0.15]))
+    story.append(_grid([
+        ("Descrição do Serviço", d["desc_serv"]),
+    ], [W]))
 
-    # ── TRIBUTAÇÃO MUNICIPAL ───────────────────────────────────────────────────
-    story.append(_sec_header("TRIBUTAÇÃO MUNICIPAL", sec_s))
-    story.append(_grid(
-        [[("Tributação do ISSQN", d["tribISSQN"]),
-          ("País Resultado da Prestação do Serviço", d["paisResult"]),
-          ("Município de Incidência do ISSQN", d["munIncid"]),
-          ("Regime Especial de Tributação", d["regEspTrib"])]],
-        [usable / 4] * 4, label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Tipo de Imunidade", d["tipoImun"]),
-          ("Suspensão da Exigibilidade do ISSQN", d["suspExig"]),
-          ("Número Processo Suspensão", d["numProc"]),
-          ("Benefício Municipal", d["benMun"])]],
-        [usable / 4] * 4, label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Valor do Serviço", d["vServ"]),
-          ("Desconto Incondicionado", d["descIncond"]),
-          ("Total Deduções/Reduções", d["totDed"]),
-          ("Cálculo do BM", d["calcBM"])]],
-        [usable / 4] * 4, label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("BC ISSQN", d["vBC"]),
-          ("Alíquota Aplicada", d["pAliq"]),
-          ("Retenção do ISSQN", d["retISSQN"]),
-          ("ISSQN Apurado", d["vISSQN"])]],
-        [usable / 4] * 4, label_s, value_s,
-    ))
+    # ── 8. TRIBUTAÇÃO MUNICIPAL ───────────────────────────────────────────────
+    story.append(_sec_bar("TRIBUTAÇÃO MUNICIPAL"))
+    story.append(_grid([
+        ("Tributação do ISSQN",                    d["tribISSQN"]),
+        ("País Resultado da Prestação do Serviço", d["paisResult"]),
+        ("Município de Incidência do ISSQN",       d["munIncid"]),
+        ("Regime Especial de Tributação",          d["regEsp"]),
+    ], [w4]*4))
+    story.append(_grid([
+        ("Tipo de Imunidade",                   d["tipoImun"]),
+        ("Suspensão da Exigibilidade do ISSQN", d["suspExig"]),
+        ("Número Processo Suspensão",           d["numProc"]),
+        ("Benefício Municipal",                 d["benMun"]),
+    ], [w4]*4))
+    story.append(_grid([
+        ("Valor do Serviço",        d["vServ"]),
+        ("Desconto Incondicionado", d["descIncond"]),
+        ("Total Deduções/Reduções", d["totDed"]),
+        ("Cálculo do BM",           d["calcBM"]),
+    ], [w4]*4))
+    story.append(_grid([
+        ("BC ISSQN",        d["vBC"]),
+        ("Alíquota Aplicada", d["pAliq"]),
+        ("Retenção do ISSQN", d["retISSQN"]),
+        ("ISSQN Apurado",    d["vISSQN"]),
+    ], [w4]*4))
 
-    # ── TRIBUTAÇÃO FEDERAL ─────────────────────────────────────────────────────
-    story.append(_sec_header("TRIBUTAÇÃO FEDERAL", sec_s))
-    story.append(_grid(
-        [[("IRRF", d["irrf"]),
-          ("Contribuição Previdenciária - Retida", d["contribPrev"]),
-          ("Contribuições Sociais - Retidas", d["contribSoc"]),
-          ("Descrição Contrib. Sociais - Retidas", d["descContrib"])]],
-        [usable / 4] * 4, label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("PIS - Débito Apuração Própria", d["pis"]),
-          ("COFINS - Débito Apuração Própria", d["cofins"])]],
-        [usable / 2, usable / 2], label_s, value_s,
-    ))
+    # ── 9. TRIBUTAÇÃO FEDERAL ─────────────────────────────────────────────────
+    story.append(_sec_bar("TRIBUTAÇÃO FEDERAL"))
+    story.append(_grid([
+        ("IRRF",                              d["irrf"]),
+        ("Contribuição Previdenciária - Retida", d["contPrev"]),
+        ("Contribuições Sociais - Retidas",   d["contSoc"]),
+        ("Descrição Contrib. Sociais - Retidas", d["descCont"]),
+    ], [w4]*4))
+    story.append(_grid([
+        ("PIS - Débito Apuração Própria",    d["pis"]),
+        ("COFINS - Débito Apuração Própria", d["cofins"]),
+    ], [W/2, W/2]))
 
-    # ── VALOR TOTAL ────────────────────────────────────────────────────────────
-    story.append(_sec_header("VALOR TOTAL DA NFS-E", sec_s))
-    story.append(_grid(
-        [[("Valor do Serviço", d["vServTotal"]),
-          ("Desconto Condicionado", d["descCond"]),
-          ("Desconto Incondicionado", d["descIncondT"]),
-          ("ISSQN Retido", d["issqnRetido"])]],
-        [usable / 4] * 4, label_s, value_s,
-    ))
-    story.append(_grid(
-        [[("Total das Retenções Federais", d["totRetFed"]),
-          ("PIS/COFINS - Débito Apur. Própria", d["pisCofins"]),
-          ("", ""),
-          ("Valor Líquido da NFS-e", d["vLiq"])]],
-        [usable / 4] * 4, label_s, value_s,
-        highlight_last_value=True,
-    ))
+    # ── 10. VALOR TOTAL ───────────────────────────────────────────────────────
+    story.append(_sec_bar("VALOR TOTAL DA NFS-E"))
+    story.append(_grid([
+        ("Valor do Serviço",       d["vServT"]),
+        ("Desconto Condicionado",  d["descCond"]),
+        ("Desconto Incondicionado",d["descIncondT"]),
+        ("ISSQN Retido",           d["issqnRet"]),
+    ], [w4]*4))
+    story.append(_grid([
+        ("Total das Retenções Federais",     d["totRetFed"]),
+        ("PIS/COFINS - Débito Apur. Própria",d["pisCofins"]),
+        ("",                                 ""),
+        ("Valor Líquido da NFS-e",           d["vLiq"]),
+    ], [w4]*4, bold_last=True))
 
-    # ── TOTAIS APROXIMADOS ─────────────────────────────────────────────────────
-    story.append(_sec_header("TOTAIS APROXIMADOS DOS TRIBUTOS", sec_s))
-    story.append(_grid(
-        [[("Federais", d["tribFed"]),
-          ("Estaduais", d["tribEst"]),
-          ("Municipais", d["tribMun_val"])]],
-        [usable / 3, usable / 3, usable / 3], label_s, value_s,
-    ))
+    # ── 11. TOTAIS APROXIMADOS ────────────────────────────────────────────────
+    story.append(_sec_bar("TOTAIS APROXIMADOS DOS TRIBUTOS"))
+    story.append(_grid([
+        ("Federais",  d["tbFed"]),
+        ("Estaduais", d["tbEst"]),
+        ("Municipais",d["tbMun"]),
+    ], [W/3, W/3, W/3]))
 
-    # ── INFORMAÇÕES COMPLEMENTARES ─────────────────────────────────────────────
-    story.append(_sec_header("INFORMAÇÕES COMPLEMENTARES", sec_s))
-    info_txt = d["cNBS_fmt"] or "-"
-    info_t = Table(
-        [[Paragraph(info_txt, value_s)]],
-        colWidths=[usable],
-    )
-    info_t.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.3, COR_BORDA),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+    # ── 12. INFORMAÇÕES COMPLEMENTARES ───────────────────────────────────────
+    story.append(_sec_bar("INFORMAÇÕES COMPLEMENTARES"))
+    info = Table([[Paragraph(d["infoComp"], S_VAL)]], colWidths=[W])
+    info.setStyle(TableStyle([
+        ("BOX",           (0,0),(-1,-1), 0.3, C_BRD),
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ("LEFTPADDING",   (0,0),(-1,-1), 3),
     ]))
-    story.append(info_t)
+    story.append(info)
 
     doc.build(story)
     return buf.getvalue()
 
-
-# ── Interface de uso (linha de comando / Streamlit) ────────────────────────────
 
 def gerar_pdf_bytes(xml_bytes: bytes) -> bytes:
     return gerar_danfse(xml_bytes)
