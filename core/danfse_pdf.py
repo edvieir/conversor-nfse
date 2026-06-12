@@ -100,7 +100,10 @@ def _map_tp_trib(v: str) -> str:
 
 
 def _map_ret_iss(v: str) -> str:
-    m = {"1": "Retido", "2": "Não Retido", "3": "Substituição Tributária"}
+    # tpRetISSQN: 1=Retido, 2=Não Retido, 3=Substituição Tributária
+    # indISSRet:  1=Retido na Fonte, 2=Não Retido — mesmo mapeamento
+    m = {"1": "Retido", "2": "Não Retido", "3": "Substituição Tributária",
+         "0": "Não Retido"}
     return m.get(v, _dash(v))
 
 
@@ -201,10 +204,18 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     if emit_bairro: end_parts.append(emit_bairro)
     emit_end = ", ".join(p for p in end_parts if p)
 
-    op_sn    = tv("opSN") or tv("optSN")
-    reg_trib = tv("regTrib")
-
+    # opSN e regTrib: busca no emit, prest, e nas tags alternativas do XML
     prest_el = inf_dps.find(f".//{{{_NS}}}prest") if inf_dps is not None else None
+    op_sn = (
+        _t(prest_el, "opSN") or _t(prest_el, "optSN") or _t(prest_el, "indSimplesNacional")
+        or (_t(emit, "opSN") or _t(emit, "optSN") if emit is not None else "")
+        or tv("opSN") or tv("optSN") or tv("indSimplesNacional")
+    )
+    reg_trib = (
+        _t(prest_el, "regTrib") or _t(prest_el, "regApurTrib")
+        or (_t(emit, "regTrib") if emit is not None else "")
+        or tv("regTrib") or tv("regApurTrib")
+    )
     prest_mun = _t(prest_el, "xMun") if prest_el is not None else ""
     prest_cmun = _t(prest_el, "cMun") if prest_el is not None else ""
     emit_cmun  = _t(emit, "cMun")    if emit is not None else ""
@@ -282,7 +293,17 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     else:
         c_trib_nac_fmt = _dash(_cnac_code or x_trib_nac)
     c_trib_mun   = tv("cTribMun")
-    x_mun_prest  = tv("xMunPrest") or tv("cMunPrest")
+    # Local da Prestação: tenta nome textual primeiro, depois resolve código IBGE
+    _xmp_raw = tv("xMunPrest") or _t(prest_el, "xMun") if prest_el is not None else tv("xMunPrest")
+    _cmp_raw = tv("cMunPrest") or _t(prest_el, "cMun") if prest_el is not None else tv("cMunPrest")
+    try:
+        from core.ibge_municipios import IBGE_MUNICIPIOS as _IBGE3
+        _xmp_ibge = (
+            _IBGE3.get(int(_cmp_raw)) if _cmp_raw and _cmp_raw.isdigit() else ""
+        ) or ""
+    except Exception:
+        _xmp_ibge = ""
+    x_mun_prest  = _xmp_raw or _xmp_ibge or ""
     x_pais_prest = tv("xPaisPrest") or tv("cPaisPrest")
 
     xdsc = ""
@@ -294,9 +315,21 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     trib_mun_node = inf_dps.find(f".//{{{_NS}}}tribMun") if inf_dps is not None else None
     tp_trib      = _t(trib_mun_node, "tpTrib") or tv("tpTrib")
     x_pais_res   = tv("xPaisResultado") or tv("cPaisResultado")
-    x_mun_incid  = tv("xMunIncid") or tv("cMunIncid")
+    # Município de Incidência: tenta nome textual, depois resolve via IBGE
+    _xmi_raw  = (_t(trib_mun_node, "xMunIncid") if trib_mun_node is not None else "") or tv("xMunIncid")
+    _cmi_raw  = (_t(trib_mun_node, "cMunIncid") if trib_mun_node is not None else "") or tv("cMunIncid")
+    try:
+        from core.ibge_municipios import IBGE_MUNICIPIOS as _IBGE4
+        _xmi_ibge = (
+            _IBGE4.get(int(_cmi_raw)) if _cmi_raw and _cmi_raw.isdigit() else ""
+        ) or ""
+    except Exception:
+        _xmi_ibge = ""
+    x_mun_incid = _xmi_raw or _xmi_ibge or x_mun_prest or ""
     city = city_name or x_mun_incid or x_mun_prest or ""
-    reg_esp_trib = tv("regEspTrib")
+    # Regime Especial de Tributação: "0" = não se aplica
+    _reg_esp_raw = tv("regEspTrib")
+    reg_esp_trib = "" if _reg_esp_raw in ("0", "00") else _reg_esp_raw
     tp_imun      = tv("tpImun")
     _susp_raw = (tv("exigSusp") or tv("xMotDesonSusp") or tv("motDesonSusp")
                  or tv("indExigSusp") or tv("tpSuspExig"))
@@ -305,7 +338,14 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     x_mot_sust = _susp_map.get(_susp_raw, _susp_raw) if _susp_raw else "Não"
     n_proc_susp  = tv("nProcessoSusp")
     c_benef      = tv("cBenef")
-    tp_ret_iss   = _t(trib_mun_node, "tpRetISSQN") or tv("tpRetISSQN")
+    # Retenção do ISSQN: tpRetISSQN (1=Retido,2=Não Retido,3=Substituição)
+    # Alternativa: indISSRet (1=Retido na Fonte, 2=Não Retido)
+    _tp_ret_raw = (_t(trib_mun_node, "tpRetISSQN") if trib_mun_node is not None else "") or tv("tpRetISSQN")
+    if not _tp_ret_raw:
+        _ind_ret = (_t(trib_mun_node, "indISSRet") if trib_mun_node is not None else "") or tv("indISSRet")
+        # indISSRet: 1=Retido, 2=Não Retido
+        _tp_ret_raw = _ind_ret
+    tp_ret_iss = _tp_ret_raw
 
     vals = inf.find(f"{{{_NS}}}valores")
     def _v(tag, fallback=""):
