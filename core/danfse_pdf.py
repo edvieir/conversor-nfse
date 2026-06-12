@@ -192,7 +192,6 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     op_sn    = tv("opSN") or tv("optSN")
     reg_trib = tv("regTrib")
 
-    city = emit_mun or ""
     uf   = emit_uf  or ""
 
     # ── Tomador ───────────────────────────────────────────────────────────────
@@ -238,6 +237,7 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     tp_trib       = _t(trib_mun_node, "tpTrib") or tv("tpTrib")
     x_pais_res    = tv("xPaisResultado") or tv("cPaisResultado")
     x_mun_incid   = tv("xMunIncid") or tv("cMunIncid")
+    city = emit_mun or x_mun_incid or x_mun_prest or ""
     reg_esp_trib  = tv("regEspTrib")
     tp_imun       = tv("tpImun")
     x_mot_sust    = tv("xMotDesonSusp") or tv("motDesonSusp")
