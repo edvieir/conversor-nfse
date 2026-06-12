@@ -331,7 +331,7 @@ def _make_qr(data_str: str):
     """Gera imagem QR code como ImageReader. Retorna None se qrcode não disponível."""
     try:
         import qrcode
-        from reportlab.lib.utils import ImageReader
+        
         qr = qrcode.QRCode(
             version=None,
             error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -344,7 +344,7 @@ def _make_qr(data_str: str):
         buf = BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
-        return ImageReader(buf)
+        return buf
     except Exception:
         return None
 
