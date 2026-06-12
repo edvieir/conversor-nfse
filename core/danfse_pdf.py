@@ -163,8 +163,8 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     n_dps = serie = dh_emi_dps = ""
     if inf_dps is not None:
         n_dps      = _t(inf_dps, "nDPS")
-        serie      = _t(inf_dps, "serie")
-        dh_emi_dps = _t(inf_dps, "dhEmi") or dh_emi
+        serie      = _t(inf_dps, "serie") or _t(inf_dps, "serDPS")
+        dh_emi_dps = _t(inf_dps, "dhEmi") or _t(inf_dps, "dhEmit") or dh_emi
 
     chave_acesso = ""
     inf_id = inf.get("Id", "")
@@ -172,23 +172,28 @@ def _parse_xml(xml_bytes: bytes) -> dict:
         chave_acesso = inf_id[3:]
     elif len(inf_id) >= 44:
         chave_acesso = inf_id
+    if not chave_acesso:
+        chave_acesso = tv("chNFSe") or tv("chNFS-e") or tv("cChave") or ""
 
-    emit = inf.find(f"{{{_NS}}}emit")
-    if emit is None and inf_dps is not None:
-        emit = inf_dps.find(f"{{{_NS}}}emit")
+    emit = (inf.find(f"{{{_NS}}}emit")
+            or inf.find(f"{{{_NS}}}infEmit")
+            or (inf_dps.find(f"{{{_NS}}}emit") if inf_dps is not None else None)
+            or (inf_dps.find(f"{{{_NS}}}infEmit") if inf_dps is not None else None))
 
     emit_cnpj  = (_t(emit, "CNPJ") or _t(emit, "CPF")) if emit is not None else ""
     emit_im    = _t(emit, "IM")    if emit is not None else ""
     emit_fone  = (_t(emit, "fone") or _t(emit, "tel")) if emit is not None else ""
     emit_nome  = _t(emit, "xNome") if emit is not None else ""
     emit_email = (_t(emit, "email") or _t(emit, "xEmail")) if emit is not None else ""
-    emit_lgr   = _t(emit, "xLgr")  if emit is not None else ""
-    emit_nro   = _t(emit, "nro")   if emit is not None else ""
-    emit_cpl   = _t(emit, "xCpl")  if emit is not None else ""
-    emit_bairro= _t(emit, "xBairro") if emit is not None else ""
-    emit_mun   = _t(emit, "xMun")  if emit is not None else ""
-    emit_uf    = (_t(emit, "UF") or _uf_from_ibge(_t(emit, "cMun") if emit is not None else "")) if emit is not None else ""
-    emit_cep   = _t(emit, "CEP")   if emit is not None else ""
+    # Endereço pode estar num subelemento <end> (padrão Gemini) ou direto
+    emit_end_el = (emit.find(f"{{{_NS}}}end") if emit is not None else None) or emit
+    emit_lgr    = _t(emit_end_el, "xLgr")    if emit_end_el is not None else ""
+    emit_nro    = _t(emit_end_el, "nro")     if emit_end_el is not None else ""
+    emit_cpl    = _t(emit_end_el, "xCpl")    if emit_end_el is not None else ""
+    emit_bairro = _t(emit_end_el, "xBairro") if emit_end_el is not None else ""
+    emit_mun    = _t(emit_end_el, "xMun")    if emit_end_el is not None else ""
+    emit_uf     = (_t(emit_end_el, "UF") or _uf_from_ibge(_t(emit_end_el, "cMun") if emit_end_el is not None else "")) if emit_end_el is not None else ""
+    emit_cep    = _t(emit_end_el, "CEP")     if emit_end_el is not None else ""
 
     end_parts = [emit_lgr]
     if emit_nro: end_parts.append(emit_nro)
@@ -228,16 +233,19 @@ def _parse_xml(xml_bytes: bytes) -> dict:
                    else _emit_disp or emit_uf or "")
     uf = emit_uf or ""
 
-    toma = inf_dps.find(f".//{{{_NS}}}toma") if inf_dps is not None else None
+    toma = (inf_dps.find(f".//{{{_NS}}}toma") if inf_dps is not None else None) \
+        or (inf_dps.find(f".//{{{_NS}}}infTomador") if inf_dps is not None else None) \
+        or (inf.find(f".//{{{_NS}}}infTomador"))
     toma_doc   = (_t(toma, "CNPJ") or _t(toma, "CPF")) if toma is not None else ""
     toma_im    = _t(toma, "IM")    if toma is not None else ""
     toma_fone  = (_t(toma, "fone") or _t(toma, "tel")) if toma is not None else ""
     toma_nome  = _t(toma, "xNome") if toma is not None else ""
     toma_email = (_t(toma, "email") or _t(toma, "xEmail")) if toma is not None else ""
-    toma_lgr   = _t(toma, "xLgr") if toma is not None else ""
-    toma_nro   = _t(toma, "nro")  if toma is not None else ""
-    toma_cpl   = _t(toma, "xCpl") if toma is not None else ""
-    toma_bairro= _t(toma, "xBairro") if toma is not None else ""
+    toma_end_el = (toma.find(f"{{{_NS}}}end") if toma is not None else None) or toma
+    toma_lgr    = _t(toma_end_el, "xLgr")    if toma_end_el is not None else ""
+    toma_nro    = _t(toma_end_el, "nro")     if toma_end_el is not None else ""
+    toma_cpl    = _t(toma_end_el, "xCpl")    if toma_end_el is not None else ""
+    toma_bairro = _t(toma_end_el, "xBairro") if toma_end_el is not None else ""
     toma_mun_raw = _t(toma, "xMun") if toma is not None else ""
     toma_cmun    = _t(toma, "cMun") if toma is not None else ""
     try:
@@ -278,7 +286,7 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     x_pais_prest = tv("xPaisPrest") or tv("cPaisPrest")
 
     xdsc = ""
-    for tag in ("xDscServ", "discServ", "xDisc", "xServico", "xDescServ"):
+    for tag in ("xDscServ", "discServ", "xDisc", "xServico", "xDescServ", "xDesc"):
         xdsc = tv(tag)
         if xdsc:
             break
@@ -302,12 +310,12 @@ def _parse_xml(xml_bytes: bytes) -> dict:
     vals = inf.find(f"{{{_NS}}}valores")
     def _v(tag, fallback=""):
         return (_t(vals, tag) or fallback) if vals is not None else fallback
-    v_serv_prest  = _v("vServPrest") or _v("vBC")
+    v_serv_prest  = _v("vServPrest") or _v("vServ") or _v("vBC")
     v_desc_incond = _v("vDescIncond")
     v_ded         = _v("vDed")
     v_bc          = _v("vBC")
-    p_aliq        = _v("pAliqAplic")
-    v_issqn       = _v("vISSQN")
+    p_aliq        = _v("pAliqAplic") or _v("pAliq")
+    v_issqn       = _v("vISSQN") or _v("vIssqn")
     v_liq         = _v("vLiq") or v_bc
     v_desc_cond   = _v("vDescCond")
     v_ret_issqn   = _v("vRetISSQN")
@@ -431,54 +439,30 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
     CWE = [W * 0.20, W * 0.37, W * 0.25, W * 0.18]
 
     # ═══════════════════════════════════════════════════════════════
-    # BLOCO SUPERIOR — tabela externa 3 colunas: logo | centro | right
-    # A coluna centro usa nested tables (título / chave / números)
-    # A coluna right abrange toda a altura com prefeitura + QR + auth
+    # BLOCO SUPERIOR — tabela PLANA 5 colunas com SPAN
+    # col0=logo | col1..3=centro (3 iguais) | col4=direita
     # ═══════════════════════════════════════════════════════════════
     qr_buf = _make_qr(data["chave_acesso"] or "")
 
-    LOGO_W  = W * 0.14
-    RIGHT_W = W * 0.27
-    CTR_W   = W - LOGO_W - RIGHT_W
-    CW3h    = CTR_W / 3
+    LOGO_W  = W * 0.13
+    RIGHT_W = W * 0.26
+    CW_C    = (W - LOGO_W - RIGHT_W) / 3   # largura de cada col central
 
-    # Logo NFSe: caixa verde com texto branco + legenda abaixo
+    # Conteúdo da coluna logo
     _NFSE_GREEN = colors.HexColor("#1a8a34")
-    _nfse_box = Table(
-        [[Paragraph(
-            '<font name="Helvetica-Bold" size="15" color="white">NFS'
-            '<font size="10">e</font></font>',
-            ps("nfsebox", alignment=TA_LEFT, leading=17),
-        )]],
-        colWidths=[LOGO_W * 0.72],
+    logo_content = Paragraph(
+        '<font name="Helvetica-Bold" size="16" color="#1a8a34">NFS</font>'
+        '<font name="Helvetica-Bold" size="11" color="#1a8a34">e</font><br/>'
+        '<font name="Helvetica" size="5.5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
+        ps("logo", alignment=TA_LEFT, leading=18),
     )
-    _nfse_box.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (0, 0), _NFSE_GREEN),
-        ("TOPPADDING",    (0, 0), (0, 0), 2),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 2),
-        ("LEFTPADDING",   (0, 0), (0, 0), 4),
-        ("RIGHTPADDING",  (0, 0), (0, 0), 4),
-    ]))
-    logo_p = Table(
-        [[_nfse_box],
-         [Paragraph(
-             '<font name="Helvetica" size="5.5" color="#333333">Nota Fiscal de<br/>Serviço Eletrônico</font>',
-             ps("logosub", alignment=TA_LEFT, leading=7),
-         )]],
-        colWidths=[LOGO_W - 6],
-    )
-    logo_p.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-    ]))
+
     title_p = Paragraph(
         '<font name="Helvetica-Bold" size="13">DANFSe v1.0</font><br/>'
         '<font name="Helvetica" size="8">Documento Auxiliar da NFS-e</font>',
-        ps("title", alignment=TA_CENTER, leading=14),
+        ps("title", alignment=TA_CENTER, leading=15),
     )
+
     city_up = (data["city"] or "").upper()
     uf_up   = (data["uf"]   or "").upper()
     pref_p = Paragraph(
@@ -496,78 +480,69 @@ def gerar_danfse_pdf(xml_bytes: bytes) -> bytes:
         ps("auth", alignment=TA_RIGHT, leading=5.5),
     )
 
-    # Nested: números (3 colunas iguais)
-    _nb = [
-        ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
-    ]
-    nums_tbl = Table([
-        [lv("Número da NFS-e",                data["n_nfse"]),
-         lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
-         lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"]))],
-        [lv("Número da DPS",                  data["n_dps"]),
-         lv("Série da DPS",                   data["serie"]),
-         lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"]))],
-    ], colWidths=[CW3h, CW3h, CW3h])
-    nums_tbl.setStyle(TableStyle(_nb))
-
-    # Nested: coluna centro (título / chave / números)
-    ctr_tbl = Table([
-        [title_p],
-        [lv("Chave de Acesso da NFS-e", data["chave_acesso"] or "-")],
-        [nums_tbl],
-    ], colWidths=[CTR_W])
-    ctr_tbl.setStyle(TableStyle([
-        ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("ALIGN",         (0, 0), (0, 0), "CENTER"),
-        ("VALIGN",        (0, 0), (0, 0), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
-        ("TOPPADDING",    (0, 0), (0, 0), 5),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 5),
-    ]))
-
-    # Nested: coluna direita (prefeitura + QR + auth)
+    # Conteúdo da coluna direita: prefeitura + QR + auth em lista vertical
+    from reportlab.platypus import Image as RLImage
     if qr_buf:
-        from reportlab.platypus import Image as RLImage
-        qr_sz = 22 * mm
-        right_inner = Table([
-            [pref_p],
-            [RLImage(qr_buf, width=qr_sz, height=qr_sz)],
-            [auth_p],
-        ], colWidths=[RIGHT_W - 6])
-        right_inner.setStyle(TableStyle([
-            ("ALIGN",         (0, 0), (-1, -1), "RIGHT"),
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 1),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ]))
-        right_cell = right_inner
+        qr_sz = 20 * mm
+        right_content = [
+            pref_p,
+            Paragraph("", ps("sp1", leading=3)),
+            RLImage(qr_buf, width=qr_sz, height=qr_sz),
+            Paragraph("", ps("sp2", leading=2)),
+            auth_p,
+        ]
     else:
-        right_cell = pref_p
+        right_content = pref_p
 
-    # Tabela externa principal
-    hdr = Table([[logo_p, ctr_tbl, right_cell]],
-                colWidths=[LOGO_W, CTR_W, RIGHT_W])
+    # Tabela plana: 4 linhas x 5 colunas
+    # row0: logo | título(span c1-c3) | direita(span r0-r3)
+    # row1: logo | chave(span c1-c3)  | …
+    # row2: logo | Nº NFS-e | Competência | Data NFS-e | …
+    # row3: logo | Nº DPS   | Série DPS   | Data DPS   | …
+    hdr = Table([
+        [logo_content,
+         title_p, "", "",
+         right_content],
+        ["",
+         lv("Chave de Acesso da NFS-e", data["chave_acesso"] or "-"), "", "",
+         ""],
+        ["",
+         lv("Número da NFS-e",                data["n_nfse"]),
+         lv("Competência da NFS-e",            _fmt_dt_date(data["d_compet"])),
+         lv("Data e Hora da emissão da NFS-e", _fmt_dt(data["dh_emi"])),
+         ""],
+        ["",
+         lv("Número da DPS",                  data["n_dps"]),
+         lv("Série da DPS",                   data["serie"]),
+         lv("Data e Hora da emissão da DPS",  _fmt_dt(data["dh_emi_dps"])),
+         ""],
+    ], colWidths=[LOGO_W, CW_C, CW_C, CW_C, RIGHT_W])
+
     hdr.setStyle(TableStyle([
         ("BOX",           (0, 0), (-1, -1), 0.5, BRD),
         ("INNERGRID",     (0, 0), (-1, -1), 0.3, BRD),
         ("BACKGROUND",    (0, 0), (-1, -1), WBG),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("VALIGN",        (0, 0), (0, 0), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+        # Logo: centralizado verticalmente, ocupa as 4 linhas
+        ("SPAN",   (0, 0), (0, 3)),
+        ("VALIGN", (0, 0), (0, 3), "MIDDLE"),
+        ("ALIGN",  (0, 0), (0, 3), "CENTER"),
+        # Título: span nas 3 colunas centrais, centralizado
+        ("SPAN",   (1, 0), (3, 0)),
+        ("ALIGN",  (1, 0), (3, 0), "CENTER"),
+        ("VALIGN", (1, 0), (3, 0), "MIDDLE"),
+        ("TOPPADDING",    (1, 0), (3, 0), 6),
+        ("BOTTOMPADDING", (1, 0), (3, 0), 6),
+        # Chave: span nas 3 colunas centrais
+        ("SPAN",   (1, 1), (3, 1)),
+        # Coluna direita: span nas 4 linhas
+        ("SPAN",   (4, 0), (4, 3)),
+        ("ALIGN",  (4, 0), (4, 3), "RIGHT"),
+        ("VALIGN", (4, 0), (4, 3), "TOP"),
     ]))
     story.append(hdr)
 
