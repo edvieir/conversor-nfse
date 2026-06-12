@@ -66,6 +66,12 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
 
     cnae = _t(inf_dps, "CNAE") if inf_dps is not None else ""
 
+    # código e descrição do serviço (dentro de <cServ> no DPS)
+    c_serv     = inf_dps.find(f".//{{{_NS}}}cServ") if inf_dps is not None else None
+    cod_trib_mun = _t(c_serv, "cTribMun") if c_serv is not None else ""
+    cod_trib_nac = _t(c_serv, "cTribNac") if c_serv is not None else ""
+    desc_serv    = _t(c_serv, "xDescServ") if c_serv is not None else ""
+
     d_compet = _tv("dCompet")
     if not d_compet:
         dh = _tv("dhEmi")
@@ -97,6 +103,8 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso, "cnae": cnae,
         "v_ret_cofins": v_ret_cofins, "v_ret_pis": v_ret_pis,
         "v_ret_csl": v_ret_csl, "v_ret_irrf": v_ret_irrf, "v_ret_inss": v_ret_inss,
+        "cod_trib_mun": cod_trib_mun, "cod_trib_nac": cod_trib_nac,
+        "desc_serv": desc_serv,
     }
 
 
@@ -188,7 +196,9 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""),
         ))
-        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], cod_servico,
+        # prioridade: código municipal do XML > código nacional > parâmetro global
+        _cod = n.get("cod_trib_mun") or n.get("cod_trib_nac") or cod_servico
+        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], _cod,
                                 n["v_bc"], cnae=n.get("cnae","")))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
