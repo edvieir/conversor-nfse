@@ -132,6 +132,17 @@ def _make_session(cert_path: str, key_path: str) -> requests.Session:
     return s
 
 
+def _is_cancelada(root) -> bool:
+    """Detecta nota cancelada: presença de <nfseCanc> ou cSitNFSe/tpSit fora do valor ativo."""
+    if any(e.tag.endswith("nfseCanc") for e in root.iter()):
+        return True
+    for tag in ("cSitNFSe", "tpSit", "cSit"):
+        el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
+        if el is not None and el.text and el.text.strip() not in ("1", ""):
+            return True
+    return False
+
+
 def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict | None:
     url    = f"{BASE_URL}/DFe/{nsu}"
     params = {"cnpjConsulta": cnpj, "lote": "true"}
@@ -281,8 +292,9 @@ def baixar_xmls_nfse(
         lote_num = 0
         log_lock = threading.Lock()
 
-        # acumula todos os XMLs aprovados antes de baixar PDFs em paralelo
-        xmls_aprovados: list[tuple[str, bytes, str]] = []  # (chave, xml_bytes, chave_pdf)
+        # acumula todos os XMLs antes de baixar PDFs em paralelo
+        # tupla: (chave, xml_bytes, chave_pdf, cancelada)
+        xmls_aprovados: list[tuple[str, bytes, str, bool]] = []
 
         import xml.etree.ElementTree as _ET2
 
@@ -373,6 +385,15 @@ def baixar_xmls_nfse(
                     except Exception as parse_err:
                         log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
+                    # detecta cancelamento
+                    cancelada = False
+                    try:
+                        cancelada = _is_cancelada(_root)
+                    except Exception:
+                        pass
+                    if cancelada:
+                        log.append(f"    -> CANCELADA")
+
                     # determina chave para PDF
                     chave_pdf = chave
                     if formato in ("pdf", "ambos"):
@@ -386,7 +407,7 @@ def baixar_xmls_nfse(
                         except Exception:
                             pass
 
-                    xmls_aprovados.append((chave, xml_bytes, chave_pdf))
+                    xmls_aprovados.append((chave, xml_bytes, chave_pdf, cancelada))
                     total_ok += 1
 
                 except Exception as e:
@@ -403,24 +424,30 @@ def baixar_xmls_nfse(
             if progress_cb:
                 progress_cb(min(lote_num / (lote_num + 3), 0.5))
 
-        log.append(f"  Total de NFS-e no periodo: {total_ok}")
+        total_canc = sum(1 for _, _, _, c in xmls_aprovados if c)
+        log.append(f"  Total de NFS-e no periodo: {total_ok} ({total_canc} cancelada(s))")
         if log_cb: log_cb(log)
 
         # ── Monta ZIP ────────────────────────────────────────────────────────
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
 
-            # salva XMLs
+            # salva XMLs — canceladas em xml/canceladas/
             if formato in ("xml", "ambos"):
-                for chave, xml_bytes, _ in xmls_aprovados:
-                    zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
-                log.append(f"  {len(xmls_aprovados)} XMLs salvos.")
+                for chave, xml_bytes, _, cancelada in xmls_aprovados:
+                    if cancelada:
+                        zf.writestr(f"xml/canceladas/nfse_{chave}_CANC.xml", xml_bytes)
+                    else:
+                        zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
+                log.append(f"  {len(xmls_aprovados)} XMLs salvos ({total_canc} em canceladas/).")
                 if log_cb: log_cb(log)
 
-            # baixa PDFs da API (com fallback para gerar do XML se a API falhar)
+            # baixa PDFs da API — canceladas em pdf/canceladas/
             if formato in ("pdf", "ambos") and xmls_aprovados:
                 tarefas_pdf = [
-                    (chave_pdf, f"nfse_{chave}.pdf", xml_b)
-                    for chave, xml_b, chave_pdf in xmls_aprovados
+                    (chave_pdf,
+                     f"canceladas/nfse_{chave}_CANC.pdf" if cancelada else f"nfse_{chave}.pdf",
+                     xml_b)
+                    for chave, xml_b, chave_pdf, cancelada in xmls_aprovados
                 ]
                 log.append(f"  Baixando {len(tarefas_pdf)} PDFs da API...")
                 if log_cb: log_cb(log)
@@ -438,7 +465,7 @@ def baixar_xmls_nfse(
         if progress_cb:
             progress_cb(1.0)
 
-        log.append(f"Concluido. {total_ok} NFS-e no periodo, {erros} erros.")
+        log.append(f"Concluido. {total_ok} NFS-e ({total_canc} cancelada(s)), {erros} erros.")
         buf.seek(0)
         return (buf.read() if total_ok > 0 else b""), log
 
