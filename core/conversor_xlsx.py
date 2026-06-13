@@ -353,6 +353,20 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
             pass
         return ""
 
+    def _is_cancelada_xml(xml_path):
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.parse(xml_path).getroot()
+            if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
+                return True
+            for tag in ("cSitNFSe", "tpSit", "cSit"):
+                el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
+                if el is not None and el.text and el.text.strip() not in ("1", ""):
+                    return True
+        except Exception:
+            pass
+        return False
+
     with tempfile.TemporaryDirectory() as tmp:
         for uf_file in uploaded_files:
             uf_file.seek(0)
@@ -377,6 +391,7 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
 
         buf   = io.StringIO()
         total = 0
+        canc_ignorados = 0
         erros = []
         n_arqs = max(len(arquivos), 1)
 
@@ -396,6 +411,11 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
                         if comp and comp != competencia_filtro:
                             print(f"  SKIP {nome_arq}: competência {comp} ≠ {competencia_filtro}")
                             continue
+
+                    if _is_cancelada_xml(xml_path):
+                        canc_ignorados += 1
+                        print(f"  CANCELADA {nome_arq}: ignorada")
+                        continue
 
                     d = C.parse_nfse(xml_path)
                     if im:

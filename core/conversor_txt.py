@@ -225,9 +225,23 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 except Exception:
                     pass
 
+    def _is_cancelada_bytes(content: bytes) -> bool:
+        try:
+            root = _ET.fromstring(content)
+            if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
+                return True
+            for tag in ("cSitNFSe", "tpSit", "cSit"):
+                el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
+                if el is not None and el.text and el.text.strip() not in ("1", ""):
+                    return True
+        except Exception:
+            pass
+        return False
+
     with tempfile.TemporaryDirectory() as tmp:
         ignorados    = 0
         pj_ignorados = 0
+        canc_ignorados = 0
         for uf in uploaded_files:
             uf.seek(0)
             content = uf.read()
@@ -236,6 +250,9 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 if comp and comp != competencia_filtro:
                     ignorados += 1
                     continue
+            if _is_cancelada_bytes(content):
+                canc_ignorados += 1
+                continue
             # TXT Fortaleza: ignora emitentes PJ que não sejam MEI ou Pessoa Física
             if modo == "txt" and _emit_pj_nao_mei(content):
                 pj_ignorados += 1
@@ -247,6 +264,8 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         buf   = io.StringIO()
         if ignorados:
             buf.write(f"  FILTRO  {ignorados} arquivo(s) ignorado(s) — competência ≠ {competencia_filtro}\n\n")
+        if canc_ignorados:
+            buf.write(f"  CANCELADAS  {canc_ignorados} nota(s) cancelada(s) ignorada(s)\n\n")
         if pj_ignorados:
             buf.write(
                 f"  FILTRO  {pj_ignorados} arquivo(s) ignorado(s) "
