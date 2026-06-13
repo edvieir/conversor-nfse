@@ -139,6 +139,18 @@ def render():
                     )
 
             if notas:
+                canceladas = [n for n in notas if n.get("cancelada")]
+                notas = [n for n in notas if not n.get("cancelada")]
+                if canceladas:
+                    ic_warn = icon("alert-triangle", 15, "#C77D0A")
+                    nomes = ", ".join(f"NFS-e {n['n_nfse']}" for n in canceladas)
+                    st.markdown(
+                        f'<div class="warn-box">{ic_warn}'
+                        f'<span class="box-text">{len(canceladas)} nota(s) cancelada(s) ignorada(s): {nomes}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+            if notas:
                 try:
                     # Nome da empresa: usa o digitado ou cai no tomador do XML
                     nome_empresa = nome_empresa_input.strip() or notas[0].get("toma_nome", "") or "EMPRESA"

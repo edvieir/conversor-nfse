@@ -428,6 +428,17 @@ def _qr_image(chave: str, size_mm: float = 25):
 # ── Geração do PDF ────────────────────────────────────────────────────────────
 
 def gerar_danfse(xml_bytes: bytes) -> bytes:
+    root = ET.fromstring(xml_bytes)
+    _canc = any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter())
+    if not _canc:
+        for _tag in ("cSitNFSe", "tpSit", "cSit"):
+            _el = next((e for e in root.iter() if e.tag.split("}")[-1] == _tag), None)
+            if _el is not None and _el.text and _el.text.strip() not in ("1", ""):
+                _canc = True
+                break
+    if _canc:
+        raise ValueError("Nota cancelada — DANFSe não gerado.")
+
     d = _parse(xml_bytes)
     buf = io.BytesIO()
 

@@ -13,11 +13,24 @@ def _t(el, tag: str) -> str:
     return found.text.strip() if found is not None and found.text else ""
 
 
+def _nota_cancelada(root) -> bool:
+    """Retorna True se o XML indica nota cancelada."""
+    if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
+        return True
+    for tag in ("cSitNFSe", "tpSit", "cSit"):
+        el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
+        if el is not None and el.text and el.text.strip() not in ("1", ""):
+            return True
+    return False
+
+
 def parse_nfse_xml(xml_bytes: bytes) -> dict:
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as exc:
         raise ValueError(f"XML inválido: {exc}") from exc
+
+    cancelada = _nota_cancelada(root)
 
     inf = root.find(f"{{{_NS}}}infNFSe")
     if inf is None:
@@ -95,6 +108,7 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         chave_acesso = inf_id[:44]
 
     return {
+        "cancelada": cancelada,
         "n_nfse": n_nfse, "d_compet": d_compet,
         "emit_cnpj": emit_cnpj, "emit_nome": emit_nome,
         "emit_im": emit_im, "emit_uf": emit_uf or "CE",
@@ -184,6 +198,8 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
         ))
 
     for n in sorted(notas, key=lambda n: (n["d_compet"], n["n_nfse"].zfill(15))):
+        if n.get("cancelada"):
+            continue
         cnpj = n["emit_cnpj"]
         if not cnpj or cnpj not in prestadores:
             continue
