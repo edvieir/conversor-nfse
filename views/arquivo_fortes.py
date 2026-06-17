@@ -94,21 +94,32 @@ def render():
             observacao = ""
 
         if is_prestados:
-            st.markdown(_label("Código Município Fortes (opcional)"), unsafe_allow_html=True)
-            cod_municipio = st.text_input(
-                "cod_municipio",
-                placeholder="ex: 07700  (Fortaleza)",
-                label_visibility="collapsed",
-                key="fortes_cod_municipio",
-            )
+            col_mun, col_atv = st.columns(2, gap="medium")
+            with col_mun:
+                st.markdown(_label("Código Município Fortes (opcional)"), unsafe_allow_html=True)
+                cod_municipio = st.text_input(
+                    "cod_municipio",
+                    placeholder="ex: 07700  (Fortaleza)",
+                    label_visibility="collapsed",
+                    key="fortes_cod_municipio",
+                )
+            with col_atv:
+                st.markdown(_label("Código de Atividade ISS (Fortes)"), unsafe_allow_html=True)
+                cod_atividade = st.text_input(
+                    "cod_atividade",
+                    placeholder="ex: 3",
+                    label_visibility="collapsed",
+                    key="fortes_cod_atividade",
+                )
             ic_info = icon("info", 13, "#475569")
             st.markdown(
                 f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-                f'{ic_info}&nbsp; Código interno do município no ACFiscal (ex: 07700 para Fortaleza). '
-                f'Se deixar em branco, será usado o código IBGE do XML.</div>',
+                f'{ic_info}&nbsp; Consulte no ACFiscal: <b>Cadastros → Atividades ISS</b> '
+                f'para obter o código da atividade e o município (ex: 07700 = Fortaleza).</div>',
                 unsafe_allow_html=True,
             )
         else:
+            cod_atividade = ""
             cod_municipio = ""
             ic_info = icon("info", 13, "#475569")
             st.markdown(
@@ -182,6 +193,7 @@ def render():
                             notas=notas,
                             nome_empresa=nome_empresa,
                             cod_municipio=cod_municipio.strip(),
+                            cod_atividade=cod_atividade.strip(),
                         )
                     else:
                         # Nome da empresa: usa o digitado ou cai no tomador do XML

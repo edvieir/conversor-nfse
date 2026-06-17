@@ -184,6 +184,11 @@ def _ies_line(v_total, tributacao, aliq, cod_servico, v_bc, cnae=""):
 def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
                        lgr="", nro="", cpl="", bairro="", cep="", cmun="", fone=""):
     """PAR line para arquivo de serviços Prestados (v200)."""
+    # Campo 18 exige numérico; CMun deve ser só dígitos
+    nro_num  = ''.join(c for c in (nro or "") if c.isdigit())
+    cmun_dig = ''.join(c for c in (cmun or "") if c.isdigit())
+    cmun_cod = cmun_dig[-5:] if len(cmun_dig) >= 5 else cmun_dig
+
     f = [""] * 43
     f[0]  = "PAR"
     f[1]  = str(par_id)
@@ -197,12 +202,12 @@ def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
     if not is_cpf and (lgr or bairro or cep or cmun):
         f[15] = "35"  # tipo logradouro padrão
         f[16] = lgr
-        f[17] = nro
+        f[17] = nro_num   # somente dígitos
         f[18] = cpl
         f[19] = "1" if bairro else ""
         f[20] = bairro
         f[21] = cep.replace("-", "").replace(".", "")
-        f[22] = cmun[-5:] if len(cmun) >= 5 else cmun
+        f[22] = cmun_cod  # somente dígitos, últimos 5
         ddd, tel = (fone[:2], fone[2:]) if len(fone) > 2 else ("", fone)
         f[23] = ddd
         f[24] = tel
@@ -221,8 +226,8 @@ def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
 
 
 def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss_retido):
-    """DSS line — documento de serviço prestado."""
-    f = [""] * 58
+    """DSS line — documento de serviço prestado (57 campos, layout v200)."""
+    f = [""] * 57
     f[0]  = "DSS"
     f[1]  = "0001"
     f[2]  = data_emi            # YYYYMMDD (data emissão)
@@ -234,29 +239,37 @@ def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss
     f[8]  = v_total
     f[9]  = str(par_id)
     f[10] = "S" if iss_retido else "N"
-    # f[11-30] = 20 campos vazios
-    f[31] = chave[:44] if chave else ""
-    f[32] = d_compet_yyyymm01  # YYYYMM01
-    f[33] = "N"
-    # f[34-35] = vazios
-    f[36] = v_total
-    # f[37] = vazio
-    f[38] = "0"
-    # f[39-42] = vazios
-    f[43] = "0"
-    f[44] = "0"
-    f[45] = "0"
-    # f[46-55] = vazios
-    f[56] = "N"
+    # f[11-29] = 19 campos vazios
+    f[30] = chave[:44] if chave else ""   # campo 31: chave
+    f[31] = d_compet_yyyymm01            # campo 32: data de prestação AAAAMMDD
+    f[32] = "N"                          # campo 33: Pago pelo SUS
+    # f[33-34] = vazios
+    f[35] = v_total                      # campo 36: valor
+    # f[36] = vazio (campo 37: Código Contábil — deixar em branco)
+    f[37] = "0"                          # campo 38
+    # f[38-41] = vazios (campo 39: CNO — deve ficar vazio)
+    f[42] = "0"                          # campo 43
+    f[43] = "0"                          # campo 44
+    f[44] = "0"                          # campo 45
+    # f[45-54] = vazios
+    f[55] = "N"                          # campo 56: Pagamento Antecipado
     return "|".join(f)
 
 
-def _its_line(v_total, tributacao, v_bc, aliq, uf, cmun, cod_servico):
-    """ITS line — item de serviço prestado."""
-    f = [""] * 51
+def _its_line(v_total, cod_atividade, v_bc, aliq, uf, cmun, cod_servico):
+    """ITS line — item de serviço prestado (50 campos, layout v200).
+
+    campo 3  (f[2])  = Código de Atividade ISS (código configurado no Fortes)
+    campo 10 (f[9])  = Código do Serviço ISS
+    campo 15 (f[14]) = Código de Atividade ISS (secundário, mesmo valor)
+    """
+    # Código do serviço: remove zeros à esquerda (Fortes usa ex: "701" não "0701")
+    cod_serv_clean = str(int(cod_servico)) if cod_servico and cod_servico.isdigit() else (cod_servico or "")
+
+    f = [""] * 50
     f[0]  = "ITS"
     f[1]  = v_total
-    f[2]  = str(tributacao)
+    f[2]  = str(cod_atividade) if cod_atividade else ""  # campo 3: Código de Atividade
     f[3]  = v_bc
     try:
         f[4] = f"{float(aliq):.5f}" if aliq else ""
@@ -265,12 +278,13 @@ def _its_line(v_total, tributacao, v_bc, aliq, uf, cmun, cod_servico):
     f[5]  = "1"
     f[6]  = uf
     f[7]  = cmun
-    f[9]  = cod_servico
+    f[9]  = cod_serv_clean                               # campo 10: Código do Serviço
+    f[14] = str(cod_atividade) if cod_atividade else ""  # campo 15: Código de Atividade (2º)
     f[19] = v_total
     return "|".join(f)
 
 
-def gerar_fortes_prestados(notas, nome_empresa, cod_municipio="", observacao=""):
+def gerar_fortes_prestados(notas, nome_empresa, cod_municipio="", cod_atividade="", observacao=""):
     """Gera arquivo .fs para serviços PRESTADOS (formato DSS/ITS, versão 200)."""
     if not notas:
         return ""
@@ -344,7 +358,7 @@ def gerar_fortes_prestados(notas, nome_empresa, cod_municipio="", observacao="")
         mun_code = cod_municipio or n.get("emit_cmun", "") or ""
         cod_serv = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
 
-        linhas.append(_its_line(v_total, tributacao, n["v_bc"],
+        linhas.append(_its_line(v_total, cod_atividade, n["v_bc"],
                                 aliq_iss, uf, mun_code, cod_serv))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
