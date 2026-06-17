@@ -214,6 +214,8 @@ def _baixar_pdfs_paralelo(
     for i, (chave, nome, _xml_b) in enumerate(tarefas):
         fila.put((i + 1, chave, nome, _PDF_MAX_TRIES))
 
+    concluidos = [0]  # sucessos + falhas definitivas
+
     def worker():
         while True:
             try:
@@ -228,17 +230,21 @@ def _baixar_pdfs_paralelo(
                 with res_lock:
                     resultados[nome] = pdf
                 with log_lock:
-                    log.append(f"  PDF {idx}/{total}: OK ({len(pdf)//1024} KB) [{tentativa_num}t]")
+                    concluidos[0] += 1
+                    pct = int(concluidos[0] / total * 100)
+                    log.append(f"  [{pct:3d}%] PDF {idx}/{total}: OK ({len(pdf)//1024} KB) [{tentativa_num}t]")
                     if log_cb: log_cb(log)
                 fila.task_done()
             elif retry and restantes > 1:
-                # volta para a fila apos breve espera — outros workers continuam
+                # volta para a fila — outros workers continuam sem parar
                 time.sleep(2)
                 fila.put((idx, chave, nome, restantes - 1))
                 fila.task_done()
             else:
                 with log_lock:
-                    log.append(f"  PDF {idx}/{total}: FALHA apos {tentativa_num} tentativas")
+                    concluidos[0] += 1
+                    pct = int(concluidos[0] / total * 100)
+                    log.append(f"  [{pct:3d}%] PDF {idx}/{total}: falhou ({tentativa_num}t)")
                     if log_cb: log_cb(log)
                 fila.task_done()
 
@@ -455,16 +461,21 @@ def baixar_xmls_nfse(
 
                 pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, tarefas_pdf, log, log_lock, log_cb)
 
-                # ondas de rescue para os que falharam
-                _MAX_ONDAS = 2
+                # ondas de rescue com contagem regressiva visivel
+                _MAX_ONDAS   = 2
+                _ESPERA_ONDA = 30
                 for onda in range(1, _MAX_ONDAS + 1):
                     falhas = [(chave, nome, xml_b) for chave, nome, xml_b in tarefas_pdf if nome not in pdfs]
                     if not falhas:
                         break
-                    log.append(f"  {len(falhas)} PDFs falharam — aguardando 30s antes da onda {onda+1}/{_MAX_ONDAS+1}...")
-                    if log_cb: log_cb(log)
-                    time.sleep(30)
-                    log.append(f"  Onda {onda+1}: retentando {len(falhas)} PDFs...")
+                    # contagem regressiva: substitui a ultima linha do log a cada 3s
+                    log.append("")
+                    for seg in range(_ESPERA_ONDA, 0, -3):
+                        log[-1] = f"  {len(falhas)} PDFs pendentes — proxima tentativa em {seg}s..."
+                        if log_cb: log_cb(log)
+                        if progress_cb: progress_cb(0.65 + 0.10 * onda)
+                        time.sleep(min(3, seg))
+                    log[-1] = f"  Onda {onda+1}/{_MAX_ONDAS+1}: retentando {len(falhas)} PDFs..."
                     if log_cb: log_cb(log)
                     pdfs2 = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, falhas, log, log_lock, log_cb)
                     pdfs.update(pdfs2)
