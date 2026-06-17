@@ -8,11 +8,6 @@ from auth.security import current_user, is_admin, logout
 from views import nav
 from core.conversor_txt  import processar_uploads, conversor_disponivel
 from core.conversor_xlsx import processar_xlsx_sped
-try:
-    from core.conversor_pdf import gerar_pdf_bytes as _gerar_pdf
-    _PDF_OK = True
-except Exception:
-    _PDF_OK = False
 from db.database import log_conversion
 from assets.icons import icon
 
@@ -143,11 +138,10 @@ def render():
                 unsafe_allow_html=True,
             )
 
-        col1, col2, col3 = st.columns(3, gap="medium")
+        col1, col2 = st.columns(2, gap="medium")
 
         ic_txt  = icon("file-text", 40, "#00CED1")
         ic_xlsx = icon("bar-chart",  40, "#7B3FE4")
-        ic_pdf  = icon("file",       40, "#E53935")
 
         with col1:
             st.markdown(f"""
@@ -177,20 +171,6 @@ def render():
                 use_container_width=True, type="primary", key="btn_xlsx",
             )
 
-        with col3:
-            st.markdown(f"""
-            <div class="format-card">
-                <div class="format-svg">{ic_pdf}</div>
-                <div class="format-name">DANFSe (PDF)</div>
-                <div class="format-desc">PDF no padrao nacional DANFSe v1.0</div>
-            </div>
-            """, unsafe_allow_html=True)
-            btn_pdf = st.button(
-                "Gerar PDF",
-                disabled=not tem_arquivos or not _PDF_OK,
-                use_container_width=True, type="primary", key="btn_pdf",
-            )
-
     # ── Validação de competência ──────────────────────────────────────────────
     comp_filtro = ""
     if comp_input.strip():
@@ -209,70 +189,6 @@ def render():
                 f'<span class="box-text">Competencia invalida — use MM/AAAA (ex: 05/2026).</span></div>',
                 unsafe_allow_html=True,
             )
-
-    # ── Processamento PDF ─────────────────────────────────────────────────────
-    if btn_pdf:
-        if not uploaded:
-            ic_warn = icon("alert-triangle", 15, "#C77D0A")
-            st.markdown(
-                f'<div class="warn-box">{ic_warn}'
-                f'<span class="box-text">Selecione pelo menos um arquivo XML na Etapa 1.</span></div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            import io, zipfile
-            pdfs = []
-            erros = []
-            with st.spinner(f"Gerando {len(uploaded)} DANFSe(s) em PDF..."):
-                for f in uploaded:
-                    try:
-                        xml_bytes = f.read()
-                        pdf_bytes = _gerar_pdf(xml_bytes)
-                        nome_pdf  = f.name.replace(".xml", ".pdf")
-                        pdfs.append((nome_pdf, pdf_bytes))
-                    except Exception as e:
-                        erros.append(f"{f.name}: {e}")
-
-            log_conversion(usuario=user["username"], modo="pdf", qtd=len(uploaded),
-                           sucesso=bool(pdfs))
-
-            if pdfs:
-                if len(pdfs) == 1:
-                    nome_dl, dados_dl = pdfs[0][0], pdfs[0][1]
-                    mime_dl = "application/pdf"
-                else:
-                    buf_zip = io.BytesIO()
-                    with zipfile.ZipFile(buf_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-                        for nome_p, dados_p in pdfs:
-                            zf.writestr(nome_p, dados_p)
-                    nome_dl  = f"danfse_pdf_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-                    dados_dl = buf_zip.getvalue()
-                    mime_dl  = "application/zip"
-
-                tamanho_kb = round(len(dados_dl) / 1024, 1)
-                ic_ok = icon("check-circle", 32, "#1AB87A")
-                ic_file = icon("file", 18, "#1AB87A")
-                st.markdown(f"""
-                <div class="result-success">
-                    <div class="result-success-icon">{ic_ok}</div>
-                    <div>
-                        <div class="result-success-title">DANFSe gerado com sucesso!</div>
-                        <div class="result-success-meta">
-                            {ic_file} {nome_dl} &nbsp;&middot;&nbsp; {tamanho_kb} KB
-                            &nbsp;&middot;&nbsp;
-                            {len(pdfs)} PDF{'s' if len(pdfs) > 1 else ''} gerado{'s' if len(pdfs) > 1 else ''}
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.download_button(
-                    label=f"Baixar  {nome_dl}",
-                    data=dados_dl, file_name=nome_dl, mime=mime_dl,
-                    use_container_width=True,
-                )
-            if erros:
-                for e in erros:
-                    st.warning(e)
 
     # ── Processamento ─────────────────────────────────────────────────────────
     if btn_txt or btn_xlsx:
