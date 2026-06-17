@@ -381,10 +381,13 @@ def baixar_xmls_nfse(
                             else:
                                 papel = "tomados"
 
+                        # filtro de data: usa dCompet do XML; se ausente (ex: evento de cancelamento)
+                        # usa DataHoraGeracao da API como fallback
                         _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
-                        if _el is not None and _el.text:
+                        _data_filtro = (_el.text.strip()[:10] if _el is not None and _el.text else None) or data_str or None
+                        if _data_filtro:
                             try:
-                                data_compet = date.fromisoformat(_el.text.strip()[:10])
+                                data_compet = date.fromisoformat(_data_filtro)
                                 compet_ym = (data_compet.year, data_compet.month)
                                 ini_ym    = (data_ini.year,    data_ini.month)
                                 fim_ym    = (data_fim.year,    data_fim.month)
@@ -392,7 +395,7 @@ def baixar_xmls_nfse(
                                     log.append(f"    -> competencia {data_compet.year}-{data_compet.month:02d} fora do periodo, ignorado")
                                     continue
                             except ValueError:
-                                log.append(f"    -> dCompet formato invalido '{_el.text}', incluido")
+                                log.append(f"    -> data formato invalido '{_data_filtro}', incluido")
                     except Exception as parse_err:
                         log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
