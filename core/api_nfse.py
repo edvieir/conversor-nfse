@@ -133,8 +133,11 @@ def _make_session(cert_path: str, key_path: str) -> requests.Session:
 
 
 def _is_cancelada(root) -> bool:
-    """Detecta nota cancelada: presença de <nfseCanc> ou cSitNFSe/tpSit fora do valor ativo."""
+    """Detecta nota cancelada: nfseCanc, cStat != 100, ou cSitNFSe/tpSit fora do valor ativo."""
     if any(e.tag.endswith("nfseCanc") for e in root.iter()):
+        return True
+    el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
+    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() != "100":
         return True
     for tag in ("cSitNFSe", "tpSit", "cSit"):
         el = next((e for e in root.iter() if e.tag.endswith(tag)), None)

@@ -17,6 +17,10 @@ def _nota_cancelada(root) -> bool:
     """Retorna True se o XML indica nota cancelada."""
     if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
         return True
+    # cStat: 100 = autorizada; qualquer outro (101, 107, 108...) = cancelada/denegada
+    el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
+    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() != "100":
+        return True
     for tag in ("cSitNFSe", "tpSit", "cSit"):
         el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
         if el is not None and el.text and el.text.strip() not in ("1", ""):
@@ -164,7 +168,7 @@ def _ies_line(v_total, tributacao, aliq, cod_servico, v_bc, cnae=""):
     return "|".join(f)
 
 
-def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico=""):
+def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao"):
     if not notas:
         return ""
 
@@ -207,7 +211,10 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
         data_emi   = n["d_compet"].replace("-", "")
         num_nota   = n["n_nfse"].zfill(15)
         v_total    = n["v_liq"]
-        tributacao = "4" if n.get("tp_ret_iss") == "1" else "3"
+        # tpRetISSQN=2 → ISS retido pelo tomador; qualquer outro → não retido
+        iss_retido = n.get("tp_ret_iss") == "2"
+        tributacao = "4" if iss_retido else "3"
+        aliq_iss   = n["p_aliq"] if iss_retido else ""
 
         linhas.append(_esi_line(
             par_id, data_emi, num_nota, v_total, n.get("chave_acesso",""),
@@ -215,9 +222,9 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao", cod_servico
             v_csl=n.get("v_ret_csl",""), v_irrf=n.get("v_ret_irrf",""),
             v_inss=n.get("v_ret_inss",""),
         ))
-        # prioridade: campo manual (override global) > LC 116 derivado do cTribNac > cTribMun
-        _cod = cod_servico or n.get("cod_lc116") or n.get("cod_trib_mun") or ""
-        linhas.append(_ies_line(v_total, tributacao, n["p_aliq"], _cod,
+        # LC 116 derivado do cTribNac tem prioridade; fallback para cTribMun
+        _cod = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
+        linhas.append(_ies_line(v_total, tributacao, aliq_iss, _cod,
                                 n["v_bc"], cnae=n.get("cnae","")))
 
     linhas.append(f"TRA|{len(linhas) + 1}")

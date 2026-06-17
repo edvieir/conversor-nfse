@@ -230,6 +230,9 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
             root = _ET.fromstring(content)
             if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
                 return True
+            el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
+            if el_cstat is not None and el_cstat.text and el_cstat.text.strip() != "100":
+                return True
             for tag in ("cSitNFSe", "tpSit", "cSit"):
                 el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
                 if el is not None and el.text and el.text.strip() not in ("1", ""):

@@ -71,14 +71,6 @@ def render():
             label_visibility="collapsed",
             key="fortes_nome_empresa",
         )
-        st.markdown(_label("Código do Serviço (Fortes) — opcional"), unsafe_allow_html=True)
-        cod_servico = st.text_input(
-            "cod_servico",
-            placeholder="Preenchido automaticamente pelo XML. Informe só para forçar um código fixo.",
-            label_visibility="collapsed",
-            key="fortes_cod_servico",
-        )
-
         st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
         observacao = st.text_input(
             "observacao",
@@ -158,7 +150,6 @@ def render():
                         notas=notas,
                         nome_empresa=nome_empresa,
                         observacao=observacao.strip() or "NFS-e Importacao",
-                        cod_servico=cod_servico.strip(),
                     )
 
                     hoje = date.today().strftime("%Y%m%d")

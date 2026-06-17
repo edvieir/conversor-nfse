@@ -359,6 +359,9 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
             root = ET.parse(xml_path).getroot()
             if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
                 return True
+            el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
+            if el_cstat is not None and el_cstat.text and el_cstat.text.strip() != "100":
+                return True
             for tag in ("cSitNFSe", "tpSit", "cSit"):
                 el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
                 if el is not None and el.text and el.text.strip() not in ("1", ""):
