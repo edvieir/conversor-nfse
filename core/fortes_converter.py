@@ -380,8 +380,9 @@ def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
                                 chave, d_compet_yyyymm01, iss_retido))
 
         uf           = n.get("emit_uf", "CE")
-        # Código do município: IBGE do XML (emit_cmun), apenas dígitos
-        mun_code     = ''.join(c for c in (n.get("emit_cmun") or "") if c.isdigit())
+        # Código do município: últimos 5 dígitos do IBGE (coluna MUN_Codigo aceita só 5)
+        mun_raw  = ''.join(c for c in (n.get("emit_cmun") or "") if c.isdigit())
+        mun_code = mun_raw[-5:] if len(mun_raw) >= 5 else mun_raw
         cod_atividade = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
 
         linhas.append(_its_line(v_total, cod_atividade, n["v_bc"],
