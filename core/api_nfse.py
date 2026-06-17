@@ -334,12 +334,13 @@ def baixar_xmls_nfse(
 
                 log.append(f"    NSU={nsu_doc} tipo={tipo_doc} data={data_str}")
 
-                if tipo_doc != "NFSE":
-                    continue
-
                 arquivo_b64 = doc.get("ArquivoXml")
                 if not arquivo_b64:
-                    log.append(f"    -> sem ArquivoXml, ignorado")
+                    # sem XML: documentos que não são NFS-e (ex: DPS sem NFSe) ignorar
+                    if tipo_doc != "NFSE":
+                        log.append(f"    -> tipo {tipo_doc} sem XML, ignorado")
+                    else:
+                        log.append(f"    -> sem ArquivoXml, ignorado")
                     continue
 
                 chave = doc.get("ChaveAcesso") or str(nsu_doc)
@@ -395,12 +396,13 @@ def baixar_xmls_nfse(
                     except Exception as parse_err:
                         log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
-                    # detecta cancelamento
-                    cancelada = False
-                    try:
-                        cancelada = _is_cancelada(_root)
-                    except Exception:
-                        pass
+                    # detecta cancelamento: eventos não-NFSE com XML são sempre cancelamentos
+                    cancelada = tipo_doc != "NFSE"
+                    if not cancelada:
+                        try:
+                            cancelada = _is_cancelada(_root)
+                        except Exception:
+                            pass
                     if cancelada:
                         log.append(f"    -> CANCELADA")
 
