@@ -94,32 +94,14 @@ def render():
             observacao = ""
 
         if is_prestados:
-            col_mun, col_atv = st.columns(2, gap="medium")
-            with col_mun:
-                st.markdown(_label("Código Município Fortes (opcional)"), unsafe_allow_html=True)
-                cod_municipio = st.text_input(
-                    "cod_municipio",
-                    placeholder="ex: 07700  (Fortaleza)",
-                    label_visibility="collapsed",
-                    key="fortes_cod_municipio",
-                )
-            with col_atv:
-                st.markdown(_label("Código de Atividade ISS (Fortes)"), unsafe_allow_html=True)
-                cod_atividade = st.text_input(
-                    "cod_atividade",
-                    placeholder="ex: 3",
-                    label_visibility="collapsed",
-                    key="fortes_cod_atividade",
-                )
             ic_info = icon("info", 13, "#475569")
             st.markdown(
                 f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-                f'{ic_info}&nbsp; Consulte no ACFiscal: <b>Cadastros → Atividades ISS</b> '
-                f'para obter o código da atividade e o município (ex: 07700 = Fortaleza).</div>',
+                f'{ic_info}&nbsp; Código do município e código de atividade ISS são extraídos '
+                f'automaticamente do XML (código IBGE e cTribNac).</div>',
                 unsafe_allow_html=True,
             )
         else:
-            cod_atividade = ""
             cod_municipio = ""
             ic_info = icon("info", 13, "#475569")
             st.markdown(
@@ -192,8 +174,6 @@ def render():
                         conteudo = gerar_fortes_prestados(
                             notas=notas,
                             nome_empresa=nome_empresa,
-                            cod_municipio=cod_municipio.strip(),
-                            cod_atividade=cod_atividade.strip(),
                         )
                     else:
                         # Nome da empresa: usa o digitado ou cai no tomador do XML

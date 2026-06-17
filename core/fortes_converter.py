@@ -284,7 +284,7 @@ def _its_line(v_total, cod_atividade, v_bc, aliq, uf, cmun, cod_servico):
     return "|".join(f)
 
 
-def gerar_fortes_prestados(notas, nome_empresa, cod_municipio="", cod_atividade="", observacao=""):
+def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
     """Gera arquivo .fs para serviços PRESTADOS (formato DSS/ITS, versão 200)."""
     if not notas:
         return ""
@@ -354,9 +354,12 @@ def gerar_fortes_prestados(notas, nome_empresa, cod_municipio="", cod_atividade=
         linhas.append(_dss_line(par_id, d_emi_raw, num_nota, v_total,
                                 chave, d_compet_yyyymm01, iss_retido))
 
-        uf       = n.get("emit_uf", "CE")
-        mun_code = cod_municipio or n.get("emit_cmun", "") or ""
-        cod_serv = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
+        uf           = n.get("emit_uf", "CE")
+        # Código do município: IBGE do XML (emit_cmun), apenas dígitos
+        mun_code     = ''.join(c for c in (n.get("emit_cmun") or "") if c.isdigit())
+        # Código de atividade ISS: derivado de cTribNac (igual ao tomados)
+        cod_atividade = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
+        cod_serv      = cod_atividade  # mesmo código para campo 10
 
         linhas.append(_its_line(v_total, cod_atividade, n["v_bc"],
                                 aliq_iss, uf, mun_code, cod_serv))
