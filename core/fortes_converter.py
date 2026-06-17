@@ -207,7 +207,8 @@ def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
         f[19] = "1" if bairro else ""
         f[20] = bairro
         f[21] = cep.replace("-", "").replace(".", "")
-        f[22] = cmun_cod  # somente dígitos, últimos 5
+        # f[22] = campo 23 (município) deixado vazio: Fortes valida contra sua
+        # tabela interna e rejeita municípios não cadastrados (ex: Baturité).
         ddd, tel = (fone[:2], fone[2:]) if len(fone) > 2 else ("", fone)
         f[23] = ddd
         f[24] = tel
@@ -284,7 +285,7 @@ def _its_line(v_total, cod_atividade, v_bc, aliq, uf, cmun, cod_servico):
     return "|".join(f)
 
 
-def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
+def gerar_fortes_prestados(notas, nome_empresa, observacao="", cod_iss=""):
     """Gera arquivo .fs para serviços PRESTADOS (formato DSS/ITS, versão 200)."""
     if not notas:
         return ""
@@ -357,12 +358,13 @@ def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
         uf           = n.get("emit_uf", "CE")
         # Código do município: IBGE do XML (emit_cmun), apenas dígitos
         mun_code     = ''.join(c for c in (n.get("emit_cmun") or "") if c.isdigit())
-        # Código de atividade ISS: derivado de cTribNac (igual ao tomados)
-        cod_atividade = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
-        cod_serv      = cod_atividade  # mesmo código para campo 10
+        # Código ISS: usa o informado pelo usuário; senão, cai no derivado do XML
+        cod_atividade = cod_iss.strip() if cod_iss and cod_iss.strip() else (
+            n.get("cod_lc116") or n.get("cod_trib_mun") or ""
+        )
 
         linhas.append(_its_line(v_total, cod_atividade, n["v_bc"],
-                                aliq_iss, uf, mun_code, cod_serv))
+                                aliq_iss, uf, mun_code, cod_atividade))
 
     linhas.append(f"TRA|{len(linhas) + 1}")
     return "\r\n".join(linhas) + "\r\n"
