@@ -211,9 +211,6 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
     return None
 
 
-_PDF_WORKERS = 2  # 2 workers — evita sobrecarregar backend DANFSe
-
-
 def _baixar_pdfs_paralelo(
     cert_path: str,
     key_path: str,
@@ -223,38 +220,23 @@ def _baixar_pdfs_paralelo(
     log_lock: threading.Lock,
     log_cb=None,
 ) -> dict[str, bytes]:
-    """Baixa PDFs via API DANFSe."""
+    """Baixa PDFs via API DANFSe — sequencial para não sobrecarregar o backend."""
     resultados: dict[str, bytes] = {}
-    res_lock = threading.Lock()
     total = len(tarefas)
-    concluidos = [0]
 
-    def baixar_um(idx: int, chave: str, nome: str, xml_bytes: bytes):
+    for idx, (chave, nome, xml_b) in enumerate(tarefas, 1):
         local_log: list[str] = []
-        local_log.append(f"  PDF {idx}/{total}: {nome.split('/')[-1][:40]}")
+        local_log.append(f"  PDF {idx}/{total}: {nome.split('/')[-1][:50]}")
         pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
+        if pdf:
+            local_log.append(f"    -> OK ({len(pdf)//1024} KB)")
+            resultados[nome] = pdf
         with log_lock:
             log.extend(local_log)
-            concluidos[0] += 1
-            if pdf:
-                log.append(f"    -> OK ({len(pdf)//1024} KB)")
             if log_cb:
                 log_cb(log)
-        if pdf:
-            with res_lock:
-                resultados[nome] = pdf
-
-    with ThreadPoolExecutor(max_workers=_PDF_WORKERS) as pool:
-        futures = {
-            pool.submit(baixar_um, i + 1, chave, nome, xml_b): nome
-            for i, (chave, nome, xml_b) in enumerate(tarefas)
-        }
-        for fut in as_completed(futures):
-            try:
-                fut.result()
-            except Exception as e:
-                with log_lock:
-                    log.append(f"      PDF worker erro: {e}")
+        if idx < total:
+            time.sleep(1)  # pausa entre requisições para não triggar rate limit
 
     return resultados
 
