@@ -265,12 +265,14 @@ def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss
     f[8]  = v_total
     f[9]  = str(par_id)
     f[10] = "S" if iss_retido else "N"
-    # retenções federais (mesmas posições do ESI/tomados)
-    f[11] = v_cofins or ""      # campo 12: COFINS retido
-    f[12] = v_pis    or ""      # campo 13: PIS retido
-    f[13] = v_csl    or ""      # campo 14: CSL retido
-    f[14] = v_irrf   or ""      # campo 15: IRRF retido
-    f[15] = v_inss   or ""      # campo 16: INSS retido
+    # Retido na Fonte: campos 21-26 (f[20]-f[25])
+    # campos 12-20 = Receita Tributável (COFINS/PIS/CSL/IRPJ) — deixar vazios
+    f[20] = v_cofins or ""      # campo 21: COFINS retido
+    f[21] = v_pis    or ""      # campo 22: PIS retido
+    f[22] = v_csl    or ""      # campo 23: CSL retido
+    # f[23]                     # campo 24: IRPJ retido (n/a)
+    f[24] = v_irrf   or ""      # campo 25: IRRF retido
+    f[25] = v_inss   or ""      # campo 26: INSS retido
     f[30] = chave[:44] if chave else ""   # campo 31: chave
     f[31] = d_compet_yyyymm01            # campo 32: data de prestação AAAAMMDD
     f[32] = "N"                          # campo 33: Pago pelo SUS
