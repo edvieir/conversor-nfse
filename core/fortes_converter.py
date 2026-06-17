@@ -13,6 +13,22 @@ def _t(el, tag: str) -> str:
     return found.text.strip() if found is not None and found.text else ""
 
 
+_IBGE_UF = {
+    "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO",
+    "21": "MA", "22": "PI", "23": "CE", "24": "RN", "25": "PB", "26": "PE",
+    "27": "AL", "28": "SE", "29": "BA",
+    "31": "MG", "32": "ES", "33": "RJ", "35": "SP",
+    "41": "PR", "42": "SC", "43": "RS",
+    "50": "MS", "51": "MT", "52": "GO", "53": "DF",
+}
+
+
+def _uf_from_cmun(cmun: str) -> str:
+    """Deriva a sigla UF a partir do código IBGE de 7 dígitos do município."""
+    digits = ''.join(c for c in cmun if c.isdigit())
+    return _IBGE_UF.get(digits[:2], "")
+
+
 def _nota_cancelada(root) -> bool:
     """Retorna True se o XML indica nota cancelada."""
     if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
@@ -67,12 +83,15 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     toma_cnpj   = (_t(toma, "CNPJ") or _t(toma, "CPF")) if toma is not None else ""
     toma_is_cpf = bool(_t(toma, "CPF")) if toma is not None else False
     toma_nome   = _t(toma, "xNome")   if toma is not None else ""
-    toma_uf     = _t(toma, "UF")      if toma is not None else ""
     toma_lgr    = _t(toma, "xLgr")   if toma is not None else ""
     toma_nro    = _t(toma, "nro")     if toma is not None else ""
     toma_bairro = _t(toma, "xBairro") if toma is not None else ""
     toma_cep    = _t(toma, "CEP")     if toma is not None else ""
     toma_cmun   = _t(toma, "cMun")   if toma is not None else ""
+    # UF pode estar ausente no <toma> do NFSe Nacional; deriva do prefixo IBGE
+    toma_uf     = _t(toma, "UF") if toma is not None else ""
+    if not toma_uf and toma_cmun:
+        toma_uf = _uf_from_cmun(toma_cmun)
 
     vals_nfse = inf.find(f"{{{_NS}}}valores")
     v_bc   = (_t(vals_nfse, "vBC")        if vals_nfse is not None else "") or "0.00"
@@ -207,8 +226,7 @@ def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
         f[19] = "1" if bairro else ""
         f[20] = bairro
         f[21] = cep.replace("-", "").replace(".", "")
-        # f[22] = campo 23 (município) deixado vazio: Fortes valida contra sua
-        # tabela interna e rejeita municípios não cadastrados (ex: Baturité).
+        f[22] = cmun_cod  # campo 23: código município Fortes (5 dígitos)
         ddd, tel = (fone[:2], fone[2:]) if len(fone) > 2 else ("", fone)
         f[23] = ddd
         f[24] = tel
