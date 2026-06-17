@@ -64,6 +64,16 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
+        st.markdown(_label("Tipo de Nota"), unsafe_allow_html=True)
+        tipo_nota = st.radio(
+            "tipo_nota",
+            options=["Serviços Tomados", "Serviços Prestados"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="fortes_tipo_nota",
+        )
+        is_prestados = tipo_nota == "Serviços Prestados"
+
         st.markdown(_label("Nome da Empresa"), unsafe_allow_html=True)
         nome_empresa_input = st.text_input(
             "nome_empresa",
@@ -71,21 +81,42 @@ def render():
             label_visibility="collapsed",
             key="fortes_nome_empresa",
         )
-        st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
-        observacao = st.text_input(
-            "observacao",
-            value="NFS-e Importacao",
-            label_visibility="collapsed",
-            key="fortes_observacao",
-        )
 
-        ic_info = icon("info", 13, "#475569")
-        st.markdown(
-            f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; O nome da empresa aparecerá no cabeçalho do arquivo. '
-            f'Se deixar em branco, será usado o nome do tomador extraído dos XMLs.</div>',
-            unsafe_allow_html=True,
-        )
+        if not is_prestados:
+            st.markdown(_label("Observação (opcional)"), unsafe_allow_html=True)
+            observacao = st.text_input(
+                "observacao",
+                value="NFS-e Importacao",
+                label_visibility="collapsed",
+                key="fortes_observacao",
+            )
+        else:
+            observacao = ""
+
+        if is_prestados:
+            st.markdown(_label("Código Município Fortes (opcional)"), unsafe_allow_html=True)
+            cod_municipio = st.text_input(
+                "cod_municipio",
+                placeholder="ex: 07700  (Fortaleza)",
+                label_visibility="collapsed",
+                key="fortes_cod_municipio",
+            )
+            ic_info = icon("info", 13, "#475569")
+            st.markdown(
+                f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
+                f'{ic_info}&nbsp; Código interno do município no ACFiscal (ex: 07700 para Fortaleza). '
+                f'Se deixar em branco, será usado o código IBGE do XML.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            cod_municipio = ""
+            ic_info = icon("info", 13, "#475569")
+            st.markdown(
+                f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
+                f'{ic_info}&nbsp; O nome da empresa aparecerá no cabeçalho do arquivo. '
+                f'Se deixar em branco, será usado o nome do tomador extraído dos XMLs.</div>',
+                unsafe_allow_html=True,
+            )
 
     with st.container(border=True):
         ic = icon("download", 16, "#00CED1")
@@ -107,7 +138,7 @@ def render():
         )
 
         if btn_gerar:
-            from core.fortes_converter import parse_nfse_xml, gerar_fortes
+            from core.fortes_converter import parse_nfse_xml, gerar_fortes, gerar_fortes_prestados
 
             notas = []
             erros = []
@@ -144,13 +175,22 @@ def render():
 
             if notas:
                 try:
-                    # Nome da empresa: usa o digitado ou cai no tomador do XML
-                    nome_empresa = nome_empresa_input.strip() or notas[0].get("toma_nome", "") or "EMPRESA"
-                    conteudo = gerar_fortes(
-                        notas=notas,
-                        nome_empresa=nome_empresa,
-                        observacao=observacao.strip() or "NFS-e Importacao",
-                    )
+                    if is_prestados:
+                        # Para prestados: usa nome digitado ou nome do prestador (emit_nome)
+                        nome_empresa = nome_empresa_input.strip() or notas[0].get("emit_nome", "") or "EMPRESA"
+                        conteudo = gerar_fortes_prestados(
+                            notas=notas,
+                            nome_empresa=nome_empresa,
+                            cod_municipio=cod_municipio.strip(),
+                        )
+                    else:
+                        # Nome da empresa: usa o digitado ou cai no tomador do XML
+                        nome_empresa = nome_empresa_input.strip() or notas[0].get("toma_nome", "") or "EMPRESA"
+                        conteudo = gerar_fortes(
+                            notas=notas,
+                            nome_empresa=nome_empresa,
+                            observacao=observacao.strip() or "NFS-e Importacao",
+                        )
 
                     hoje = date.today().strftime("%Y%m%d")
                     nome_arq = f"fortes_nfse_{hoje}.fs"

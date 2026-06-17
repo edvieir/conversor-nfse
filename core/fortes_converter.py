@@ -64,8 +64,15 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     emit_fone   = _t(emit, "fone")   if emit is not None else ""
 
     toma = inf_dps.find(f"{{{_NS}}}toma") if inf_dps is not None else None
-    toma_cnpj = (_t(toma, "CNPJ") or _t(toma, "CPF")) if toma is not None else ""
-    toma_nome = _t(toma, "xNome") if toma is not None else ""
+    toma_cnpj   = (_t(toma, "CNPJ") or _t(toma, "CPF")) if toma is not None else ""
+    toma_is_cpf = bool(_t(toma, "CPF")) if toma is not None else False
+    toma_nome   = _t(toma, "xNome")   if toma is not None else ""
+    toma_uf     = _t(toma, "UF")      if toma is not None else ""
+    toma_lgr    = _t(toma, "xLgr")   if toma is not None else ""
+    toma_nro    = _t(toma, "nro")     if toma is not None else ""
+    toma_bairro = _t(toma, "xBairro") if toma is not None else ""
+    toma_cep    = _t(toma, "CEP")     if toma is not None else ""
+    toma_cmun   = _t(toma, "cMun")   if toma is not None else ""
 
     vals_nfse = inf.find(f"{{{_NS}}}valores")
     v_bc   = (_t(vals_nfse, "vBC")        if vals_nfse is not None else "") or "0.00"
@@ -92,10 +99,14 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     # Os primeiros 4 dígitos = código LC 116/2003 sem ponto (ex: "110201" → "1102" = item 11.02).
     cod_lc116 = cod_trib_nac[:4] if len(cod_trib_nac) >= 4 else cod_trib_nac
 
+    dh_emi_raw = _tv("dhEmi") or _tv("dEmi") or ""
+    d_emi = dh_emi_raw[:10] if dh_emi_raw else ""  # YYYY-MM-DD
+
     d_compet = _tv("dCompet")
     if not d_compet:
-        dh = _tv("dhEmi")
-        d_compet = dh[:10] if dh else date.today().isoformat()
+        d_compet = d_emi or date.today().isoformat()
+    if not d_emi:
+        d_emi = d_compet
 
     n_nfse = _t(inf, "nNFSe") or _tv("nDPS") or "0"
 
@@ -113,13 +124,15 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
 
     return {
         "cancelada": cancelada,
-        "n_nfse": n_nfse, "d_compet": d_compet,
+        "n_nfse": n_nfse, "d_compet": d_compet, "d_emi": d_emi,
         "emit_cnpj": emit_cnpj, "emit_nome": emit_nome,
         "emit_im": emit_im, "emit_uf": emit_uf or "CE",
         "emit_lgr": emit_lgr, "emit_nro": emit_nro,
         "emit_cpl": emit_cpl, "emit_bairro": emit_bairro,
         "emit_cmun": emit_cmun, "emit_cep": emit_cep, "emit_fone": emit_fone,
-        "toma_cnpj": toma_cnpj, "toma_nome": toma_nome,
+        "toma_cnpj": toma_cnpj, "toma_is_cpf": toma_is_cpf, "toma_nome": toma_nome,
+        "toma_uf": toma_uf, "toma_lgr": toma_lgr, "toma_nro": toma_nro,
+        "toma_bairro": toma_bairro, "toma_cep": toma_cep, "toma_cmun": toma_cmun,
         "v_bc": v_bc, "v_iss": v_iss, "v_liq": v_liq, "p_aliq": p_aliq,
         "tp_ret_iss": tp_ret_iss, "chave_acesso": chave_acesso, "cnae": cnae,
         "v_ret_cofins": v_ret_cofins, "v_ret_pis": v_ret_pis,
@@ -166,6 +179,176 @@ def _ies_line(v_total, tributacao, aliq, cod_servico, v_bc, cnae=""):
     f[0]="IES"; f[1]=v_total; f[2]="N"; f[3]=tributacao
     f[4]=v_total; f[5]=aliq; f[6]=cod_servico; f[7]=cnae; f[8]="98"; f[10]=v_bc
     return "|".join(f)
+
+
+def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
+                       lgr="", nro="", cpl="", bairro="", cep="", cmun="", fone=""):
+    """PAR line para arquivo de serviços Prestados (v200)."""
+    f = [""] * 43
+    f[0]  = "PAR"
+    f[1]  = str(par_id)
+    f[2]  = nome.upper()[:60]
+    f[3]  = "" if is_cpf else uf
+    f[4]  = doc
+    f[7]  = "N"
+    f[11] = "N"
+    f[13] = "N"
+    f[14] = "N"
+    if not is_cpf and (lgr or bairro or cep or cmun):
+        f[15] = "35"  # tipo logradouro padrão
+        f[16] = lgr
+        f[17] = nro
+        f[18] = cpl
+        f[19] = "1" if bairro else ""
+        f[20] = bairro
+        f[21] = cep.replace("-", "").replace(".", "")
+        f[22] = cmun[-5:] if len(cmun) >= 5 else cmun
+        ddd, tel = (fone[:2], fone[2:]) if len(fone) > 2 else ("", fone)
+        f[23] = ddd
+        f[24] = tel
+        f[29] = "1058"
+    else:
+        f[20] = "0"
+    f[26] = "N"
+    f[30] = "N"
+    f[31] = "3" if is_cpf else "1"
+    f[33] = "N"
+    f[34] = "N"
+    f[36] = "N"
+    f[37] = "0"
+    f[38] = "N"
+    return "|".join(f)
+
+
+def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss_retido):
+    """DSS line — documento de serviço prestado."""
+    f = [""] * 58
+    f[0]  = "DSS"
+    f[1]  = "0001"
+    f[2]  = data_emi            # YYYYMMDD (data emissão)
+    f[3]  = "50"                # NFS-e Nacional
+    f[4]  = "N"
+    f[5]  = num_nota            # número nota, 15 dígitos
+    f[6]  = ""
+    f[7]  = "N"
+    f[8]  = v_total
+    f[9]  = str(par_id)
+    f[10] = "S" if iss_retido else "N"
+    # f[11-30] = 20 campos vazios
+    f[31] = chave[:44] if chave else ""
+    f[32] = d_compet_yyyymm01  # YYYYMM01
+    f[33] = "N"
+    # f[34-35] = vazios
+    f[36] = v_total
+    # f[37] = vazio
+    f[38] = "0"
+    # f[39-42] = vazios
+    f[43] = "0"
+    f[44] = "0"
+    f[45] = "0"
+    # f[46-55] = vazios
+    f[56] = "N"
+    return "|".join(f)
+
+
+def _its_line(v_total, tributacao, v_bc, aliq, uf, cmun, cod_servico):
+    """ITS line — item de serviço prestado."""
+    f = [""] * 51
+    f[0]  = "ITS"
+    f[1]  = v_total
+    f[2]  = str(tributacao)
+    f[3]  = v_bc
+    try:
+        f[4] = f"{float(aliq):.5f}" if aliq else ""
+    except (ValueError, TypeError):
+        f[4] = aliq or ""
+    f[5]  = "1"
+    f[6]  = uf
+    f[7]  = cmun
+    f[9]  = cod_servico
+    f[19] = v_total
+    return "|".join(f)
+
+
+def gerar_fortes_prestados(notas, nome_empresa, cod_municipio="", observacao=""):
+    """Gera arquivo .fs para serviços PRESTADOS (formato DSS/ITS, versão 200)."""
+    if not notas:
+        return ""
+
+    hoje = date.today().strftime("%Y%m%d")
+    datas_raw = [n["d_compet"].replace("-", "")[:8] for n in notas if n.get("d_compet")]
+    periodo_ini = (min(datas_raw)[:6] + "01") if datas_raw else hoje[:6] + "01"
+    periodo_fim = (max(datas_raw)[:6] + "01") if datas_raw else hoje[:6] + "01"
+    # Ajusta período_fim para o último dia do mês
+    import calendar
+    try:
+        ano_f, mes_f = int(periodo_fim[:4]), int(periodo_fim[4:6])
+        ultimo_dia = calendar.monthrange(ano_f, mes_f)[1]
+        periodo_fim = f"{ano_f}{mes_f:02d}{ultimo_dia:02d}"
+    except Exception:
+        pass
+
+    linhas = [f"CAB|200|ACFiscal|{hoje}|{nome_empresa}|{periodo_ini}|{periodo_fim}|1|N"]
+
+    # Constrói índice de tomadores (parceiros)
+    tomadores = {}
+    par_id_next = 1
+    for n in notas:
+        if n.get("cancelada"):
+            continue
+        doc = n.get("toma_cnpj") or ""
+        if doc and doc not in tomadores:
+            tomadores[doc] = {
+                "id": par_id_next,
+                "nome": n.get("toma_nome", "") or doc,
+                "uf": n.get("toma_uf", ""),
+                "lgr": n.get("toma_lgr", ""),
+                "nro": n.get("toma_nro", ""),
+                "bairro": n.get("toma_bairro", ""),
+                "cep": n.get("toma_cep", ""),
+                "cmun": n.get("toma_cmun", ""),
+                "is_cpf": n.get("toma_is_cpf", False),
+            }
+            par_id_next += 1
+
+    for doc, p in tomadores.items():
+        linhas.append(_par_line_prestado(
+            p["id"], p["nome"], p["uf"], doc, is_cpf=p["is_cpf"],
+            lgr=p["lgr"], nro=p["nro"], bairro=p["bairro"],
+            cep=p["cep"], cmun=p["cmun"],
+        ))
+
+    for n in sorted(notas, key=lambda n: (n["d_compet"], n["n_nfse"].zfill(15))):
+        if n.get("cancelada"):
+            continue
+        doc = n.get("toma_cnpj") or ""
+        if not doc or doc not in tomadores:
+            continue
+
+        par_id  = tomadores[doc]["id"]
+        d_emi_raw = (n.get("d_emi") or n["d_compet"]).replace("-", "")[:8]
+        d_comp_raw = n["d_compet"].replace("-", "")[:8]
+        d_compet_yyyymm01 = d_comp_raw[:6] + "01"
+
+        num_nota  = n["n_nfse"].zfill(15)
+        v_total   = n["v_liq"] or n["v_bc"]
+        iss_retido = n.get("tp_ret_iss") == "2"
+        tributacao = "4" if iss_retido else "3"
+        aliq_iss   = n.get("p_aliq", "")
+        chave      = n.get("chave_acesso", "")
+
+        linhas.append(_dss_line(par_id, d_emi_raw, num_nota, v_total,
+                                chave, d_compet_yyyymm01, iss_retido))
+
+        uf       = n.get("emit_uf", "CE")
+        mun_code = cod_municipio or n.get("emit_cmun", "") or ""
+        cod_serv = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
+
+        linhas.append(_its_line(v_total, tributacao, n["v_bc"],
+                                aliq_iss, uf, mun_code, cod_serv))
+
+    linhas.append(f"TRA|{len(linhas) + 1}")
+    return "\r\n".join(linhas) + "\r\n"
 
 
 def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao"):
