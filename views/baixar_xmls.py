@@ -133,7 +133,7 @@ def render():
             ic_info2 = icon("info", 13, "#475569")
             st.markdown(
                 f'<div style="color:#475569;font-size:.72rem;margin-top:4px;">'
-                f'{ic_info2}&nbsp; PDF gerado no padrao DANFSe v1.0 a partir do XML baixado.</div>',
+                f'{ic_info2}&nbsp; PDF baixado via API DANFSe v1.0 (formato nacional).</div>',
                 unsafe_allow_html=True,
             )
 

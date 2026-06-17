@@ -23,8 +23,8 @@ from datetime import date
 
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
-_RETRIES       = 3
-_RETRIES_DANFSE = 5
+_RETRIES        = 3
+_RETRIES_DANFSE = 2   # reduzido: 2 tentativas × 2s = 4s max por falha
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -191,10 +191,10 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
                 continue
             if resp.status_code in (502, 503):
                 if tentativa < _RETRIES_DANFSE:
-                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 4s")
-                    time.sleep(4)
+                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 2s")
+                    time.sleep(2)
                     continue
-                log.append(f"      PDF {resp.status_code} — backend indisponivel apos {tentativa} tentativas")
+                log.append(f"      PDF {resp.status_code} — indisponivel apos {tentativa} tentativas")
                 return None
             if not resp.ok:
                 log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
@@ -207,11 +207,11 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
         except Exception as e:
             log.append(f"      PDF tentativa {tentativa} falhou: {e}")
             if tentativa < _RETRIES_DANFSE:
-                time.sleep(4)
+                time.sleep(2)
     return None
 
 
-_PDF_WORKERS = 4  # downloads paralelos de PDF
+_PDF_WORKERS = 8  # workers paralelos
 
 
 def _baixar_pdfs_paralelo(
@@ -222,25 +222,13 @@ def _baixar_pdfs_paralelo(
     log: list,
     log_lock: threading.Lock,
 ) -> dict[str, bytes]:
-    """Baixa PDFs via API; se falhar, gera do XML local (DANFSe v1.0)."""
-    try:
-        from core.conversor_pdf import gerar_pdf_bytes as _gerar_pdf
-        _pdf_gen_ok = True
-    except Exception:
-        _pdf_gen_ok = False
-
+    """Baixa PDFs via API DANFSe."""
     resultados: dict[str, bytes] = {}
     res_lock = threading.Lock()
 
     def baixar_um(chave: str, nome: str, xml_bytes: bytes):
         local_log: list[str] = []
         pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
-        if pdf is None and _pdf_gen_ok and xml_bytes:
-            try:
-                pdf = _gerar_pdf(xml_bytes)
-                local_log.append(f"      PDF gerado do XML (API indisponivel)")
-            except Exception as eg:
-                local_log.append(f"      Fallback PDF falhou: {eg}")
         with log_lock:
             log.extend(local_log)
         if pdf:
@@ -463,15 +451,13 @@ def baixar_xmls_nfse(
                      xml_b)
                     for chave, xml_b, chave_pdf, cancelada, papel in xmls_aprovados
                 ]
-                log.append(f"  Baixando {len(tarefas_pdf)} PDFs da API...")
+                log.append(f"  Baixando {len(tarefas_pdf)} PDFs via API DANFSe...")
                 if log_cb: log_cb(log)
 
-                pdfs = _baixar_pdfs_paralelo(
-                    cert_path, key_path, cnpj_uso, tarefas_pdf, log, log_lock
-                )
+                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, tarefas_pdf, log, log_lock)
                 for nome_pdf, pdf_bytes in pdfs.items():
                     zf.writestr(nome_pdf, pdf_bytes)
-                log.append(f"  PDFs obtidos: {len(pdfs)}/{len(tarefas_pdf)}")
+                log.append(f"  PDFs baixados: {len(pdfs)}/{len(tarefas_pdf)}")
                 if log_cb: log_cb(log)
                 if progress_cb:
                     progress_cb(0.95)
