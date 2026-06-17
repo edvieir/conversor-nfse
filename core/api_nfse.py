@@ -24,7 +24,7 @@ from datetime import date
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
 _RETRIES        = 3
-_RETRIES_DANFSE = 6   # 6 tentativas × 3s = até 18s de espera por PDF
+_RETRIES_DANFSE = 4   # 4 tentativas × 3s = máx 9s de espera por PDF
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -191,9 +191,8 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
                 continue
             if resp.status_code in (502, 503):
                 if tentativa < _RETRIES_DANFSE:
-                    espera = 3 * tentativa
-                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando {espera}s")
-                    time.sleep(espera)
+                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 3s")
+                    time.sleep(3)
                     continue
                 log.append(f"      PDF {resp.status_code} — indisponivel apos {tentativa} tentativas")
                 return None
@@ -222,24 +221,33 @@ def _baixar_pdfs_paralelo(
     tarefas: list[tuple],  # [(chave, nome_arquivo, xml_bytes), ...]
     log: list,
     log_lock: threading.Lock,
+    log_cb=None,
 ) -> dict[str, bytes]:
     """Baixa PDFs via API DANFSe."""
     resultados: dict[str, bytes] = {}
     res_lock = threading.Lock()
+    total = len(tarefas)
+    concluidos = [0]
 
-    def baixar_um(chave: str, nome: str, xml_bytes: bytes):
+    def baixar_um(idx: int, chave: str, nome: str, xml_bytes: bytes):
         local_log: list[str] = []
+        local_log.append(f"  PDF {idx}/{total}: {nome.split('/')[-1][:40]}")
         pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
         with log_lock:
             log.extend(local_log)
+            concluidos[0] += 1
+            if pdf:
+                log.append(f"    -> OK ({len(pdf)//1024} KB)")
+            if log_cb:
+                log_cb(log)
         if pdf:
             with res_lock:
                 resultados[nome] = pdf
 
     with ThreadPoolExecutor(max_workers=_PDF_WORKERS) as pool:
         futures = {
-            pool.submit(baixar_um, chave, nome, xml_b): nome
-            for chave, nome, xml_b in tarefas
+            pool.submit(baixar_um, i + 1, chave, nome, xml_b): nome
+            for i, (chave, nome, xml_b) in enumerate(tarefas)
         }
         for fut in as_completed(futures):
             try:
@@ -455,7 +463,7 @@ def baixar_xmls_nfse(
                 log.append(f"  Baixando {len(tarefas_pdf)} PDFs via API DANFSe...")
                 if log_cb: log_cb(log)
 
-                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, tarefas_pdf, log, log_lock)
+                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, tarefas_pdf, log, log_lock, log_cb)
                 for nome_pdf, pdf_bytes in pdfs.items():
                     zf.writestr(nome_pdf, pdf_bytes)
                 log.append(f"  PDFs baixados: {len(pdfs)}/{len(tarefas_pdf)}")
