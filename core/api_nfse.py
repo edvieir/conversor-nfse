@@ -24,7 +24,8 @@ from datetime import date
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
 _RETRIES        = 3
-_RETRIES_DANFSE = 10  # 10 tentativas × 3s = máx 27s de espera por PDF
+_PDF_WORKERS    = 3   # workers paralelos na fila de retry
+_PDF_MAX_TRIES  = 10  # máx tentativas por PDF antes de desistir
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -168,47 +169,24 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
 _DANFSE_URL = "https://adn.nfse.gov.br/danfse"
 
 
-def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: list, nsu: int = 0) -> bytes | None:
+def _tentar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str) -> tuple[bytes | None, bool]:
+    """Uma única tentativa HTTP. Retorna (pdf_bytes, deve_retry)."""
     url = f"{_DANFSE_URL}/{chave}"
-    hdrs_req = {"Accept": "application/pdf"}
-    params = {"cnpjConsulta": cnpj}
-    tentativa = 0
-    tentativas_429 = 0
-    while tentativa < _RETRIES_DANFSE:
-        tentativa += 1
-        try:
-            with _make_session(cert_path, key_path) as s:
-                resp = s.get(url, params=params, headers=hdrs_req, timeout=TIMEOUT)
-            if resp.status_code == 404:
-                log.append(f"      PDF 404 — chave nao disponivel neste municipio")
-                return None
-            if resp.status_code == 429:
-                tentativas_429 += 1
-                tentativa -= 1  # 429 nao conta como tentativa de 502
-                espera = 10 * tentativas_429
-                log.append(f"      PDF 429 — aguardando {espera}s")
-                time.sleep(espera)
-                continue
-            if resp.status_code in (502, 503):
-                if tentativa < _RETRIES_DANFSE:
-                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 3s")
-                    time.sleep(3)
-                    continue
-                log.append(f"      PDF {resp.status_code} — indisponivel apos {tentativa} tentativas")
-                return None
-            if not resp.ok:
-                log.append(f"      PDF HTTP {resp.status_code}: {resp.text[:200]}")
-                return None
+    try:
+        with _make_session(cert_path, key_path) as s:
+            resp = s.get(url, params={"cnpjConsulta": cnpj},
+                         headers={"Accept": "application/pdf"}, timeout=TIMEOUT)
+        if resp.status_code == 200:
             ct = resp.headers.get("Content-Type", "")
-            if "pdf" not in ct.lower() and len(resp.content) < 200:
-                log.append(f"      PDF resposta inesperada (ct={ct}): {resp.text[:120]}")
-                return None
-            return resp.content
-        except Exception as e:
-            log.append(f"      PDF tentativa {tentativa} falhou: {e}")
-            if tentativa < _RETRIES_DANFSE:
-                time.sleep(3)
-    return None
+            if "pdf" in ct.lower() or len(resp.content) > 500:
+                return resp.content, False
+            return None, False  # resposta inesperada mas definitiva
+        if resp.status_code == 404:
+            return None, False  # chave nao disponivel — definitivo
+        # 429, 502, 503 ou qualquer outro erro transitorio
+        return None, True
+    except Exception:
+        return None, True  # timeout / erro de rede — pode tentar de novo
 
 
 def _baixar_pdfs_paralelo(
@@ -220,24 +198,54 @@ def _baixar_pdfs_paralelo(
     log_lock: threading.Lock,
     log_cb=None,
 ) -> dict[str, bytes]:
-    """Baixa PDFs via API DANFSe — sequencial para não sobrecarregar o backend."""
+    """Baixa PDFs com fila de retry compartilhada entre N workers.
+
+    Quando um PDF falha, volta para a fila (outros workers continuam).
+    Muito mais rapido que retry sequencial para muitas notas.
+    """
+    from queue import Queue, Empty
+
     resultados: dict[str, bytes] = {}
-    total = len(tarefas)
+    res_lock   = threading.Lock()
+    total      = len(tarefas)
+    fila: Queue = Queue()
 
-    for idx, (chave, nome, xml_b) in enumerate(tarefas, 1):
-        local_log: list[str] = []
-        local_log.append(f"  PDF {idx}/{total}: {nome.split('/')[-1][:50]}")
-        pdf = _baixar_danfse(cert_path, key_path, cnpj, chave, local_log)
-        if pdf:
-            local_log.append(f"    -> OK ({len(pdf)//1024} KB)")
-            resultados[nome] = pdf
-        with log_lock:
-            log.extend(local_log)
-            if log_cb:
-                log_cb(log)
-        if idx < total:
-            time.sleep(1)  # pausa entre requisições para não triggar rate limit
+    # (indice_exibicao, chave, nome_arquivo, tentativas_restantes)
+    for i, (chave, nome, _xml_b) in enumerate(tarefas):
+        fila.put((i + 1, chave, nome, _PDF_MAX_TRIES))
 
+    def worker():
+        while True:
+            try:
+                idx, chave, nome, restantes = fila.get(timeout=20)
+            except Empty:
+                break
+
+            pdf, retry = _tentar_danfse(cert_path, key_path, cnpj, chave)
+            tentativa_num = _PDF_MAX_TRIES - restantes + 1
+
+            if pdf:
+                with res_lock:
+                    resultados[nome] = pdf
+                with log_lock:
+                    log.append(f"  PDF {idx}/{total}: OK ({len(pdf)//1024} KB) [{tentativa_num}t]")
+                    if log_cb: log_cb(log)
+                fila.task_done()
+            elif retry and restantes > 1:
+                # volta para a fila apos breve espera — outros workers continuam
+                time.sleep(2)
+                fila.put((idx, chave, nome, restantes - 1))
+                fila.task_done()
+            else:
+                with log_lock:
+                    log.append(f"  PDF {idx}/{total}: FALHA apos {tentativa_num} tentativas")
+                    if log_cb: log_cb(log)
+                fila.task_done()
+
+    threads = [threading.Thread(target=worker, daemon=True) for _ in range(_PDF_WORKERS)]
+    for t in threads:
+        t.start()
+    fila.join()
     return resultados
 
 
