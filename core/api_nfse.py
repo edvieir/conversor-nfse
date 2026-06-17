@@ -24,7 +24,7 @@ from datetime import date
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
 _RETRIES        = 3
-_RETRIES_DANFSE = 4   # 4 tentativas × 3s = máx 9s de espera por PDF
+_RETRIES_DANFSE = 10  # 10 tentativas × 3s = máx 27s de espera por PDF
 
 
 def _limpar_cnpj(cnpj: str) -> str:
