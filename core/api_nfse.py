@@ -349,29 +349,36 @@ def baixar_xmls_nfse(
                     try:
                         _root = _ET2.fromstring(xml_bytes)
 
-                        if tipo != "todos":
-                            _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
-                            _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
+                        # determina papel (tomados/prestados) para filtro e pasta
+                        _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
+                        _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
+                        cnpj_toma  = ""
+                        cnpj_prest = ""
+                        if _toma_el is not None:
+                            cnpj_toma = re.sub(r"\D", "", next(
+                                (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
+                            ))
+                        if _prest_el is not None:
+                            cnpj_prest = re.sub(r"\D", "", next(
+                                (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
+                            ))
 
-                            cnpj_toma  = ""
-                            cnpj_prest = ""
-                            if _toma_el is not None:
-                                cnpj_toma = re.sub(r"\D", "", next(
-                                    (e.text or "" for e in _toma_el.iter() if e.tag.endswith("CNPJ")), ""
-                                ))
-                            if _prest_el is not None:
-                                cnpj_prest = re.sub(r"\D", "", next(
-                                    (e.text or "" for e in _prest_el.iter() if e.tag.endswith("CNPJ")), ""
-                                ))
-
-                            if tipo == "tomados":
-                                if cnpj_toma and cnpj_toma != cnpj_uso:
-                                    log.append(f"    -> servico prestado (nao tomado), ignorado")
-                                    continue
-                            elif tipo == "prestados":
-                                if cnpj_prest and cnpj_prest != cnpj_uso:
-                                    log.append(f"    -> servico tomado (nao prestado), ignorado")
-                                    continue
+                        if tipo == "tomados":
+                            if cnpj_toma and cnpj_toma != cnpj_uso:
+                                log.append(f"    -> servico prestado (nao tomado), ignorado")
+                                continue
+                            papel = "tomados"
+                        elif tipo == "prestados":
+                            if cnpj_prest and cnpj_prest != cnpj_uso:
+                                log.append(f"    -> servico tomado (nao prestado), ignorado")
+                                continue
+                            papel = "prestados"
+                        else:
+                            # "todos" — classifica pela posicao do CNPJ no XML
+                            if cnpj_prest and cnpj_prest == cnpj_uso:
+                                papel = "prestados"
+                            else:
+                                papel = "tomados"
 
                         _el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
                         if _el is not None and _el.text:
@@ -410,7 +417,7 @@ def baixar_xmls_nfse(
                         except Exception:
                             pass
 
-                    xmls_aprovados.append((chave, xml_bytes, chave_pdf, cancelada))
+                    xmls_aprovados.append((chave, xml_bytes, chave_pdf, cancelada, papel))
                     total_ok += 1
 
                 except Exception as e:
@@ -427,30 +434,29 @@ def baixar_xmls_nfse(
             if progress_cb:
                 progress_cb(min(lote_num / (lote_num + 3), 0.5))
 
-        total_canc = sum(1 for _, _, _, c in xmls_aprovados if c)
+        total_canc = sum(1 for _, _, _, c, _ in xmls_aprovados if c)
         log.append(f"  Total de NFS-e no periodo: {total_ok} ({total_canc} cancelada(s))")
         if log_cb: log_cb(log)
 
         # ── Monta ZIP ────────────────────────────────────────────────────────
+        # Estrutura: cancelados/ | tomados/ | prestados/
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
 
-            # salva XMLs — canceladas em xml/canceladas/
             if formato in ("xml", "ambos"):
-                for chave, xml_bytes, _, cancelada in xmls_aprovados:
+                for chave, xml_bytes, _, cancelada, papel in xmls_aprovados:
                     if cancelada:
-                        zf.writestr(f"xml/canceladas/nfse_{chave}_CANC.xml", xml_bytes)
+                        zf.writestr(f"cancelados/nfse_{chave}_CANC.xml", xml_bytes)
                     else:
-                        zf.writestr(f"xml/nfse_{chave}.xml", xml_bytes)
-                log.append(f"  {len(xmls_aprovados)} XMLs salvos ({total_canc} em canceladas/).")
+                        zf.writestr(f"{papel}/nfse_{chave}.xml", xml_bytes)
+                log.append(f"  {len(xmls_aprovados)} XMLs salvos ({total_canc} em cancelados/).")
                 if log_cb: log_cb(log)
 
-            # baixa PDFs da API — canceladas em pdf/canceladas/
             if formato in ("pdf", "ambos") and xmls_aprovados:
                 tarefas_pdf = [
                     (chave_pdf,
-                     f"canceladas/nfse_{chave}_CANC.pdf" if cancelada else f"nfse_{chave}.pdf",
+                     f"cancelados/nfse_{chave}_CANC.pdf" if cancelada else f"{papel}/nfse_{chave}.pdf",
                      xml_b)
-                    for chave, xml_b, chave_pdf, cancelada in xmls_aprovados
+                    for chave, xml_b, chave_pdf, cancelada, papel in xmls_aprovados
                 ]
                 log.append(f"  Baixando {len(tarefas_pdf)} PDFs da API...")
                 if log_cb: log_cb(log)
@@ -459,7 +465,7 @@ def baixar_xmls_nfse(
                     cert_path, key_path, cnpj_uso, tarefas_pdf, log, log_lock
                 )
                 for nome_pdf, pdf_bytes in pdfs.items():
-                    zf.writestr(f"pdf/{nome_pdf}", pdf_bytes)
+                    zf.writestr(nome_pdf, pdf_bytes)
                 log.append(f"  PDFs obtidos: {len(pdfs)}/{len(tarefas_pdf)}")
                 if log_cb: log_cb(log)
                 if progress_cb:
