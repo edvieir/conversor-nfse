@@ -115,8 +115,14 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     cod_trib_nac = _t(c_serv, "cTribNac") if c_serv is not None else ""
     desc_serv    = _t(c_serv, "xDescServ") if c_serv is not None else ""
     # cTribNac tem 6 dígitos no padrão LLSSDD (lista LC116 + sub-item + desdobramento).
-    # Os primeiros 4 dígitos = código LC 116/2003 sem ponto (ex: "110201" → "1102" = item 11.02).
-    cod_lc116 = cod_trib_nac[:4] if len(cod_trib_nac) >= 4 else cod_trib_nac
+    # Fortes cadastra o código ISS como str(int(LL)) + SS preenchido com zeros à esquerda até 6
+    # dígitos. Ex: "070101" → LL=07→7, SS=01 → "701" → zfill(6) → "000701".
+    if len(cod_trib_nac) >= 4:
+        ll = str(int(cod_trib_nac[0:2])) if cod_trib_nac[0:2].isdigit() else cod_trib_nac[0:2]
+        ss = cod_trib_nac[2:4]
+        cod_lc116 = (ll + ss).zfill(6)
+    else:
+        cod_lc116 = cod_trib_nac
 
     dh_emi_raw = _tv("dhEmi") or _tv("dEmi") or ""
     d_emi = dh_emi_raw[:10] if dh_emi_raw else ""  # YYYY-MM-DD
@@ -303,7 +309,7 @@ def _its_line(v_total, cod_atividade, v_bc, aliq, uf, cmun, cod_servico):
     return "|".join(f)
 
 
-def gerar_fortes_prestados(notas, nome_empresa, observacao="", cod_iss=""):
+def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
     """Gera arquivo .fs para serviços PRESTADOS (formato DSS/ITS, versão 200)."""
     if not notas:
         return ""
@@ -376,10 +382,7 @@ def gerar_fortes_prestados(notas, nome_empresa, observacao="", cod_iss=""):
         uf           = n.get("emit_uf", "CE")
         # Código do município: IBGE do XML (emit_cmun), apenas dígitos
         mun_code     = ''.join(c for c in (n.get("emit_cmun") or "") if c.isdigit())
-        # Código ISS: usa o informado pelo usuário; senão, cai no derivado do XML
-        cod_atividade = cod_iss.strip() if cod_iss and cod_iss.strip() else (
-            n.get("cod_lc116") or n.get("cod_trib_mun") or ""
-        )
+        cod_atividade = n.get("cod_lc116") or n.get("cod_trib_mun") or ""
 
         linhas.append(_its_line(v_total, cod_atividade, n["v_bc"],
                                 aliq_iss, uf, mun_code, cod_atividade))

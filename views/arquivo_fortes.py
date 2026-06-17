@@ -94,23 +94,14 @@ def render():
             observacao = ""
 
         if is_prestados:
-            st.markdown(_label("Código ISS (Atividade/Serviço) — opcional"), unsafe_allow_html=True)
-            cod_iss_input = st.text_input(
-                "cod_iss",
-                placeholder="ex: 7  (consulte Fortes → Cadastros → ISS)",
-                label_visibility="collapsed",
-                key="fortes_cod_iss",
-            )
             ic_info = icon("info", 13, "#475569")
             st.markdown(
-                f'<div style="color:#475569;font-size:.72rem;margin-top:4px;">'
-                f'{ic_info}&nbsp; Código de Atividade/Serviço ISS configurado no seu Fortes ACFiscal. '
-                f'Se deixar vazio, será derivado automaticamente do XML (pode falhar caso o código '
-                f'não esteja cadastrado no Fortes).</div>',
+                f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
+                f'{ic_info}&nbsp; Código do município e código de atividade ISS são extraídos '
+                f'automaticamente do XML.</div>',
                 unsafe_allow_html=True,
             )
         else:
-            cod_iss_input = ""
             ic_info = icon("info", 13, "#475569")
             st.markdown(
                 f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
@@ -182,7 +173,6 @@ def render():
                         conteudo = gerar_fortes_prestados(
                             notas=notas,
                             nome_empresa=nome_empresa,
-                            cod_iss=cod_iss_input,
                         )
                     else:
                         # Nome da empresa: usa o digitado ou cai no tomador do XML
