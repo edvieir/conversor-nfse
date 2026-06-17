@@ -120,7 +120,7 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
     if len(cod_trib_nac) >= 4:
         ll = str(int(cod_trib_nac[0:2])) if cod_trib_nac[0:2].isdigit() else cod_trib_nac[0:2]
         ss = cod_trib_nac[2:4]
-        cod_lc116 = (ll + ss).zfill(6)
+        cod_lc116 = ll + ss  # ex: "070101" -> "7"+"01" = "701"
     else:
         cod_lc116 = cod_trib_nac
 
