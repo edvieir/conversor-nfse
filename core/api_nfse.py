@@ -24,7 +24,7 @@ from datetime import date
 BASE_URL  = "https://adn.nfse.gov.br/contribuintes"
 TIMEOUT   = 90
 _RETRIES        = 3
-_RETRIES_DANFSE = 2   # reduzido: 2 tentativas × 2s = 4s max por falha
+_RETRIES_DANFSE = 6   # 6 tentativas × 3s = até 18s de espera por PDF
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -191,8 +191,9 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
                 continue
             if resp.status_code in (502, 503):
                 if tentativa < _RETRIES_DANFSE:
-                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando 2s")
-                    time.sleep(2)
+                    espera = 3 * tentativa
+                    log.append(f"      PDF {resp.status_code} — tentativa {tentativa}/{_RETRIES_DANFSE}, aguardando {espera}s")
+                    time.sleep(espera)
                     continue
                 log.append(f"      PDF {resp.status_code} — indisponivel apos {tentativa} tentativas")
                 return None
@@ -207,11 +208,11 @@ def _baixar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str, log: li
         except Exception as e:
             log.append(f"      PDF tentativa {tentativa} falhou: {e}")
             if tentativa < _RETRIES_DANFSE:
-                time.sleep(2)
+                time.sleep(3)
     return None
 
 
-_PDF_WORKERS = 8  # workers paralelos
+_PDF_WORKERS = 2  # 2 workers — evita sobrecarregar backend DANFSe
 
 
 def _baixar_pdfs_paralelo(
