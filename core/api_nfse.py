@@ -454,6 +454,21 @@ def baixar_xmls_nfse(
                 if log_cb: log_cb(log)
 
                 pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, tarefas_pdf, log, log_lock, log_cb)
+
+                # ondas de rescue para os que falharam
+                _MAX_ONDAS = 2
+                for onda in range(1, _MAX_ONDAS + 1):
+                    falhas = [(chave, nome, xml_b) for chave, nome, xml_b in tarefas_pdf if nome not in pdfs]
+                    if not falhas:
+                        break
+                    log.append(f"  {len(falhas)} PDFs falharam — aguardando 30s antes da onda {onda+1}/{_MAX_ONDAS+1}...")
+                    if log_cb: log_cb(log)
+                    time.sleep(30)
+                    log.append(f"  Onda {onda+1}: retentando {len(falhas)} PDFs...")
+                    if log_cb: log_cb(log)
+                    pdfs2 = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, falhas, log, log_lock, log_cb)
+                    pdfs.update(pdfs2)
+
                 for nome_pdf, pdf_bytes in pdfs.items():
                     zf.writestr(nome_pdf, pdf_bytes)
                 log.append(f"  PDFs baixados: {len(pdfs)}/{len(tarefas_pdf)}")
