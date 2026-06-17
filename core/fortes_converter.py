@@ -270,8 +270,9 @@ def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss
     f[20] = v_cofins or ""      # campo 21: COFINS retido
     f[21] = v_pis    or ""      # campo 22: PIS retido
     f[22] = v_csl    or ""      # campo 23: CSL retido
-    f[23] = v_irrf   or ""      # campo 24: IRRF retido
+    # f[23]                     # campo 24: IRPJ retido (n/a)
     f[24] = v_inss   or ""      # campo 25: INSS retido
+    f[25] = v_irrf   or ""      # campo 26: IRRF retido
     f[30] = chave[:44] if chave else ""   # campo 31: chave
     f[31] = d_compet_yyyymm01            # campo 32: data de prestação AAAAMMDD
     f[32] = "N"                          # campo 33: Pago pelo SUS
