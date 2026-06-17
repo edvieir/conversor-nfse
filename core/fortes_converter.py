@@ -250,7 +250,8 @@ def _par_line_prestado(par_id, nome, uf, doc, is_cpf=False,
     return "|".join(f)
 
 
-def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss_retido):
+def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss_retido,
+              v_cofins="", v_pis="", v_csl="", v_irrf="", v_inss=""):
     """DSS line — documento de serviço prestado (57 campos, layout v200)."""
     f = [""] * 57
     f[0]  = "DSS"
@@ -264,7 +265,12 @@ def _dss_line(par_id, data_emi, num_nota, v_total, chave, d_compet_yyyymm01, iss
     f[8]  = v_total
     f[9]  = str(par_id)
     f[10] = "S" if iss_retido else "N"
-    # f[11-29] = 19 campos vazios
+    # retenções federais (mesmas posições do ESI/tomados)
+    f[11] = v_cofins or ""      # campo 12: COFINS retido
+    f[12] = v_pis    or ""      # campo 13: PIS retido
+    f[13] = v_csl    or ""      # campo 14: CSL retido
+    f[14] = v_irrf   or ""      # campo 15: IRRF retido
+    f[15] = v_inss   or ""      # campo 16: INSS retido
     f[30] = chave[:44] if chave else ""   # campo 31: chave
     f[31] = d_compet_yyyymm01            # campo 32: data de prestação AAAAMMDD
     f[32] = "N"                          # campo 33: Pago pelo SUS
@@ -376,8 +382,15 @@ def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
         aliq_iss   = n.get("p_aliq", "")
         chave      = n.get("chave_acesso", "")
 
-        linhas.append(_dss_line(par_id, d_emi_raw, num_nota, v_total,
-                                chave, d_compet_yyyymm01, iss_retido))
+        linhas.append(_dss_line(
+            par_id, d_emi_raw, num_nota, v_total,
+            chave, d_compet_yyyymm01, iss_retido,
+            v_cofins=n.get("v_ret_cofins", ""),
+            v_pis   =n.get("v_ret_pis",    ""),
+            v_csl   =n.get("v_ret_csl",    ""),
+            v_irrf  =n.get("v_ret_irrf",   ""),
+            v_inss  =n.get("v_ret_inss",   ""),
+        ))
 
         uf           = n.get("emit_uf", "CE")
         # Código do município: últimos 5 dígitos do IBGE (coluna MUN_Codigo aceita só 5)
