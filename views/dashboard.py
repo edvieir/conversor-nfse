@@ -7,12 +7,14 @@ from db.database import get_stats, get_conversions
 from views import nav
 
 _MODO_LABEL = {
-    "TXT":   ("📄", "ISS Fortaleza",        "#00e5ff"),
-    "XLSX":  ("📊", "SPED GOV",              "#a78bfa"),
-    "FS":    ("🗂️", "Arquivo Fortes",        "#34d399"),
-    "XML":   ("☁️", "Download XML — API",   "#f59e0b"),
-    "PDF":   ("📑", "Download PDF — API",   "#fb923c"),
-    "AMBOS": ("☁️", "Download XML+PDF — API","#f59e0b"),
+    "TXT":        ("📄", "ISS Fortaleza",          "#00e5ff"),
+    "XLSX":       ("📊", "SPED GOV",                "#a78bfa"),
+    "MILHAO_TXT": ("📄", "Notas do Milhão — TXT",  "#00e5ff"),
+    "MILHAO_XLSX":("📊", "Notas do Milhão — XLSX", "#a78bfa"),
+    "FS":         ("🗂️", "Arquivo Fortes",          "#34d399"),
+    "XML":        ("☁️", "Download XML — API",     "#f59e0b"),
+    "PDF":        ("📑", "Download PDF — API",     "#fb923c"),
+    "AMBOS":      ("☁️", "Download XML+PDF — API", "#f59e0b"),
 }
 
 
