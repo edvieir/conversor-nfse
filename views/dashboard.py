@@ -220,49 +220,35 @@ def render():
                 f'font-family:Manrope,sans-serif;">{uname}</td>'
             ) if admin else ""
 
-            rows += f"""
-<tr style="border-bottom:1px solid rgba(255,255,255,.03);">
-  <td style="padding:10px 20px;">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div style="width:32px;height:32px;border-radius:8px;background:#151e2d;
-                  border:1px solid rgba(255,255,255,.06);
-                  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">{emoji}</div>
-      <div>
-        <div style="color:#e2e8f0;font-size:.82rem;font-weight:600;font-family:Manrope,sans-serif;">
-          {n_arq} arquivo{"s" if n_arq != 1 else ""}
-        </div>
-        <div style="color:#475569;font-size:.71rem;font-family:Manrope,sans-serif;">{modo}</div>
-      </div>
-    </div>
-  </td>
-  {col_u}
-  <td style="padding:10px 14px;color:#64748b;font-size:.78rem;font-family:Manrope,sans-serif;">{dest}</td>
-  <td style="padding:10px 14px;color:#64748b;font-size:.78rem;font-family:Manrope,sans-serif;">{ts_str}</td>
-  <td style="padding:10px 20px;text-align:right;">{badge}</td>
-</tr>"""
+            th_arq  = '<th style="padding:9px 20px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Arquivo</th>'
+            th_usr  = '<th style="padding:9px 14px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Usuário</th>' if admin else ""
+            th_dest = '<th style="padding:9px 14px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Destino</th>'
+            th_data = '<th style="padding:9px 14px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Data</th>'
+            th_stat = '<th style="padding:9px 20px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:right;font-family:Manrope,sans-serif;">Status</th>'
 
-        th_u = (
-            '<th style="padding:9px 14px;color:#475569;font-size:.63rem;font-weight:700;'
-            'letter-spacing:.08em;text-transform:uppercase;text-align:left;'
-            'font-family:Manrope,sans-serif;">Usuário</th>'
-        ) if admin else ""
+            td_arq = (
+                f'<td style="padding:10px 20px;">'
+                f'<div style="display:flex;align-items:center;gap:10px;">'
+                f'<div style="width:32px;height:32px;border-radius:8px;background:#151e2d;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">{emoji}</div>'
+                f'<div>'
+                f'<div style="color:#e2e8f0;font-size:.82rem;font-weight:600;font-family:Manrope,sans-serif;">{n_arq} arquivo{"s" if n_arq != 1 else ""}</div>'
+                f'<div style="color:#475569;font-size:.71rem;font-family:Manrope,sans-serif;">{modo}</div>'
+                f'</div></div></td>'
+            )
+            td_usr  = f'<td style="padding:10px 14px;color:#64748b;font-size:.77rem;font-family:Manrope,sans-serif;">{uname}</td>' if admin else ""
+            td_dest = f'<td style="padding:10px 14px;color:#64748b;font-size:.78rem;font-family:Manrope,sans-serif;">{dest}</td>'
+            td_data = f'<td style="padding:10px 14px;color:#64748b;font-size:.78rem;font-family:Manrope,sans-serif;">{ts_str}</td>'
+            td_stat = f'<td style="padding:10px 20px;text-align:right;">{badge}</td>'
 
-        st.markdown(f"""
-<div style="background:#080d17;border:1px solid rgba(255,255,255,.05);border-radius:14px;overflow:hidden;">
-<table style="width:100%;border-collapse:collapse;">
-  <thead>
-    <tr style="background:rgba(0,0,0,.4);">
-      <th style="padding:9px 20px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Arquivo</th>
-      {th_u}
-      <th style="padding:9px 14px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Destino</th>
-      <th style="padding:9px 14px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;font-family:Manrope,sans-serif;">Data</th>
-      <th style="padding:9px 20px;color:#475569;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:right;font-family:Manrope,sans-serif;">Status</th>
-    </tr>
-  </thead>
-  <tbody>{rows}</tbody>
-</table>
-</div>
-""", unsafe_allow_html=True)
+            rows += f'<tr style="border-bottom:1px solid rgba(255,255,255,.03);">{td_arq}{td_usr}{td_dest}{td_data}{td_stat}</tr>'
+
+        thead = f'<tr style="background:rgba(0,0,0,.4);">{th_arq}{th_usr}{th_dest}{th_data}{th_stat}</tr>'
+        html_table = (
+            '<div style="background:#080d17;border:1px solid rgba(255,255,255,.05);border-radius:14px;overflow:hidden;">'
+            f'<table style="width:100%;border-collapse:collapse;"><thead>{thead}</thead><tbody>{rows}</tbody></table>'
+            '</div>'
+        )
+        st.markdown(html_table, unsafe_allow_html=True)
 
     st.markdown("""
 <div style="text-align:center;color:#1e2d42;font-size:.68rem;padding:2rem 0 .5rem;font-family:Manrope,sans-serif;">
