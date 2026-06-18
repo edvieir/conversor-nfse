@@ -324,13 +324,20 @@ def log_conversion(usuario: str, modo: str, qtd: int, sucesso: bool):
     )
 
 
-def get_conversions(limit: int = 500) -> list[dict]:
+def get_conversions(limit: int = 500, usuario: str | None = None) -> list[dict]:
     ph = "%s" if _PG else "?"
-    rows = _exec(
-        f"SELECT ts, usuario, modo, qtd_arquivos AS arquivos, sucesso FROM conversions ORDER BY ts DESC LIMIT {ph}",
-        (limit,),
-        fetch_all=True,
-    )
+    if usuario:
+        rows = _exec(
+            f"SELECT ts, usuario, modo, qtd_arquivos AS arquivos, sucesso FROM conversions WHERE usuario={ph} ORDER BY ts DESC LIMIT {ph}",
+            (usuario, limit),
+            fetch_all=True,
+        )
+    else:
+        rows = _exec(
+            f"SELECT ts, usuario, modo, qtd_arquivos AS arquivos, sucesso FROM conversions ORDER BY ts DESC LIMIT {ph}",
+            (limit,),
+            fetch_all=True,
+        )
     return rows or []
 
 
@@ -404,35 +411,44 @@ def remover_certificado(usuario: str, cnpj: str):
     _exec(f"DELETE FROM certificados WHERE usuario={ph} AND cnpj={ph}", (usuario, cnpj))
 
 
-def get_stats() -> dict:
+def get_stats(usuario: str | None = None) -> dict:
     hoje = str(date.today())
     mes  = hoje[:7]
 
+    # filtro extra se não for admin
+    if usuario:
+        f_pg  = " AND usuario=%s"
+        f_sq  = " AND usuario=?"
+        u_arg = (usuario,)
+    else:
+        f_pg = f_sq = ""
+        u_arg = ()
+
     if _PG:
-        total  = (_exec("SELECT COUNT(*) AS n FROM conversions", fetch_one=True) or {}).get("n", 0)
-        d_hoje = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s", (f"{hoje}%",), fetch_one=True) or {}).get("n", 0)
-        d_mes  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s", (f"{mes}%",), fetch_one=True) or {}).get("n", 0)
-        xmls   = (_exec("SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1", fetch_one=True) or {}).get("n", 0)
-        txt_c  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
-        xlsx_c = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
-        by_usr = _exec("SELECT usuario, COUNT(*) AS cnt FROM conversions GROUP BY usuario ORDER BY 2 DESC", fetch_all=True) or []
+        total  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE 1=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        d_hoje = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s{f_pg}", (f"{hoje}%", *u_arg), fetch_one=True) or {}).get("n", 0)
+        d_mes  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s{f_pg}", (f"{mes}%",  *u_arg), fetch_one=True) or {}).get("n", 0)
+        xmls   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        txt_c  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        xlsx_c = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        by_usr = _exec(f"SELECT usuario, COUNT(*) AS cnt FROM conversions WHERE 1=1{f_pg} GROUP BY usuario ORDER BY 2 DESC", u_arg, fetch_all=True) or []
         by_day = _exec(
-            "SELECT DATE(ts::date) AS d, COUNT(*) AS cnt FROM conversions "
-            "WHERE ts::date >= CURRENT_DATE - INTERVAL '14 days' GROUP BY d ORDER BY d",
-            fetch_all=True,
+            f"SELECT DATE(ts::date) AS d, COUNT(*) AS cnt FROM conversions "
+            f"WHERE ts::date >= CURRENT_DATE - INTERVAL '14 days'{f_pg} GROUP BY d ORDER BY d",
+            u_arg, fetch_all=True,
         ) or []
     else:
-        total  = (_exec("SELECT COUNT(*) AS n FROM conversions", fetch_one=True) or {}).get("n", 0)
-        d_hoje = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?", (f"{hoje}%",), fetch_one=True) or {}).get("n", 0)
-        d_mes  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?", (f"{mes}%",), fetch_one=True) or {}).get("n", 0)
-        xmls   = (_exec("SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1", fetch_one=True) or {}).get("n", 0)
-        txt_c  = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
-        xlsx_c = (_exec("SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1", fetch_one=True) or {}).get("n", 0)
-        by_usr = _exec("SELECT usuario, COUNT(*) AS cnt FROM conversions GROUP BY usuario ORDER BY 2 DESC", fetch_all=True) or []
+        total  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE 1=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        d_hoje = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?{f_sq}", (f"{hoje}%", *u_arg), fetch_one=True) or {}).get("n", 0)
+        d_mes  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?{f_sq}", (f"{mes}%",  *u_arg), fetch_one=True) or {}).get("n", 0)
+        xmls   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        txt_c  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        xlsx_c = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        by_usr = _exec(f"SELECT usuario, COUNT(*) AS cnt FROM conversions WHERE 1=1{f_sq} GROUP BY usuario ORDER BY 2 DESC", u_arg, fetch_all=True) or []
         by_day = _exec(
-            "SELECT DATE(ts) AS d, COUNT(*) AS cnt FROM conversions "
-            "WHERE ts >= date('now','-14 days') GROUP BY d ORDER BY d",
-            fetch_all=True,
+            f"SELECT DATE(ts) AS d, COUNT(*) AS cnt FROM conversions "
+            f"WHERE ts >= date('now','-14 days'){f_sq} GROUP BY d ORDER BY d",
+            u_arg, fetch_all=True,
         ) or []
 
     return {
