@@ -425,9 +425,9 @@ def get_stats(usuario: str | None = None) -> dict:
         u_arg = ()
 
     if _PG:
-        total  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE 1=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
-        d_hoje = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s{f_pg}", (f"{hoje}%", *u_arg), fetch_one=True) or {}).get("n", 0)
-        d_mes  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE %s{f_pg}", (f"{mes}%",  *u_arg), fetch_one=True) or {}).get("n", 0)
+        total  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        d_hoje = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE sucesso=1 AND ts LIKE %s{f_pg}", (f"{hoje}%", *u_arg), fetch_one=True) or {}).get("n", 0)
+        d_mes  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE sucesso=1 AND ts LIKE %s{f_pg}", (f"{mes}%",  *u_arg), fetch_one=True) or {}).get("n", 0)
         xmls   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
         txt_c  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo IN ('TXT','MILHAO_TXT') AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
         xlsx_c = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo IN ('XLSX','MILHAO_XLSX') AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
@@ -441,9 +441,9 @@ def get_stats(usuario: str | None = None) -> dict:
             u_arg, fetch_all=True,
         ) or []
     else:
-        total  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE 1=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
-        d_hoje = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?{f_sq}", (f"{hoje}%", *u_arg), fetch_one=True) or {}).get("n", 0)
-        d_mes  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE ts LIKE ?{f_sq}", (f"{mes}%",  *u_arg), fetch_one=True) or {}).get("n", 0)
+        total  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        d_hoje = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE sucesso=1 AND ts LIKE ?{f_sq}", (f"{hoje}%", *u_arg), fetch_one=True) or {}).get("n", 0)
+        d_mes  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE sucesso=1 AND ts LIKE ?{f_sq}", (f"{mes}%",  *u_arg), fetch_one=True) or {}).get("n", 0)
         xmls   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
         txt_c  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo IN ('TXT','MILHAO_TXT') AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
         xlsx_c = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo IN ('XLSX','MILHAO_XLSX') AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
