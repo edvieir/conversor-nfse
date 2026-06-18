@@ -223,29 +223,41 @@ def _baixar_pdfs_paralelo(
             except Empty:
                 break
 
-            pdf, retry = _tentar_danfse(cert_path, key_path, cnpj, chave)
-            tentativa_num = _PDF_MAX_TRIES - restantes + 1
+            deve_retry = False
+            try:
+                pdf, retry = _tentar_danfse(cert_path, key_path, cnpj, chave)
+                tentativa_num = _PDF_MAX_TRIES - restantes + 1
 
-            if pdf:
-                with res_lock:
-                    resultados[nome] = pdf
+                if pdf:
+                    with res_lock:
+                        resultados[nome] = pdf
+                    with log_lock:
+                        concluidos[0] += 1
+                        pct = int(concluidos[0] / total * 100)
+                        log.append(f"  [{pct:3d}%] PDF {idx}/{total}: OK ({len(pdf)//1024} KB) [{tentativa_num}t]")
+                        try:
+                            if log_cb: log_cb(log)
+                        except Exception:
+                            pass
+                elif retry and restantes > 1:
+                    deve_retry = True
+                else:
+                    with log_lock:
+                        concluidos[0] += 1
+                        pct = int(concluidos[0] / total * 100)
+                        log.append(f"  [{pct:3d}%] PDF {idx}/{total}: falhou ({tentativa_num}t)")
+                        try:
+                            if log_cb: log_cb(log)
+                        except Exception:
+                            pass
+            except Exception as exc:
                 with log_lock:
-                    concluidos[0] += 1
-                    pct = int(concluidos[0] / total * 100)
-                    log.append(f"  [{pct:3d}%] PDF {idx}/{total}: OK ({len(pdf)//1024} KB) [{tentativa_num}t]")
-                    if log_cb: log_cb(log)
-                fila.task_done()
-            elif retry and restantes > 1:
-                # volta para a fila — outros workers continuam sem parar
-                time.sleep(2)
-                fila.put((idx, chave, nome, restantes - 1))
-                fila.task_done()
-            else:
-                with log_lock:
-                    concluidos[0] += 1
-                    pct = int(concluidos[0] / total * 100)
-                    log.append(f"  [{pct:3d}%] PDF {idx}/{total}: falhou ({tentativa_num}t)")
-                    if log_cb: log_cb(log)
+                    log.append(f"  PDF {idx}/{total}: erro interno: {exc}")
+            finally:
+                # task_done SEMPRE chamado — evita fila.join() travar
+                if deve_retry:
+                    time.sleep(2)
+                    fila.put((idx, chave, nome, restantes - 1))
                 fila.task_done()
 
     threads = [threading.Thread(target=worker, daemon=True) for _ in range(_PDF_WORKERS)]
