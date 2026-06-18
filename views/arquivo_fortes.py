@@ -187,6 +187,10 @@ def render():
                     nome_arq = f"fortes_nfse_{hoje}.fs"
                     tamanho  = len(conteudo.encode("utf-8"))
 
+                    from db.database import log_conversion
+                    from auth.security import current_user as _cu
+                    log_conversion(_cu().get("username", "?"), "FS", len(notas), True)
+
                     ic_ok = icon("check-circle", 32, "#1AB87A")
                     st.markdown(f"""
                     <div class="result-success">

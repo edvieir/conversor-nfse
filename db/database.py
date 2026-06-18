@@ -431,6 +431,9 @@ def get_stats(usuario: str | None = None) -> dict:
         xmls   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
         txt_c  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
         xlsx_c = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        fs_c   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE modo='FS' AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        xml_api= (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE modo IN ('XML','AMBOS') AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
+        pdf_api= (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE modo IN ('PDF','AMBOS') AND sucesso=1{f_pg}", u_arg, fetch_one=True) or {}).get("n", 0)
         by_usr = _exec(f"SELECT usuario, COUNT(*) AS cnt FROM conversions WHERE 1=1{f_pg} GROUP BY usuario ORDER BY 2 DESC", u_arg, fetch_all=True) or []
         by_day = _exec(
             f"SELECT DATE(ts::date) AS d, COUNT(*) AS cnt FROM conversions "
@@ -444,6 +447,9 @@ def get_stats(usuario: str | None = None) -> dict:
         xmls   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
         txt_c  = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='TXT' AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
         xlsx_c = (_exec(f"SELECT COUNT(*) AS n FROM conversions WHERE modo='XLSX' AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        fs_c   = (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE modo='FS' AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        xml_api= (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE modo IN ('XML','AMBOS') AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
+        pdf_api= (_exec(f"SELECT COALESCE(SUM(qtd_arquivos),0) AS n FROM conversions WHERE modo IN ('PDF','AMBOS') AND sucesso=1{f_sq}", u_arg, fetch_one=True) or {}).get("n", 0)
         by_usr = _exec(f"SELECT usuario, COUNT(*) AS cnt FROM conversions WHERE 1=1{f_sq} GROUP BY usuario ORDER BY 2 DESC", u_arg, fetch_all=True) or []
         by_day = _exec(
             f"SELECT DATE(ts) AS d, COUNT(*) AS cnt FROM conversions "
@@ -458,6 +464,9 @@ def get_stats(usuario: str | None = None) -> dict:
         "xmls":        xmls,
         "txt":         txt_c,
         "xlsx":        xlsx_c,
+        "fs":          fs_c,
+        "xml_api":     xml_api,
+        "pdf_api":     pdf_api,
         "por_usuario": {r["usuario"]: r["cnt"] for r in by_usr},
         "por_dia":     {str(r["d"]): r["cnt"] for r in by_day},
     }

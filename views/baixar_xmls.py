@@ -190,6 +190,15 @@ def render():
                 progress_bar.progress(1.0, text="Concluido!")
                 log_placeholder.empty()
 
+                if zip_bytes:
+                    import zipfile as _zf, io as _io
+                    from db.database import log_conversion as _lc
+                    with _zf.ZipFile(_io.BytesIO(zip_bytes)) as _z:
+                        _xml_ct = len([n for n in _z.namelist() if n.lower().endswith(".xml")])
+                        _pdf_ct = len([n for n in _z.namelist() if n.lower().endswith(".pdf")])
+                        _qtd = _xml_ct or _pdf_ct or len(_z.namelist())
+                    _lc(user["username"], fmt_sel.upper(), _qtd, True)
+
                 with st.expander("Log de download", expanded=not bool(zip_bytes)):
                     st.code("\n".join(log), language="")
 
