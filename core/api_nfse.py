@@ -304,7 +304,7 @@ def baixar_xmls_nfse(
         # tupla: (chave, xml_bytes, chave_pdf, cancelada)
         xmls_aprovados: list[tuple[str, bytes, str, bool]] = []
 
-        import xml.etree.ElementTree as _ET2
+        import defusedxml.ElementTree as _ET2
 
         while True:
             lote_num += 1

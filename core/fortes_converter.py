@@ -2,7 +2,7 @@
 core/fortes_converter.py — Conversor NFS-e XML → Fortes ACFiscal (.fs)
 """
 
-from xml.etree import ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import date
 
 _NS = "http://www.sped.fazenda.gov.br/nfse"

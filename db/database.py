@@ -194,31 +194,6 @@ def _bootstrap_admin():
 
 
 def _bootstrap_users():
-    import bcrypt
-
-    _FIXOS = [
-        ("p&p",    "123456",    "P&P Contabilidade", "pp@empresa.com"),
-        ("calebe", "calebe123", "Calebe",             "calebe@exemplo.com"),
-    ]
-
-    for username, senha, nome, email in _FIXOS:
-        pw_hash = bcrypt.hashpw(senha.encode(), bcrypt.gensalt(12)).decode()
-        if _PG:
-            sql = (
-                "INSERT INTO users (username, name, email, password_hash, role) "
-                "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (username) DO NOTHING"
-            )
-        else:
-            sql = (
-                "INSERT OR IGNORE INTO users "
-                "(username, name, email, password_hash, role) VALUES (?,?,?,?,?)"
-            )
-        try:
-            _exec(sql, (username, nome, email, pw_hash, "user"))
-        except Exception:
-            pass
-        print(f"[db] Bootstrap: '{username}' verificado/criado.")
-
     raw = os.environ.get("USERS_BOOTSTRAP", "").strip()
     if not raw:
         return

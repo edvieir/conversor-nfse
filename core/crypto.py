@@ -19,8 +19,13 @@ def _get_fernet() -> Fernet:
             return Fernet(raw.encode() if isinstance(raw, str) else raw)
         except Exception:
             pass
-    # Deriva chave de SECRET_KEY ou fallback fixo
-    secret = os.environ.get("SECRET_KEY", "conversor-nfse-default-key-change-me")
+    # Deriva chave de SECRET_KEY — obrigatório
+    secret = os.environ.get("SECRET_KEY", "").strip()
+    if not secret:
+        raise ValueError(
+            "SECRET_KEY não definido. Defina a variável de ambiente SECRET_KEY "
+            "antes de iniciar a aplicação."
+        )
     key32  = hashlib.sha256(secret.encode()).digest()
     fernet_key = base64.urlsafe_b64encode(key32)
     return Fernet(fernet_key)

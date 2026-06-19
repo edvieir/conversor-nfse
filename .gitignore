@@ -42,3 +42,10 @@ desktop.ini
 # Arquivos temporários
 *.tmp
 *.log
+
+# Chaves SSH e certificados privados
+*.key
+ssh-key-*.key
+
+# Banco de dados local (SQLite)
+data/*.db

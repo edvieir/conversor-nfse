@@ -4,6 +4,7 @@ pages/usuarios.py — Gerenciamento de usuários (somente admin)
 
 import streamlit as st
 from datetime import date
+from html import escape
 from auth.security import current_user, is_admin, logout, hash_password
 from db.database import (
     list_users, create_user, delete_user,
@@ -51,9 +52,9 @@ def render():
                 if u["role"] == "admin"
                 else '<span class="user-badge">usuario</span>'
             )
-            _login = u["username"].replace("&", "&amp;")
-            _nome  = u["name"].replace("&", "&amp;")
-            _email = (u["email"] or "—").replace("&", "&amp;")
+            _login = escape(u["username"])
+            _nome  = escape(u["name"])
+            _email = escape(u["email"] or "—")
 
             val = u.get("validade")
             if val:
