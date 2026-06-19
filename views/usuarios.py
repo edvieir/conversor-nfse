@@ -103,13 +103,14 @@ def render():
 
         col_val1, col_val2 = st.columns([1, 2])
         with col_val1:
-            usar_validade = st.checkbox("Definir prazo de validade")
+            usar_validade = st.checkbox("Definir prazo de validade", value=True)
         with col_val2:
             data_validade = st.date_input(
                 "Validade até",
                 value=date.today().replace(year=date.today().year + 1),
                 min_value=date.today(),
                 disabled=not usar_validade,
+                format="DD/MM/YYYY",
             )
 
         submitted = st.form_submit_button(
