@@ -1,7 +1,7 @@
 """views/nfe_nfce.py — Consulta NF-e e NFC-e via SEFAZ Nacional"""
 
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from auth.security import current_user, is_admin
 from assets.icons import icon
 from db.database import listar_certificados, carregar_certificado, log_conversion
@@ -24,7 +24,6 @@ def _label(text: str) -> str:
 def render():
     nav.render("nfe_nfce")
     user = current_user()
-    admin = is_admin()
 
     # ── Cabeçalho ─────────────────────────────────────────────────────────────
     ic_head = icon("receipt", 20, "#00e5ff")
@@ -36,10 +35,10 @@ def render():
   </div>
   <div>
     <div style="color:#e2e8f0;font-weight:800;font-size:1.15rem;font-family:Manrope,sans-serif;line-height:1.1;">
-      NF-e e NFC-e
+      NFE / NFCE
     </div>
     <div style="color:#475569;font-size:.75rem;font-family:Manrope,sans-serif;">
-      Consulta automática na SEFAZ Nacional · Emitidas e recebidas
+      Consulta automática na SEFAZ Nacional · NF-e e NFC-e emitidas e recebidas
     </div>
   </div>
 </div>
@@ -65,7 +64,7 @@ def render():
                 st.rerun()
         return
 
-    # ── PASSO 1 — Empresa principal (dono do certificado) ─────────────────────
+    # ── PASSO 1 — Empresa / Certificado ──────────────────────────────────────
     with st.container(border=True):
         ic = icon("shield", 16, "#00CED1")
         st.markdown(f"""
@@ -78,12 +77,14 @@ def render():
 """, unsafe_allow_html=True)
 
         opcoes = {
-            f"{c['razao_social'] or c['cnpj']}  —  {_fmt_cnpj(c['cnpj'])}": c["cnpj"]
+            f"{c['razao_social'] or c['cnpj']}  —  {_fmt_cnpj(c['cnpj'])}": c
             for c in certs
         }
         escolha = st.selectbox("empresa", list(opcoes.keys()),
                                label_visibility="collapsed", key="nfe_sel_empresa")
-        cnpj_principal = opcoes[escolha]
+        cert_sel = opcoes[escolha]
+        cnpj_principal = "".join(d for d in cert_sel["cnpj"] if d.isdigit())
+        nome_principal = cert_sel["razao_social"] or cnpj_principal
 
         ic_ok = icon("check-circle", 13, "#10B981")
         st.markdown(
@@ -92,71 +93,99 @@ def render():
             unsafe_allow_html=True,
         )
 
-    # ── PASSO 2 — CNPJs adicionais para monitorar ─────────────────────────────
+    # ── PASSO 2 — Período ─────────────────────────────────────────────────────
     with st.container(border=True):
-        ic = icon("users", 16, "#00CED1")
+        ic = icon("calendar", 16, "#00CED1")
         st.markdown(f"""
 <div class="step-header">
   <div class="step-num">2</div>
   <div class="step-info">
-    <div class="step-title">{ic}&nbsp; CNPJs a Consultar</div>
-    <div class="step-desc">O certificado acima será usado para autenticar na SEFAZ.<br>
-    Você pode consultar múltiplos CNPJs do mesmo grupo econômico.</div>
+    <div class="step-title">{ic}&nbsp; Período de Consulta</div>
+    <div class="step-desc">Filtra os documentos retornados pela SEFAZ pela data de emissão.</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-        # CNPJs extras (session state)
-        if "nfe_empresas_extra" not in st.session_state:
-            st.session_state["nfe_empresas_extra"] = []
+        hoje = date.today()
+        col_ini, col_fim = st.columns(2, gap="medium")
+        with col_ini:
+            st.markdown(_label("Data Inicial"), unsafe_allow_html=True)
+            data_ini = st.date_input("data_ini", value=hoje.replace(day=1),
+                                     label_visibility="collapsed", key="nfe_data_ini")
+        with col_fim:
+            st.markdown(_label("Data Final"), unsafe_allow_html=True)
+            data_fim = st.date_input("data_fim", value=hoje,
+                                     label_visibility="collapsed", key="nfe_data_fim")
 
-        # Exibe linhas existentes
-        empresas_extras = st.session_state["nfe_empresas_extra"]
-        indices_remover = []
-        for i, emp in enumerate(empresas_extras):
-            col_cnpj, col_nome, col_del = st.columns([3, 4, 1], gap="small")
-            with col_cnpj:
-                novo_cnpj = st.text_input(
-                    "CNPJ", value=emp["cnpj"], max_chars=18,
-                    key=f"nfe_extra_cnpj_{i}", label_visibility="collapsed",
-                    placeholder="CNPJ (somente números)"
-                )
-            with col_nome:
-                novo_nome = st.text_input(
-                    "Nome", value=emp["nome"], key=f"nfe_extra_nome_{i}",
-                    label_visibility="collapsed", placeholder="Razão Social"
-                )
-            with col_del:
-                if st.button("✕", key=f"nfe_del_{i}", use_container_width=True):
-                    indices_remover.append(i)
-            empresas_extras[i] = {"cnpj": novo_cnpj, "nome": novo_nome}
-
-        for i in sorted(indices_remover, reverse=True):
-            empresas_extras.pop(i)
-            st.rerun()
-
-        if st.button("＋  Adicionar CNPJ", key="nfe_add_emp", use_container_width=False):
-            empresas_extras.append({"cnpj": "", "nome": ""})
-            st.rerun()
+        if data_ini > data_fim:
+            ic_e = icon("alert-triangle", 13, "#C97400")
+            st.markdown(
+                f'<div style="color:#C97400;font-size:.75rem;margin-top:4px;">'
+                f'{ic_e}&nbsp; Data inicial deve ser anterior à data final.</div>',
+                unsafe_allow_html=True,
+            )
 
         ic_info = icon("info", 13, "#475569")
-        nome_principal = next(
-            (c["razao_social"] or c["cnpj"] for c in certs if c["cnpj"] == cnpj_principal), cnpj_principal
-        )
         st.markdown(
             f'<div style="color:#475569;font-size:.72rem;margin-top:6px;">'
-            f'{ic_info}&nbsp; A empresa principal '
-            f'<b>{nome_principal}</b> ({_fmt_cnpj(cnpj_principal)}) '
-            f'já está incluída automaticamente.</div>',
+            f'{ic_info}&nbsp; A SEFAZ retorna documentos por NSU sequencial. '
+            f'O filtro de datas é aplicado sobre os resultados recebidos.</div>',
             unsafe_allow_html=True,
         )
 
-    # ── PASSO 3 — Configurações ───────────────────────────────────────────────
+    # ── PASSO 3 — O que baixar ────────────────────────────────────────────────
+    with st.container(border=True):
+        ic = icon("sliders", 16, "#00CED1")
+        st.markdown(f"""
+<div class="step-header">
+  <div class="step-num">3</div>
+  <div class="step-info">
+    <div class="step-title">{ic}&nbsp; O que Consultar / Baixar</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+        col_tipo, col_papel, col_saida = st.columns(3, gap="medium")
+
+        with col_tipo:
+            st.markdown(_label("Tipo de Documento"), unsafe_allow_html=True)
+            tipo_opcoes = {
+                "NF-e e NFC-e": "ambos",
+                "Somente NF-e":  "nfe",
+                "Somente NFC-e": "nfce",
+            }
+            tipo_label = st.selectbox("tipo_doc", list(tipo_opcoes.keys()),
+                                      label_visibility="collapsed", key="nfe_tipo")
+            tipo_doc = tipo_opcoes[tipo_label]
+
+        with col_papel:
+            st.markdown(_label("Papel"), unsafe_allow_html=True)
+            papel_opcoes = {
+                "Emitidas e Recebidas": "ambos",
+                "Somente Recebidas":    "recebidas",
+                "Somente Emitidas":     "emitidas",
+            }
+            papel_label = st.selectbox("papel", list(papel_opcoes.keys()),
+                                       label_visibility="collapsed", key="nfe_papel")
+            papel_filtro = papel_opcoes[papel_label]
+
+        with col_saida:
+            st.markdown(_label("Conteúdo do Download"), unsafe_allow_html=True)
+            saida_opcoes = {
+                "XMLs + Relatório Excel": "xml_excel",
+                "Somente XMLs":           "xml",
+                "Somente Relatório Excel":"excel",
+            }
+            saida_label = st.selectbox("saida", list(saida_opcoes.keys()),
+                                       label_visibility="collapsed", key="nfe_saida")
+            saida_sel = saida_opcoes[saida_label]
+
+    # ── PASSO 4 — Configurações ───────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("settings", 16, "#00CED1")
         st.markdown(f"""
 <div class="step-header">
-  <div class="step-num">3</div>
+  <div class="step-num">4</div>
   <div class="step-info">
     <div class="step-title">{ic}&nbsp; Configurações</div>
   </div>
@@ -173,10 +202,9 @@ def render():
 
         with col_uf:
             st.markdown(_label("UF Autor"), unsafe_allow_html=True)
-            uf_lista = ["CE", "SP", "RJ", "MG", "BA", "PR", "RS", "PE",
-                        "GO", "SC", "MA", "AM", "ES", "PB", "RN", "MT",
-                        "AL", "PI", "DF", "MS", "SE", "RO", "PA", "TO",
-                        "AP", "RR", "AC"]
+            uf_lista = ["CE","SP","RJ","MG","BA","PR","RS","PE","GO","SC",
+                        "MA","AM","ES","PB","RN","MT","AL","PI","DF","MS",
+                        "SE","RO","PA","TO","AP","RR","AC"]
             uf_sel = st.selectbox("uf", uf_lista, index=0,
                                   label_visibility="collapsed", key="nfe_uf")
 
@@ -184,27 +212,33 @@ def render():
             ic_warn = icon("alert-triangle", 13, "#C97400")
             st.markdown(
                 f'<div style="color:#C97400;font-size:.72rem;margin-top:4px;">'
-                f'{ic_warn}&nbsp; Homologação: a SEFAZ retorna dados de teste, não reais.</div>',
+                f'{ic_warn}&nbsp; Homologação: SEFAZ retorna dados de teste, não reais.</div>',
                 unsafe_allow_html=True,
             )
 
-    # ── PASSO 4 — Executar ────────────────────────────────────────────────────
+    # ── PASSO 5 — Executar ────────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("zap", 16, "#00CED1")
         st.markdown(f"""
 <div class="step-header">
-  <div class="step-num">4</div>
+  <div class="step-num">5</div>
   <div class="step-info">
     <div class="step-title">{ic}&nbsp; Consultar SEFAZ</div>
-    <div class="step-desc">Baixa todos os XMLs de NF-e e NFC-e emitidas e recebidas, e gera relatório Excel.</div>
+    <div class="step-desc">
+      Consulta: <b>{nome_principal}</b> ({_fmt_cnpj(cnpj_principal)}) ·
+      {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')} ·
+      {tipo_label} · {papel_label}
+    </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
+        btn_ok = data_ini <= data_fim
         btn_executar = st.button(
             "Consultar SEFAZ agora",
             type="primary",
             use_container_width=True,
+            disabled=not btn_ok,
             key="nfe_btn_exec",
         )
 
@@ -215,13 +249,7 @@ def render():
                 return
 
             pfx_bytes, pfx_senha = resultado
-
-            # Monta lista de empresas
             empresas_lista = [{"cnpj": cnpj_principal, "nome": nome_principal}]
-            for emp in st.session_state.get("nfe_empresas_extra", []):
-                cnpj_e = "".join(c for c in emp["cnpj"] if c.isdigit())
-                if len(cnpj_e) == 14:
-                    empresas_lista.append({"cnpj": cnpj_e, "nome": emp["nome"] or cnpj_e})
 
             progress_bar = st.progress(0, text="Iniciando consulta na SEFAZ...")
             log_placeholder = st.empty()
@@ -229,13 +257,11 @@ def render():
 
             def on_log(msg: str):
                 log_lines.append(msg)
-                log_placeholder.code("\n".join(log_lines[-25:]), language="")
+                log_placeholder.code("\n".join(log_lines[-30:]), language="")
 
             def on_progress(frac: float):
-                progress_bar.progress(
-                    min(frac, 1.0),
-                    text=f"Processando... {int(min(frac, 1.0) * 100)}%"
-                )
+                progress_bar.progress(min(frac, 1.0),
+                                      text=f"Processando... {int(min(frac,1.0)*100)}%")
 
             try:
                 from core.nfe_sefaz import executar_consulta_sefaz
@@ -246,6 +272,12 @@ def render():
                     empresas=empresas_lista,
                     ambiente=ambiente,
                     uf=uf_sel,
+                    data_ini=data_ini,
+                    data_fim=data_fim,
+                    tipo_doc=tipo_doc,
+                    papel_filtro=papel_filtro,
+                    incluir_xml=(saida_sel in ("xml", "xml_excel")),
+                    incluir_excel=(saida_sel in ("excel", "xml_excel")),
                     log_cb=on_log,
                     progress_cb=on_progress,
                 )
@@ -263,21 +295,27 @@ def render():
                         qt_xml = len([n for n in nomes if n.endswith(".xml")])
                         qt_xlsx = len([n for n in nomes if n.endswith(".xlsx")])
 
-                    log_conversion(user["username"], "NFE_NFCE", qt_xml, True)
+                    log_conversion(user["username"], "NFE_NFCE", qt_xml or qt_xlsx, True)
 
                     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    nome_zip = f"nfe_nfce_{cnpj_principal[:8]}_{ts}.zip"
+                    nome_zip = (
+                        f"nfe_nfce_{cnpj_principal[:8]}_"
+                        f"{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}_{ts}.zip"
+                    )
 
                     ic_ok = icon("check-circle", 32, "#1AB87A")
+                    partes = []
+                    if qt_xml:
+                        partes.append(f"{qt_xml} XML(s)")
+                    if qt_xlsx:
+                        partes.append(f"{qt_xlsx} relatório Excel")
                     st.markdown(f"""
 <div class="result-success">
   <div class="result-success-icon">{ic_ok}</div>
   <div>
     <div class="result-success-title">Consulta concluída com sucesso!</div>
     <div class="result-success-meta">
-      {qt_xml} XML(s) &nbsp;·&nbsp;
-      {qt_xlsx} relatório Excel &nbsp;·&nbsp;
-      {round(len(zip_bytes)/1024, 1)} KB
+      {' &nbsp;·&nbsp; '.join(partes)} &nbsp;·&nbsp; {round(len(zip_bytes)/1024, 1)} KB
     </div>
   </div>
 </div>
@@ -294,7 +332,9 @@ def render():
                     ic_warn = icon("alert-triangle", 15, "#C77D0A")
                     st.markdown(
                         f'<div class="warn-box">{ic_warn}'
-                        f'<span class="box-text">Nenhum documento encontrado na SEFAZ para o período.</span></div>',
+                        f'<span class="box-text">Nenhum documento encontrado no período '
+                        f'{data_ini.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}.'
+                        f'</span></div>',
                         unsafe_allow_html=True,
                     )
 
@@ -311,7 +351,7 @@ def render():
 
     st.markdown("""
 <div class="footer">
-  Fiscal Hub &nbsp;v2.0 &nbsp;·&nbsp; NF-e / NFC-e Nacional
+  Fiscal Hub &nbsp;v2.0 &nbsp;·&nbsp; NFE / NFCE Nacional
   &nbsp;·&nbsp; WebService NFeDistribuicaoDFe · SEFAZ Nacional
 </div>
 """, unsafe_allow_html=True)

@@ -201,36 +201,87 @@ def executar_consulta_sefaz(
     empresas: list[dict],
     ambiente: str = "1",
     uf: str = "CE",
+    data_ini=None,
+    data_fim=None,
+    tipo_doc: str = "ambos",
+    papel_filtro: str = "ambos",
+    incluir_xml: bool = True,
+    incluir_excel: bool = True,
     log_cb: Callable[[str], None] | None = None,
     progress_cb: Callable[[float], None] | None = None,
 ) -> tuple[bytes | None, list[str]]:
     """
-    Consulta a SEFAZ para cada empresa e retorna um ZIP com XMLs + Excel.
+    Consulta a SEFAZ para cada empresa e retorna um ZIP com XMLs e/ou Excel.
 
-    empresas = [{"cnpj": "00000000000100", "nome": "EMPRESA LTDA"}, ...]
-    Retorna (zip_bytes, log_lines).
+    tipo_doc: 'ambos' | 'nfe' | 'nfce'
+    papel_filtro: 'ambos' | 'emitidas' | 'recebidas'
     """
+    from datetime import date as _date
     log: list[str] = []
     todos_docs: list[dict] = []
+
+    # Deduplica CNPJs
+    cnpjs_vistos: set[str] = set()
+    empresas_unicas = []
+    for emp in empresas:
+        cnpj_n = "".join(c for c in emp["cnpj"] if c.isdigit())
+        if cnpj_n not in cnpjs_vistos:
+            cnpjs_vistos.add(cnpj_n)
+            empresas_unicas.append({**emp, "cnpj": cnpj_n})
 
     def _log(msg: str):
         log.append(msg)
         if log_cb:
             log_cb(msg)
 
+    def _dentro_periodo(data_emissao: str) -> bool:
+        if not data_ini and not data_fim:
+            return True
+        if not data_emissao:
+            return True
+        try:
+            dt = _date.fromisoformat(data_emissao[:10])
+            if data_ini and dt < data_ini:
+                return False
+            if data_fim and dt > data_fim:
+                return False
+            return True
+        except Exception:
+            return True
+
+    def _passa_filtros(doc: dict) -> bool:
+        if tipo_doc == "nfe" and doc.get("modelo") != "NF-e":
+            return False
+        if tipo_doc == "nfce" and doc.get("modelo") != "NFC-e":
+            return False
+        if papel_filtro == "emitidas" and doc.get("papel") != "Emitida":
+            return False
+        if papel_filtro == "recebidas" and doc.get("papel") != "Recebida":
+            return False
+        if not _dentro_periodo(doc.get("data_emissao", "")):
+            return False
+        return True
+
     cuf = UF_CODIGOS.get(uf, 23)
     sessao = _sessao(pfx_bytes, pfx_senha)
 
-    for idx, empresa in enumerate(empresas):
-        cnpj = "".join(c for c in empresa["cnpj"] if c.isdigit())
+    periodo_txt = ""
+    if data_ini or data_fim:
+        ini_str = data_ini.strftime("%d/%m/%Y") if data_ini else "início"
+        fim_str = data_fim.strftime("%d/%m/%Y") if data_fim else "hoje"
+        periodo_txt = f" | Período: {ini_str} a {fim_str}"
+
+    for idx, empresa in enumerate(empresas_unicas):
+        cnpj = empresa["cnpj"]
         nome = empresa.get("nome", cnpj)
 
-        _log(f"[{idx+1}/{len(empresas)}] Consultando {nome} ({cnpj})...")
+        _log(f"[{idx+1}/{len(empresas_unicas)}] Consultando {nome} ({cnpj}){periodo_txt}...")
         if progress_cb:
-            progress_cb((idx) / len(empresas) * 0.8)
+            progress_cb(idx / len(empresas_unicas) * 0.8)
 
         nsu = "000000000000000"
         paginas = 0
+        docs_empresa = 0
 
         while paginas < 50:
             novo_nsu, docs = _consultar_nsu(sessao, cnpj, nsu, ambiente, cuf)
@@ -240,30 +291,45 @@ def executar_consulta_sefaz(
                 _log(f"  Sem novos documentos.")
                 break
 
-            if docs and "_erro" in docs[0]:
-                _log(f"  AVISO: {docs[0]['_erro']}")
+            if "_erro" in docs[0]:
+                _log(f"  AVISO SEFAZ: {docs[0]['_erro']}")
                 break
 
             for doc in docs:
+                xml_conteudo = None
+                modelo = doc.get("modelo", "NF-e")
+
                 if doc.get("resumo"):
                     chave = _extrair_chave_resumo(doc["xml"])
                     if chave:
-                        xml_full = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
+                        xml_conteudo = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
                         time.sleep(0.5)
-                        if xml_full:
-                            dados = _extrair_dados(xml_full, cnpj)
-                            dados.update({"xml": xml_full, "cnpj_empresa": cnpj, "nome_empresa": nome,
-                                          "nsu": doc["nsu"], "modelo": doc["modelo"]})
-                            todos_docs.append(dados)
-                            _log(f"  [{dados['modelo']}][{dados['papel']}] {chave[:20]}... R${dados['valor_total']:.2f}")
-                        else:
-                            _log(f"  Resumo NSU={doc['nsu']} — XML completo indisponível")
+                        if not xml_conteudo:
+                            _log(f"  Resumo NSU={doc['nsu']} — XML indisponível")
+                            continue
                 else:
-                    dados = _extrair_dados(doc["xml"], cnpj)
-                    dados.update({"xml": doc["xml"], "cnpj_empresa": cnpj, "nome_empresa": nome,
-                                  "nsu": doc["nsu"], "modelo": doc.get("modelo", "NF-e")})
-                    todos_docs.append(dados)
-                    _log(f"  [{dados['modelo']}][{dados['papel']}] {dados['chave'][:20]}... R${dados['valor_total']:.2f}")
+                    xml_conteudo = doc["xml"]
+
+                if not xml_conteudo:
+                    continue
+
+                dados = _extrair_dados(xml_conteudo, cnpj)
+                dados.update({
+                    "xml": xml_conteudo,
+                    "cnpj_empresa": cnpj,
+                    "nome_empresa": nome,
+                    "nsu": doc["nsu"],
+                    "modelo": modelo,
+                })
+
+                if not _passa_filtros(dados):
+                    continue
+
+                todos_docs.append(dados)
+                docs_empresa += 1
+                _log(f"  [{dados['modelo']}][{dados['papel']}] "
+                     f"{dados.get('data_emissao','?')} "
+                     f"{dados['chave'][:20]}... R${dados['valor_total']:.2f}")
 
             nsu = novo_nsu
             if len(docs) < 50:
@@ -272,42 +338,39 @@ def executar_consulta_sefaz(
 
         emitidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Emitida")
         recebidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Recebida")
-        _log(f"  Total: emitidas={emitidas} recebidas={recebidas}")
+        _log(f"  Subtotal {nome}: {docs_empresa} docs (emitidas={emitidas} recebidas={recebidas})")
 
     if not todos_docs:
-        _log("Nenhum documento encontrado.")
+        _log("Nenhum documento encontrado para os filtros aplicados.")
         return None, log
 
-    _log("Gerando relatório Excel...")
-    if progress_cb:
-        progress_cb(0.9)
-
-    try:
-        xlsx_bytes = _gerar_excel(todos_docs)
-    except Exception as e:
-        _log(f"Erro ao gerar Excel: {e}")
-        xlsx_bytes = None
-
-    _log("Empacotando ZIP...")
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for doc in todos_docs:
-            chave = doc.get("chave") or f"NSU_{doc.get('nsu', 'x')}"
-            cnpj_e = doc.get("cnpj_empresa", "")
-            nome_e = "".join(c for c in doc.get("nome_empresa", "")
-                             if c.isalnum() or c in " _-")[:30].strip()
-            pasta = f"{cnpj_e}_{nome_e}"
-            zf.writestr(f"XMLs/{pasta}/{chave}.xml", doc["xml"])
 
-        if xlsx_bytes:
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            zf.writestr(f"relatorio_nfe_{ts}.xlsx", xlsx_bytes)
+        if incluir_xml:
+            _log("Empacotando XMLs...")
+            for doc in todos_docs:
+                chave = doc.get("chave") or f"NSU_{doc.get('nsu','x')}"
+                cnpj_e = doc.get("cnpj_empresa", "")
+                nome_e = "".join(c for c in doc.get("nome_empresa", "")
+                                 if c.isalnum() or c in " _-")[:30].strip()
+                zf.writestr(f"XMLs/{cnpj_e}_{nome_e}/{chave}.xml", doc["xml"])
+
+        if incluir_excel:
+            _log("Gerando relatório Excel...")
+            if progress_cb:
+                progress_cb(0.9)
+            try:
+                xlsx_bytes = _gerar_excel(todos_docs)
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                zf.writestr(f"relatorio_nfe_nfce_{ts}.xlsx", xlsx_bytes)
+            except Exception as e:
+                _log(f"Erro ao gerar Excel: {e}")
 
     if progress_cb:
         progress_cb(1.0)
 
-    total = len(todos_docs)
-    _log(f"Concluído. Total: {total} documento(s).")
+    _log(f"Concluído. Total: {len(todos_docs)} documento(s).")
     return zip_buf.getvalue(), log
 
 
