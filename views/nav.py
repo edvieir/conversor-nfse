@@ -7,6 +7,7 @@ _PAGES = [
     ("conversor",       "sync",           "Converter"),
     ("arquivo_fortes",  "description",    "Arquivo Fortes"),
     ("baixar_xmls",     "cloud_download", "Baixar XML"),
+    ("nfe_nfce",        "receipt",        "NF-e e NFC-e"),
     ("certificados",    "verified_user",  "Certificados"),
     ("milhao",          "receipt_long",   "Notas do Milhão"),
     ("dashboard",       "monitoring",     "Dashboard"),
