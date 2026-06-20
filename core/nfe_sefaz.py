@@ -405,6 +405,20 @@ def executar_consulta_sefaz(
 
 # ── Consulta avulsa por chave de acesso (Strategy 2) ─────────────────────────
 
+def _consultar_chave_raw(sessao, cnpj: str, chave: str, amb: str, cuf: int) -> tuple[str, str, str]:
+    """Faz um consChNFe e retorna (cstat, motivo, response_text)."""
+    env = _ENVELOPE_CHAVE.format(amb=amb, cuf=cuf, cnpj=cnpj, chave=chave)
+    r = sessao.post(URL_SEFAZ, data=env.encode("utf-8"), headers=_HEADERS, timeout=60)
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+    ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+    cstat_el  = root.find(f".//{{{ns_nfe}}}cStat")
+    motivo_el = root.find(f".//{{{ns_nfe}}}xMotivo")
+    cstat  = cstat_el.text.strip()  if cstat_el  is not None else "999"
+    motivo = motivo_el.text.strip() if motivo_el is not None else "Sem descrição"
+    return cstat, motivo, r.text
+
+
 def consultar_chave_avulsa(
     pfx_bytes: bytes,
     pfx_senha: str,
@@ -415,54 +429,67 @@ def consultar_chave_avulsa(
 ) -> tuple[dict | None, str]:
     """
     Baixa uma NF-e/NFC-e específica pela chave de acesso (consChNFe).
-    Usa contador separado do distNSU: até 20 consultas/hora.
-    Retorna (dados_com_xml, mensagem_erro).
+    Tenta primeiro com cUFAutor da UF informada; se retornar 137, tenta
+    com cUFAutor=91 (Ambiente Nacional) — necessário para NF-es autorizadas
+    por SEFAZ Virtual (SVRS) que não replicam corretamente por cuf estadual.
     """
     chave = "".join(c for c in chave if c.isdigit())
     if len(chave) != 44:
         return None, f"Chave inválida: deve ter 44 dígitos (informados {len(chave)})."
 
-    cuf = UF_CODIGOS.get(uf, 23)
+    cuf_uf = UF_CODIGOS.get(uf, 23)
+    # cUFAutor=91 = código Ambiente Nacional, usado como fallback para
+    # notas autorizadas por SEFAZ Virtual (SVRS, AN, etc.)
+    cufs_tentar = [cuf_uf] if cuf_uf == 91 else [cuf_uf, 91]
+
     sessao = _sessao(pfx_bytes, pfx_senha)
-    env = _ENVELOPE_CHAVE.format(amb=ambiente, cuf=cuf, cnpj=cnpj, chave=chave)
+
+    _MENSAGENS = {
+        "217": "NF-e não consta na base de dados do Ambiente Nacional.",
+        "694": "NF-e autorizada pela SEFAZ da UF emitente — não disponível no Ambiente Nacional.",
+        "218": "NF-e fora do intervalo disponível (máximo 90 dias).",
+        "656": "Consumo indevido — aguarde 1 hora antes de tentar novamente.",
+        "573": "Duplicidade de NF-e.",
+    }
+
+    ultimo_cstat = "999"
+    ultimo_motivo = "Sem descrição"
+    ultimo_resp = ""
 
     try:
-        r = sessao.post(URL_SEFAZ, data=env.encode("utf-8"), headers=_HEADERS, timeout=60)
-        r.raise_for_status()
+        for cuf in cufs_tentar:
+            cstat, motivo, resp_text = _consultar_chave_raw(sessao, cnpj, chave, ambiente, cuf)
+            ultimo_cstat = cstat
+            ultimo_motivo = motivo
+            ultimo_resp = resp_text
 
-        root = ET.fromstring(r.text)
-        ns_nfe = "http://www.portalfiscal.inf.br/nfe"
-        cstat_el  = root.find(f".//{{{ns_nfe}}}cStat")
-        motivo_el = root.find(f".//{{{ns_nfe}}}xMotivo")
-        cstat  = cstat_el.text.strip()  if cstat_el  is not None else "999"
-        motivo = motivo_el.text.strip() if motivo_el is not None else "Sem descrição"
+            if cstat == "138":
+                break  # sucesso — processa abaixo
 
-        if cstat == "138":
-            pass  # sucesso — processa abaixo
-        elif cstat == "137":
-            # Para consChNFe, 137 = NF-e não localizada para esse CNPJ
-            return None, (
-                "NF-e não localizada para esse CNPJ no Ambiente Nacional (cStat=137).\n\n"
-                "Causas mais comuns:\n"
-                "• A NF-e foi emitida há pouco tempo e ainda não foi distribuída — aguarde alguns minutos e tente de novo\n"
-                "• O CNPJ selecionado não consta como emitente ou destinatário nessa NF-e\n"
-                "• A NF-e está cancelada ou inutilizada"
-            )
-        else:
-            _MENSAGENS = {
-                "217": "NF-e não consta na base de dados do Ambiente Nacional.",
-                "694": "NF-e autorizada pela SEFAZ da UF emitente — não disponível no Ambiente Nacional.",
-                "218": "NF-e fora do intervalo disponível (máximo 90 dias).",
-                "656": "Consumo indevido — aguarde 1 hora antes de tentar novamente.",
-                "573": "Duplicidade de NF-e.",
-            }
+            if cstat == "137":
+                if cuf != cufs_tentar[-1]:
+                    # ainda há fallback para tentar
+                    continue
+                # esgotou todas as tentativas
+                return None, (
+                    "NF-e não localizada para esse CNPJ no Ambiente Nacional (cStat=137).\n\n"
+                    "Causas mais comuns:\n"
+                    "• O CNPJ selecionado não consta como emitente, destinatário ou autorizado (autXML) nessa NF-e\n"
+                    "• A NF-e foi autorizada por SEFAZ Virtual (SVRS) e ainda não foi replicada — tente a Consulta em Lote para sincronizar\n"
+                    "• A NF-e está cancelada ou inutilizada"
+                )
+
+            # outro erro — não tenta fallback
             detalhe = _MENSAGENS.get(cstat, "")
             msg = f"SEFAZ retornou cStat={cstat}: {motivo}"
             if detalhe:
                 msg += f"\n\nDica: {detalhe}"
             return None, msg
 
-        docs = _descompactar_docs(r.text)
+        if ultimo_cstat != "138":
+            return None, f"SEFAZ retornou cStat={ultimo_cstat}: {ultimo_motivo}"
+
+        docs = _descompactar_docs(ultimo_resp)
         if not docs:
             return None, (
                 "SEFAZ aceitou a consulta mas não retornou o XML (cStat=138 sem docZip).\n\n"
