@@ -189,9 +189,11 @@ def render():
         with col_saida:
             st.markdown(_label("Conteúdo do Download"), unsafe_allow_html=True)
             saida_opcoes = {
-                "XMLs + Relatório Excel": "xml_excel",
-                "Somente XMLs":           "xml",
-                "Somente Relatório Excel":"excel",
+                "XMLs + Relatório Excel":       "xml_excel",
+                "XMLs + DANFE (PDF) + Excel":   "xml_pdf_excel",
+                "Somente XMLs":                 "xml",
+                "XMLs + DANFE (PDF)":           "xml_pdf",
+                "Somente Relatório Excel":      "excel",
             }
             saida_label = st.selectbox("saida", list(saida_opcoes.keys()),
                                        label_visibility="collapsed", key="nfe_saida")
@@ -262,8 +264,9 @@ def render():
                     data_fim=data_fim,
                     tipo_doc=tipo_doc,
                     papel_filtro=papel_filtro,
-                    incluir_xml=(saida_sel in ("xml", "xml_excel")),
-                    incluir_excel=(saida_sel in ("excel", "xml_excel")),
+                    incluir_xml=(saida_sel in ("xml", "xml_excel", "xml_pdf", "xml_pdf_excel")),
+                    incluir_pdf=(saida_sel in ("xml_pdf", "xml_pdf_excel")),
+                    incluir_excel=(saida_sel in ("excel", "xml_excel", "xml_pdf_excel")),
                     log_cb=on_log,
                     progress_cb=on_progress,
                 )
@@ -279,6 +282,7 @@ def render():
                     with _zf.ZipFile(_io.BytesIO(zip_bytes)) as _z:
                         nomes = _z.namelist()
                         qt_xml  = len([n for n in nomes if n.endswith(".xml")])
+                        qt_pdf  = len([n for n in nomes if n.endswith(".pdf")])
                         qt_xlsx = len([n for n in nomes if n.endswith(".xlsx")])
 
                     log_conversion(user["username"], "NFE_NFCE", qt_xml or qt_xlsx, True)
@@ -292,6 +296,7 @@ def render():
                     ic_ok = icon("check-circle", 32, "#1AB87A")
                     partes = []
                     if qt_xml:  partes.append(f"{qt_xml} XML(s)")
+                    if qt_pdf:  partes.append(f"{qt_pdf} DANFE(s) PDF")
                     if qt_xlsx: partes.append(f"{qt_xlsx} relatório Excel")
                     st.markdown(f"""
 <div class="result-success">

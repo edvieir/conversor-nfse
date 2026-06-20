@@ -206,12 +206,13 @@ def executar_consulta_sefaz(
     tipo_doc: str = "ambos",
     papel_filtro: str = "ambos",
     incluir_xml: bool = True,
+    incluir_pdf: bool = False,
     incluir_excel: bool = True,
     log_cb: Callable[[str], None] | None = None,
     progress_cb: Callable[[float], None] | None = None,
 ) -> tuple[bytes | None, list[str]]:
     """
-    Consulta a SEFAZ para cada empresa e retorna um ZIP com XMLs e/ou Excel.
+    Consulta a SEFAZ para cada empresa e retorna um ZIP com XMLs, PDFs e/ou Excel.
 
     tipo_doc: 'ambos' | 'nfe' | 'nfce'
     papel_filtro: 'ambos' | 'emitidas' | 'recebidas'
@@ -353,14 +354,25 @@ def executar_consulta_sefaz(
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
 
-        if incluir_xml:
-            _log("Empacotando XMLs...")
-            for doc in todos_docs:
-                chave = doc.get("chave") or f"NSU_{doc.get('nsu','x')}"
-                cnpj_e = doc.get("cnpj_empresa", "")
-                nome_e = "".join(c for c in doc.get("nome_empresa", "")
-                                 if c.isalnum() or c in " _-")[:30].strip()
-                zf.writestr(f"XMLs/{cnpj_e}_{nome_e}/{chave}.xml", doc["xml"])
+        for doc in todos_docs:
+            chave = doc.get("chave") or f"NSU_{doc.get('nsu','x')}"
+            cnpj_e = doc.get("cnpj_empresa", "")
+            nome_e = "".join(c for c in doc.get("nome_empresa", "")
+                             if c.isalnum() or c in " _-")[:30].strip()
+            pasta = f"{cnpj_e}_{nome_e}"
+
+            if incluir_xml:
+                zf.writestr(f"XMLs/{pasta}/{chave}.xml", doc["xml"])
+
+            if incluir_pdf:
+                try:
+                    from brazilfiscalreport.danfe import Danfe
+                    buf_pdf = io.BytesIO()
+                    danfe = Danfe(xml=doc["xml"].encode("utf-8"))
+                    danfe.output(buf_pdf)
+                    zf.writestr(f"PDFs/{pasta}/{chave}.pdf", buf_pdf.getvalue())
+                except Exception as e_pdf:
+                    _log(f"  DANFE não gerado para {chave[:20]}...: {e_pdf}")
 
         if incluir_excel:
             _log("Gerando relatório Excel...")
