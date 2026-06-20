@@ -279,7 +279,12 @@ def executar_consulta_sefaz(
         if progress_cb:
             progress_cb(idx / len(empresas_unicas) * 0.8)
 
-        nsu = "000000000000000"
+        from db.database import get_nsu_cnpj, set_nsu_cnpj
+        estado = get_nsu_cnpj(cnpj)
+        nsu = estado["ultimo_nsu"]
+        ultima_consulta = estado.get("atualizado_em") or "nunca"
+        _log(f"  Último NSU salvo: {nsu} (consulta anterior: {ultima_consulta})")
+
         paginas = 0
         docs_empresa = 0
 
@@ -332,6 +337,7 @@ def executar_consulta_sefaz(
                      f"{dados['chave'][:20]}... R${dados['valor_total']:.2f}")
 
             nsu = novo_nsu
+            set_nsu_cnpj(cnpj, novo_nsu)  # salva após cada página
             if len(docs) < 50:
                 break
             time.sleep(2)

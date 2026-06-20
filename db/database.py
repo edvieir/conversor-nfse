@@ -86,6 +86,13 @@ def _init_pg():
     with _conn() as con:
         cur = con.cursor()
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS nfe_nsu (
+                cnpj         TEXT PRIMARY KEY,
+                ultimo_nsu   TEXT NOT NULL DEFAULT '000000000000000',
+                atualizado_em TEXT
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id            SERIAL PRIMARY KEY,
                 username      TEXT UNIQUE NOT NULL,
@@ -133,6 +140,11 @@ def _init_sqlite():
     with _conn() as con:
         cur = con.cursor()
         cur.executescript("""
+            CREATE TABLE IF NOT EXISTS nfe_nsu (
+                cnpj          TEXT PRIMARY KEY,
+                ultimo_nsu    TEXT NOT NULL DEFAULT '000000000000000',
+                atualizado_em TEXT
+            );
             CREATE TABLE IF NOT EXISTS users (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 username      TEXT UNIQUE NOT NULL,
@@ -445,3 +457,42 @@ def get_stats(usuario: str | None = None) -> dict:
         "por_usuario": {r["usuario"]: r["cnt"] for r in by_usr},
         "por_dia":     {str(r["d"]): r["cnt"] for r in by_day},
     }
+
+
+# ── CRUD — NSU NF-e ───────────────────────────────────────────────────────────
+
+def get_nsu_cnpj(cnpj: str) -> dict:
+    """Retorna {'ultimo_nsu': '...', 'atualizado_em': '...'} para o CNPJ."""
+    ph = "%s" if _PG else "?"
+    row = _exec(
+        f"SELECT ultimo_nsu, atualizado_em FROM nfe_nsu WHERE cnpj={ph}",
+        (cnpj,), fetch_one=True,
+    )
+    return row or {"ultimo_nsu": "000000000000000", "atualizado_em": None}
+
+
+def set_nsu_cnpj(cnpj: str, nsu: str):
+    """Persiste o último NSU consultado para o CNPJ."""
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    if _PG:
+        _exec(
+            """INSERT INTO nfe_nsu (cnpj, ultimo_nsu, atualizado_em)
+               VALUES (%s,%s,%s)
+               ON CONFLICT (cnpj) DO UPDATE SET
+                 ultimo_nsu=EXCLUDED.ultimo_nsu,
+                 atualizado_em=EXCLUDED.atualizado_em""",
+            (cnpj, nsu, agora),
+        )
+    else:
+        _exec(
+            """INSERT INTO nfe_nsu (cnpj, ultimo_nsu, atualizado_em) VALUES (?,?,?)
+               ON CONFLICT(cnpj) DO UPDATE SET
+                 ultimo_nsu=excluded.ultimo_nsu,
+                 atualizado_em=excluded.atualizado_em""",
+            (cnpj, nsu, agora),
+        )
+
+
+def reset_nsu_cnpj(cnpj: str):
+    """Reseta o NSU para zero (força reprocessamento do início)."""
+    set_nsu_cnpj(cnpj, "000000000000000")
