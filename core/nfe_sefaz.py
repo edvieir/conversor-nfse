@@ -421,14 +421,51 @@ def consultar_chave_avulsa(
     chave = "".join(c for c in chave if c.isdigit())
     if len(chave) != 44:
         return None, f"Chave inválida: deve ter 44 dígitos (informados {len(chave)})."
+
     cuf = UF_CODIGOS.get(uf, 23)
     sessao = _sessao(pfx_bytes, pfx_senha)
-    xml_conteudo = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
-    if not xml_conteudo:
-        return None, "XML não encontrado para essa chave. Verifique se o CNPJ é o emitente ou destinatário."
-    dados = _extrair_dados(xml_conteudo, cnpj)
-    dados["xml"] = xml_conteudo
-    return dados, ""
+    env = _ENVELOPE_CHAVE.format(amb=ambiente, cuf=cuf, cnpj=cnpj, chave=chave)
+
+    try:
+        r = sessao.post(URL_SEFAZ, data=env.encode("utf-8"), headers=_HEADERS, timeout=60)
+        r.raise_for_status()
+
+        root = ET.fromstring(r.text)
+        ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+        cstat_el  = root.find(f".//{{{ns_nfe}}}cStat")
+        motivo_el = root.find(f".//{{{ns_nfe}}}xMotivo")
+        cstat  = cstat_el.text.strip()  if cstat_el  is not None else "999"
+        motivo = motivo_el.text.strip() if motivo_el is not None else "Sem descrição"
+
+        if cstat not in ("137", "138"):
+            _MENSAGENS = {
+                "217": "NF-e não consta na base de dados do Ambiente Nacional.",
+                "694": "NF-e autorizada pela SEFAZ da UF emitente — não disponível no Ambiente Nacional.",
+                "218": "NF-e não encontrada no intervalo de tempo disponível (90 dias).",
+                "656": "Consumo indevido — aguarde 1 hora antes de tentar novamente.",
+                "573": "Duplicidade de NF-e.",
+                "137": "Nenhum documento encontrado para essa chave.",
+            }
+            detalhe = _MENSAGENS.get(cstat, "")
+            msg = f"SEFAZ retornou cStat={cstat}: {motivo}"
+            if detalhe:
+                msg += f"\n\nDica: {detalhe}"
+            return None, msg
+
+        docs = _descompactar_docs(r.text)
+        if not docs:
+            return None, (
+                f"SEFAZ aceitou a consulta (cStat={cstat}) mas não retornou o XML.\n"
+                "Possíveis causas: NF-e cancelada, inutilizada ou o CNPJ não é emitente nem destinatário."
+            )
+
+        xml_conteudo = docs[0]["xml"]
+        dados = _extrair_dados(xml_conteudo, cnpj)
+        dados["xml"] = xml_conteudo
+        return dados, ""
+
+    except Exception as e:
+        return None, f"Erro na comunicação com SEFAZ: {e}"
 
 
 # ── Geração do Excel ──────────────────────────────────────────────────────────

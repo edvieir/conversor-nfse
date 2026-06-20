@@ -432,10 +432,13 @@ def _render_tab_chave(user, certs):
             dados, erro = consultar_chave_avulsa(pfx_bytes, pfx_senha, cnpj_ch, chave_digits)
 
         if erro:
+            linhas = erro.split("\n\n")
             ic_err = icon("x-circle", 15, "#D93025")
             st.markdown(
                 f'<div class="error-box">{ic_err}'
-                f'<span class="box-text">{erro}</span></div>',
+                f'<span class="box-text"><b>{linhas[0]}</b>'
+                + (f'<br><span style="color:#94a3b8;font-size:.8rem">{linhas[1]}</span>' if len(linhas) > 1 else "")
+                + '</span></div>',
                 unsafe_allow_html=True,
             )
             return
