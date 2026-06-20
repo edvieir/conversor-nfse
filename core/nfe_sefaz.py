@@ -178,7 +178,8 @@ def _consultar_nsu(sessao, cnpj: str, nsu: str, amb: str, cuf: int) -> tuple[str
         if cstat not in ("137", "138"):
             motivo_el = root.find(".//{http://www.portalfiscal.inf.br/nfe}xMotivo")
             motivo = motivo_el.text if motivo_el is not None else "?"
-            return nsu, [{"_erro": f"cStat={cstat}: {motivo}"}]
+            # Retorna novo_nsu para que o caller possa salvar o ultNSU da resposta
+            return novo_nsu, [{"_erro": f"cStat={cstat}: {motivo}"}]
         return novo_nsu, _descompactar_docs(r.text)
     except Exception as e:
         return nsu, [{"_erro": str(e)}]
@@ -298,6 +299,10 @@ def executar_consulta_sefaz(
                 break
 
             if "_erro" in docs[0]:
+                # Salva o ultNSU retornado pelo SEFAZ mesmo em caso de erro (ex: cStat=656)
+                if novo_nsu != nsu:
+                    set_nsu_cnpj(cnpj, novo_nsu)
+                    _log(f"  NSU salvo da resposta de erro: {novo_nsu}")
                 _log(f"  AVISO SEFAZ: {docs[0]['_erro']}")
                 break
 
