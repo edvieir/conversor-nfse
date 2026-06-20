@@ -87,9 +87,41 @@ def _init_pg():
         cur = con.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS nfe_nsu (
-                cnpj         TEXT PRIMARY KEY,
-                ultimo_nsu   TEXT NOT NULL DEFAULT '000000000000000',
-                atualizado_em TEXT
+                cnpj              TEXT PRIMARY KEY,
+                ultimo_nsu        TEXT NOT NULL DEFAULT '000000000000000',
+                atualizado_em     TEXT,
+                proxima_consulta  TEXT
+            )
+        """)
+        cur.execute("ALTER TABLE nfe_nsu ADD COLUMN IF NOT EXISTS proxima_consulta TEXT")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS nfe_auto_sync (
+                cnpj     TEXT NOT NULL,
+                username TEXT NOT NULL,
+                ativo    INTEGER DEFAULT 0,
+                PRIMARY KEY (cnpj, username)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS nfe_resultados (
+                id           SERIAL PRIMARY KEY,
+                cnpj         TEXT NOT NULL,
+                chave        TEXT NOT NULL,
+                modelo       TEXT DEFAULT 'NF-e',
+                papel        TEXT DEFAULT 'Recebida',
+                numero       TEXT DEFAULT '',
+                serie        TEXT DEFAULT '',
+                data_emissao TEXT DEFAULT '',
+                cnpj_emit    TEXT DEFAULT '',
+                nome_emit    TEXT DEFAULT '',
+                cnpj_dest    TEXT DEFAULT '',
+                nome_dest    TEXT DEFAULT '',
+                valor_total  REAL DEFAULT 0,
+                nat_operacao TEXT DEFAULT '',
+                xml_conteudo TEXT NOT NULL,
+                baixado_por  TEXT DEFAULT 'auto',
+                criado_em    TEXT NOT NULL,
+                UNIQUE(cnpj, chave)
             )
         """)
         cur.execute("""
@@ -141,9 +173,36 @@ def _init_sqlite():
         cur = con.cursor()
         cur.executescript("""
             CREATE TABLE IF NOT EXISTS nfe_nsu (
-                cnpj          TEXT PRIMARY KEY,
-                ultimo_nsu    TEXT NOT NULL DEFAULT '000000000000000',
-                atualizado_em TEXT
+                cnpj             TEXT PRIMARY KEY,
+                ultimo_nsu       TEXT NOT NULL DEFAULT '000000000000000',
+                atualizado_em    TEXT,
+                proxima_consulta TEXT
+            );
+            CREATE TABLE IF NOT EXISTS nfe_auto_sync (
+                cnpj     TEXT NOT NULL,
+                username TEXT NOT NULL,
+                ativo    INTEGER DEFAULT 0,
+                PRIMARY KEY (cnpj, username)
+            );
+            CREATE TABLE IF NOT EXISTS nfe_resultados (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj         TEXT NOT NULL,
+                chave        TEXT NOT NULL,
+                modelo       TEXT DEFAULT 'NF-e',
+                papel        TEXT DEFAULT 'Recebida',
+                numero       TEXT DEFAULT '',
+                serie        TEXT DEFAULT '',
+                data_emissao TEXT DEFAULT '',
+                cnpj_emit    TEXT DEFAULT '',
+                nome_emit    TEXT DEFAULT '',
+                cnpj_dest    TEXT DEFAULT '',
+                nome_dest    TEXT DEFAULT '',
+                valor_total  REAL DEFAULT 0,
+                nat_operacao TEXT DEFAULT '',
+                xml_conteudo TEXT NOT NULL,
+                baixado_por  TEXT DEFAULT 'auto',
+                criado_em    TEXT NOT NULL,
+                UNIQUE(cnpj, chave)
             );
             CREATE TABLE IF NOT EXISTS users (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,6 +239,10 @@ def _init_sqlite():
         pass
     try:
         _exec("ALTER TABLE users ADD COLUMN validade DATE DEFAULT NULL")
+    except Exception:
+        pass
+    try:
+        _exec("ALTER TABLE nfe_nsu ADD COLUMN proxima_consulta TEXT")
     except Exception:
         pass
 
@@ -462,13 +525,13 @@ def get_stats(usuario: str | None = None) -> dict:
 # ── CRUD — NSU NF-e ───────────────────────────────────────────────────────────
 
 def get_nsu_cnpj(cnpj: str) -> dict:
-    """Retorna {'ultimo_nsu': '...', 'atualizado_em': '...'} para o CNPJ."""
+    """Retorna {'ultimo_nsu', 'atualizado_em', 'proxima_consulta'} para o CNPJ."""
     ph = "%s" if _PG else "?"
     row = _exec(
-        f"SELECT ultimo_nsu, atualizado_em FROM nfe_nsu WHERE cnpj={ph}",
+        f"SELECT ultimo_nsu, atualizado_em, proxima_consulta FROM nfe_nsu WHERE cnpj={ph}",
         (cnpj,), fetch_one=True,
     )
-    return row or {"ultimo_nsu": "000000000000000", "atualizado_em": None}
+    return row or {"ultimo_nsu": "000000000000000", "atualizado_em": None, "proxima_consulta": None}
 
 
 def set_nsu_cnpj(cnpj: str, nsu: str):
@@ -493,6 +556,165 @@ def set_nsu_cnpj(cnpj: str, nsu: str):
         )
 
 
+def set_proxima_consulta(cnpj: str, dt_iso: str):
+    """Define o datetime ISO em que a próxima consulta estará liberada."""
+    ph = "%s" if _PG else "?"
+    if _PG:
+        _exec(
+            """INSERT INTO nfe_nsu (cnpj, ultimo_nsu, proxima_consulta)
+               VALUES (%s,'000000000000000',%s)
+               ON CONFLICT (cnpj) DO UPDATE SET proxima_consulta=EXCLUDED.proxima_consulta""",
+            (cnpj, dt_iso),
+        )
+    else:
+        _exec(
+            """INSERT INTO nfe_nsu (cnpj, ultimo_nsu, proxima_consulta) VALUES (?,?,?)
+               ON CONFLICT(cnpj) DO UPDATE SET proxima_consulta=excluded.proxima_consulta""",
+            (cnpj, "000000000000000", dt_iso),
+        )
+
+
 def reset_nsu_cnpj(cnpj: str):
-    """Reseta o NSU para zero (força reprocessamento do início)."""
-    set_nsu_cnpj(cnpj, "000000000000000")
+    """Reseta o NSU para zero e libera a próxima consulta imediatamente."""
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    if _PG:
+        _exec(
+            """INSERT INTO nfe_nsu (cnpj, ultimo_nsu, atualizado_em, proxima_consulta)
+               VALUES (%s,'000000000000000',%s,NULL)
+               ON CONFLICT (cnpj) DO UPDATE SET
+                 ultimo_nsu='000000000000000',
+                 atualizado_em=EXCLUDED.atualizado_em,
+                 proxima_consulta=NULL""",
+            (cnpj, agora),
+        )
+    else:
+        _exec(
+            """INSERT INTO nfe_nsu (cnpj, ultimo_nsu, atualizado_em, proxima_consulta) VALUES (?,?,?,NULL)
+               ON CONFLICT(cnpj) DO UPDATE SET
+                 ultimo_nsu='000000000000000',
+                 atualizado_em=excluded.atualizado_em,
+                 proxima_consulta=NULL""",
+            (cnpj, "000000000000000", agora),
+        )
+
+
+# ── CRUD — Auto-Sync NF-e ─────────────────────────────────────────────────────
+
+def set_auto_sync(cnpj: str, username: str, ativo: bool):
+    """Ativa ou desativa a sincronização automática para um CNPJ."""
+    ph = "%s" if _PG else "?"
+    if _PG:
+        _exec(
+            """INSERT INTO nfe_auto_sync (cnpj, username, ativo) VALUES (%s,%s,%s)
+               ON CONFLICT (cnpj, username) DO UPDATE SET ativo=EXCLUDED.ativo""",
+            (cnpj, username, int(ativo)),
+        )
+    else:
+        _exec(
+            """INSERT INTO nfe_auto_sync (cnpj, username, ativo) VALUES (?,?,?)
+               ON CONFLICT(cnpj, username) DO UPDATE SET ativo=excluded.ativo""",
+            (cnpj, username, int(ativo)),
+        )
+
+
+def get_auto_sync(cnpj: str, username: str) -> bool:
+    ph = "%s" if _PG else "?"
+    row = _exec(
+        f"SELECT ativo FROM nfe_auto_sync WHERE cnpj={ph} AND username={ph}",
+        (cnpj, username), fetch_one=True,
+    )
+    return bool(row["ativo"]) if row else False
+
+
+def listar_auto_sync_ativos() -> list[dict]:
+    """Retorna todos os CNPJs com auto-sync ativo para uso pelo scheduler."""
+    return _exec(
+        "SELECT cnpj, username FROM nfe_auto_sync WHERE ativo=1",
+        fetch_all=True,
+    ) or []
+
+
+# ── CRUD — Resultados NF-e (auto-sync) ───────────────────────────────────────
+
+def salvar_resultados_nfe(docs: list[dict], baixado_por: str = "auto"):
+    """Insere NF-es baixadas no banco. Ignora duplicatas (por chave+cnpj)."""
+    agora = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    for d in docs:
+        chave = d.get("chave", "")
+        cnpj  = d.get("cnpj_empresa", "")
+        if not chave or not cnpj:
+            continue
+        params = (
+            cnpj, chave,
+            d.get("modelo", "NF-e"),
+            d.get("papel", "Recebida"),
+            d.get("numero", ""),
+            d.get("serie", ""),
+            d.get("data_emissao", ""),
+            d.get("cnpj_emitente", ""),
+            d.get("nome_emitente", ""),
+            d.get("cnpj_dest_doc", ""),
+            d.get("nome_dest_doc", ""),
+            float(d.get("valor_total", 0)),
+            d.get("nat_operacao", ""),
+            d.get("xml", ""),
+            baixado_por,
+            agora,
+        )
+        try:
+            if _PG:
+                _exec(
+                    """INSERT INTO nfe_resultados
+                       (cnpj,chave,modelo,papel,numero,serie,data_emissao,cnpj_emit,nome_emit,
+                        cnpj_dest,nome_dest,valor_total,nat_operacao,xml_conteudo,baixado_por,criado_em)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                       ON CONFLICT (cnpj, chave) DO NOTHING""",
+                    params,
+                )
+            else:
+                _exec(
+                    """INSERT OR IGNORE INTO nfe_resultados
+                       (cnpj,chave,modelo,papel,numero,serie,data_emissao,cnpj_emit,nome_emit,
+                        cnpj_dest,nome_dest,valor_total,nat_operacao,xml_conteudo,baixado_por,criado_em)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    params,
+                )
+        except Exception as e:
+            print(f"[db] salvar_resultados_nfe erro: {e}")
+
+
+def listar_resultados_nfe(cnpj: str, limit: int = 1000) -> list[dict]:
+    ph = "%s" if _PG else "?"
+    lim = "%s" if _PG else "?"
+    return _exec(
+        f"SELECT id,chave,modelo,papel,numero,serie,data_emissao,cnpj_emit,nome_emit,"
+        f"valor_total,criado_em FROM nfe_resultados WHERE cnpj={ph} ORDER BY criado_em DESC LIMIT {lim}",
+        (cnpj, limit), fetch_all=True,
+    ) or []
+
+
+def contar_resultados_nfe(cnpj: str) -> int:
+    ph = "%s" if _PG else "?"
+    row = _exec(
+        f"SELECT COUNT(*) AS n FROM nfe_resultados WHERE cnpj={ph}",
+        (cnpj,), fetch_one=True,
+    )
+    return int((row or {}).get("n", 0))
+
+
+def carregar_xml_resultado(cnpj: str, chave: str) -> str | None:
+    ph = "%s" if _PG else "?"
+    row = _exec(
+        f"SELECT xml_conteudo FROM nfe_resultados WHERE cnpj={ph} AND chave={ph}",
+        (cnpj, chave), fetch_one=True,
+    )
+    return row["xml_conteudo"] if row else None
+
+
+def listar_xmls_resultados(cnpj: str) -> list[dict]:
+    """Retorna (chave, xml_conteudo) de todos os resultados para gerar ZIP."""
+    ph = "%s" if _PG else "?"
+    return _exec(
+        f"SELECT chave, modelo, papel, xml_conteudo FROM nfe_resultados WHERE cnpj={ph} ORDER BY data_emissao",
+        (cnpj,), fetch_all=True,
+    ) or []

@@ -7,12 +7,10 @@ Aceita certificado como bytes (vindo do banco), sem gravar em disco.
 import gzip
 import base64
 import time
-import tempfile
 import zipfile
 import io
 import xml.etree.ElementTree as ET
-from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 import requests
@@ -289,6 +287,7 @@ def executar_consulta_sefaz(
 
         paginas = 0
         docs_empresa = 0
+        proxima_dt: datetime | None = None
 
         while paginas < 50:
             novo_nsu, docs = _consultar_nsu(sessao, cnpj, nsu, ambiente, cuf)
@@ -296,13 +295,14 @@ def executar_consulta_sefaz(
 
             if not docs:
                 _log(f"  Sem novos documentos.")
+                proxima_dt = datetime.now() + timedelta(minutes=65)
                 break
 
             if "_erro" in docs[0]:
-                # Salva o ultNSU retornado pelo SEFAZ mesmo em caso de erro (ex: cStat=656)
                 if novo_nsu != nsu:
                     set_nsu_cnpj(cnpj, novo_nsu)
                     _log(f"  NSU salvo da resposta de erro: {novo_nsu}")
+                proxima_dt = datetime.now() + timedelta(minutes=65)
                 _log(f"  AVISO SEFAZ: {docs[0]['_erro']}")
                 break
 
@@ -343,10 +343,16 @@ def executar_consulta_sefaz(
                      f"{dados['chave'][:20]}... R${dados['valor_total']:.2f}")
 
             nsu = novo_nsu
-            set_nsu_cnpj(cnpj, novo_nsu)  # salva após cada página
+            set_nsu_cnpj(cnpj, novo_nsu)
             if len(docs) < 50:
+                proxima_dt = datetime.now() + timedelta(minutes=65)
                 break
             time.sleep(2)
+
+        if proxima_dt:
+            from db.database import set_proxima_consulta
+            set_proxima_consulta(cnpj, proxima_dt.strftime("%Y-%m-%dT%H:%M:%S"))
+            _log(f"  Próxima consulta liberada em: {proxima_dt.strftime('%d/%m/%Y às %H:%M:%S')}")
 
         emitidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Emitida")
         recebidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Recebida")
@@ -395,6 +401,34 @@ def executar_consulta_sefaz(
 
     _log(f"Concluído. Total: {len(todos_docs)} documento(s).")
     return zip_buf.getvalue(), log
+
+
+# ── Consulta avulsa por chave de acesso (Strategy 2) ─────────────────────────
+
+def consultar_chave_avulsa(
+    pfx_bytes: bytes,
+    pfx_senha: str,
+    cnpj: str,
+    chave: str,
+    ambiente: str = "1",
+    uf: str = "CE",
+) -> tuple[dict | None, str]:
+    """
+    Baixa uma NF-e/NFC-e específica pela chave de acesso (consChNFe).
+    Usa contador separado do distNSU: até 20 consultas/hora.
+    Retorna (dados_com_xml, mensagem_erro).
+    """
+    chave = "".join(c for c in chave if c.isdigit())
+    if len(chave) != 44:
+        return None, f"Chave inválida: deve ter 44 dígitos (informados {len(chave)})."
+    cuf = UF_CODIGOS.get(uf, 23)
+    sessao = _sessao(pfx_bytes, pfx_senha)
+    xml_conteudo = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
+    if not xml_conteudo:
+        return None, "XML não encontrado para essa chave. Verifique se o CNPJ é o emitente ou destinatário."
+    dados = _extrair_dados(xml_conteudo, cnpj)
+    dados["xml"] = xml_conteudo
+    return dados, ""
 
 
 # ── Geração do Excel ──────────────────────────────────────────────────────────
