@@ -437,14 +437,24 @@ def consultar_chave_avulsa(
         cstat  = cstat_el.text.strip()  if cstat_el  is not None else "999"
         motivo = motivo_el.text.strip() if motivo_el is not None else "Sem descrição"
 
-        if cstat not in ("137", "138"):
+        if cstat == "138":
+            pass  # sucesso — processa abaixo
+        elif cstat == "137":
+            # Para consChNFe, 137 = NF-e não localizada para esse CNPJ
+            return None, (
+                "NF-e não localizada para esse CNPJ no Ambiente Nacional (cStat=137).\n\n"
+                "Causas mais comuns:\n"
+                "• A NF-e foi emitida há pouco tempo e ainda não foi distribuída — aguarde alguns minutos e tente de novo\n"
+                "• O CNPJ selecionado não consta como emitente ou destinatário nessa NF-e\n"
+                "• A NF-e está cancelada ou inutilizada"
+            )
+        else:
             _MENSAGENS = {
                 "217": "NF-e não consta na base de dados do Ambiente Nacional.",
                 "694": "NF-e autorizada pela SEFAZ da UF emitente — não disponível no Ambiente Nacional.",
-                "218": "NF-e não encontrada no intervalo de tempo disponível (90 dias).",
+                "218": "NF-e fora do intervalo disponível (máximo 90 dias).",
                 "656": "Consumo indevido — aguarde 1 hora antes de tentar novamente.",
                 "573": "Duplicidade de NF-e.",
-                "137": "Nenhum documento encontrado para essa chave.",
             }
             detalhe = _MENSAGENS.get(cstat, "")
             msg = f"SEFAZ retornou cStat={cstat}: {motivo}"
@@ -455,8 +465,8 @@ def consultar_chave_avulsa(
         docs = _descompactar_docs(r.text)
         if not docs:
             return None, (
-                f"SEFAZ aceitou a consulta (cStat={cstat}) mas não retornou o XML.\n"
-                "Possíveis causas: NF-e cancelada, inutilizada ou o CNPJ não é emitente nem destinatário."
+                "SEFAZ aceitou a consulta mas não retornou o XML (cStat=138 sem docZip).\n\n"
+                "Tente aguardar alguns minutos e consultar novamente."
             )
 
         xml_conteudo = docs[0]["xml"]

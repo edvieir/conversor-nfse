@@ -432,13 +432,16 @@ def _render_tab_chave(user, certs):
             dados, erro = consultar_chave_avulsa(pfx_bytes, pfx_senha, cnpj_ch, chave_digits)
 
         if erro:
-            linhas = erro.split("\n\n")
+            partes = erro.split("\n\n", 1)
+            titulo = partes[0]
+            detalhe = partes[1].replace("\n", "<br>") if len(partes) > 1 else ""
             ic_err = icon("x-circle", 15, "#D93025")
             st.markdown(
-                f'<div class="error-box">{ic_err}'
-                f'<span class="box-text"><b>{linhas[0]}</b>'
-                + (f'<br><span style="color:#94a3b8;font-size:.8rem">{linhas[1]}</span>' if len(linhas) > 1 else "")
-                + '</span></div>',
+                f'<div class="error-box" style="flex-direction:column;align-items:flex-start;gap:6px;">'
+                f'<div style="display:flex;align-items:center;gap:8px;">{ic_err}'
+                f'<span class="box-text"><b>{titulo}</b></span></div>'
+                + (f'<div style="color:#94a3b8;font-size:.8rem;padding-left:23px;line-height:1.7;">{detalhe}</div>' if detalhe else "")
+                + '</div>',
                 unsafe_allow_html=True,
             )
             return
