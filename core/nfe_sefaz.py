@@ -414,13 +414,9 @@ def consultar_chave_avulsa(
     uf: str = "CE",
 ) -> tuple[dict | None, str]:
     """
-    Baixa uma NF-e/NFC-e específica pela chave de acesso.
-
-    Estratégia em dois passos (mesma lógica do FSist):
-      1. consChNFe direto
-      2. Se retornar 137 (vínculo destinatário não indexado ainda), faz um
-         distNSU para sincronizar a fila e tenta consChNFe de novo.
-         O distNSU usa o limite de 1/hora — se estiver bloqueado, informa o usuário.
+    Baixa uma NF-e/NFC-e específica pela chave de acesso (consChNFe).
+    Usa contador separado do distNSU: até 20 consultas/hora.
+    Retorna (dados_com_xml, mensagem_erro).
     """
     chave = "".join(c for c in chave if c.isdigit())
     if len(chave) != 44:
@@ -428,95 +424,55 @@ def consultar_chave_avulsa(
 
     cuf = UF_CODIGOS.get(uf, 23)
     sessao = _sessao(pfx_bytes, pfx_senha)
-
-    _MENSAGENS = {
-        "215": "Falha no esquema XML da requisição.",
-        "217": "NF-e não consta na base de dados do Ambiente Nacional.",
-        "694": "NF-e autorizada pela SEFAZ da UF emitente — não disponível no Ambiente Nacional.",
-        "218": "NF-e fora do intervalo disponível (máximo 90 dias).",
-        "656": "Consumo indevido — aguarde 1 hora antes de tentar novamente.",
-        "573": "Duplicidade de NF-e.",
-    }
-
-    def _tentar_cons_chave() -> tuple[str, str, str]:
-        env = _ENVELOPE_CHAVE.format(amb=ambiente, cuf=cuf, cnpj=cnpj, chave=chave)
-        r = sessao.post(URL_SEFAZ, data=env.encode("utf-8"), headers=_HEADERS, timeout=60)
-        r.raise_for_status()
-        root = ET.fromstring(r.text)
-        ns = "http://www.portalfiscal.inf.br/nfe"
-        cstat  = (root.find(f".//{{{ns}}}cStat")  or type("", (), {"text": "999"})()).text.strip()
-        motivo = (root.find(f".//{{{ns}}}xMotivo") or type("", (), {"text": "Sem descrição"})()).text.strip()
-        return cstat, motivo, r.text
+    env = _ENVELOPE_CHAVE.format(amb=ambiente, cuf=cuf, cnpj=cnpj, chave=chave)
 
     try:
-        cstat, motivo, resp_text = _tentar_cons_chave()
+        r = sessao.post(URL_SEFAZ, data=env.encode("utf-8"), headers=_HEADERS, timeout=60)
+        r.raise_for_status()
 
-        if cstat == "137":
-            # consChNFe retornou 137: o Ambiente Nacional não tem o vínculo destinatário
-            # indexado. Faz distNSU para sincronizar a fila e tenta de novo.
-            from db.database import get_nsu_cnpj, set_nsu_cnpj, set_proxima_consulta
-            estado = get_nsu_cnpj(cnpj)
-            proxima = estado.get("proxima_consulta")
-            if proxima:
-                try:
-                    from datetime import datetime as _dt
-                    seg_rest = int((_dt.fromisoformat(proxima) - _dt.now()).total_seconds())
-                except Exception:
-                    seg_rest = 0
-                if seg_rest > 0:
-                    mins = seg_rest // 60
-                    return None, (
-                        f"NF-e não indexada ainda — tentei sincronizar via distNSU "
-                        f"mas a janela de consulta está bloqueada por mais {mins} min.\n\n"
-                        "Aguarde o desbloqueio e tente novamente, ou use a aba "
-                        "Consulta em Lote quando liberar."
-                    )
-
-            # distNSU para sincronizar
-            nsu_atual = estado["ultimo_nsu"]
-            novo_nsu, docs_sync = _consultar_nsu(sessao, cnpj, nsu_atual, ambiente, cuf)
-            set_nsu_cnpj(cnpj, novo_nsu)
-
-            if docs_sync and "_erro" in docs_sync[0]:
-                err_sync = docs_sync[0]["_erro"]
-                if "656" in err_sync:
-                    set_proxima_consulta(cnpj, (datetime.now() + timedelta(minutes=65)).strftime("%Y-%m-%dT%H:%M:%S"))
-                return None, (
-                    f"NF-e não indexada — distNSU de sincronização retornou erro: {err_sync}\n\n"
-                    "Tente novamente após o desbloqueio."
-                )
-
-            # NSU sincronizado — tenta consChNFe de novo
-            time.sleep(1)
-            cstat, motivo, resp_text = _tentar_cons_chave()
-
-            if cstat == "137":
-                return None, (
-                    "NF-e não localizada para esse CNPJ no Ambiente Nacional (cStat=137).\n\n"
-                    "Mesmo após sincronização via distNSU, a SEFAZ não reconhece esse CNPJ "
-                    "como parte interessada nessa NF-e.\n\n"
-                    "Possíveis causas:\n"
-                    "• O CNPJ selecionado não é emitente nem destinatário dessa NF-e\n"
-                    "• A NF-e está cancelada ou inutilizada"
-                )
+        root = ET.fromstring(r.text)
+        ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+        cstat_el  = root.find(f".//{{{ns_nfe}}}cStat")
+        motivo_el = root.find(f".//{{{ns_nfe}}}xMotivo")
+        cstat  = cstat_el.text.strip()  if cstat_el  is not None else "999"
+        motivo = motivo_el.text.strip() if motivo_el is not None else "Sem descrição"
 
         if cstat == "138":
-            docs = _descompactar_docs(resp_text)
-            if not docs:
-                return None, (
-                    "SEFAZ aceitou a consulta mas não retornou o XML (cStat=138 sem docZip).\n\n"
-                    "Tente aguardar alguns minutos e consultar novamente."
-                )
-            xml_conteudo = docs[0]["xml"]
-            dados = _extrair_dados(xml_conteudo, cnpj)
-            dados["xml"] = xml_conteudo
-            return dados, ""
+            pass  # sucesso
+        elif cstat == "137":
+            return None, (
+                "NF-e não localizada para esse CNPJ via consulta direta (cStat=137).\n\n"
+                "Isso ocorre quando a NF-e foi autorizada pelo SVRS e o vínculo destinatário "
+                "ainda não foi indexado no Ambiente Nacional para consulta direta por chave.\n\n"
+                "Use a aba Consulta em Lote quando o bloqueio liberar — "
+                "o distNSU sincroniza a fila completa e traz essas notas automaticamente."
+            )
+        else:
+            _MENSAGENS = {
+                "215": "Falha no esquema XML da requisição.",
+                "217": "NF-e não consta na base de dados do Ambiente Nacional.",
+                "694": "NF-e autorizada pela SEFAZ da UF emitente — não disponível no Ambiente Nacional.",
+                "218": "NF-e fora do intervalo disponível (máximo 90 dias).",
+                "656": "Consumo indevido — aguarde 1 hora antes de tentar novamente.",
+                "573": "Duplicidade de NF-e.",
+            }
+            detalhe = _MENSAGENS.get(cstat, "")
+            msg = f"SEFAZ retornou cStat={cstat}: {motivo}"
+            if detalhe:
+                msg += f"\n\nDica: {detalhe}"
+            return None, msg
 
-        detalhe = _MENSAGENS.get(cstat, "")
-        msg = f"SEFAZ retornou cStat={cstat}: {motivo}"
-        if detalhe:
-            msg += f"\n\nDica: {detalhe}"
-        return None, msg
+        docs = _descompactar_docs(r.text)
+        if not docs:
+            return None, (
+                "SEFAZ aceitou a consulta mas não retornou o XML (cStat=138 sem docZip).\n\n"
+                "Tente aguardar alguns minutos e consultar novamente."
+            )
+
+        xml_conteudo = docs[0]["xml"]
+        dados = _extrair_dados(xml_conteudo, cnpj)
+        dados["xml"] = xml_conteudo
+        return dados, ""
 
     except Exception as e:
         return None, f"Erro na comunicação com SEFAZ: {e}"
