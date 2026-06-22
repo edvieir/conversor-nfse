@@ -413,23 +413,37 @@ def _render_tab_chave(user, certs):
         )
 
     btn_ch = st.button(
-        "Consultar Chave na SEFAZ",
+        "Consultar Chave",
         type="primary", use_container_width=True,
         disabled=(qtd != 44),
         key="nfe_btn_chave",
     )
 
     if btn_ch:
-        resultado_cert = carregar_certificado(user["username"], cnpj_ch)
-        if not resultado_cert:
-            st.error("Certificado não encontrado.")
-            return
+        dados = None
+        erro  = ""
+        fonte = ""
 
-        pfx_bytes, pfx_senha = resultado_cert
-
-        with st.spinner("Consultando SEFAZ..."):
-            from core.nfe_sefaz import consultar_chave_avulsa
-            dados, erro = consultar_chave_avulsa(pfx_bytes, pfx_senha, cnpj_ch, chave_digits)
+        # ── 1. Verifica primeiro no banco local (notas já sincronizadas) ──────
+        from db.database import carregar_xml_resultado
+        from core.nfe_sefaz import _extrair_dados
+        xml_local = carregar_xml_resultado(cnpj_ch, chave_digits)
+        if xml_local:
+            dados = _extrair_dados(xml_local, cnpj_ch)
+            dados["xml"] = xml_local
+            fonte = "local"
+        else:
+            # ── 2. Tenta na SEFAZ ─────────────────────────────────────────────
+            resultado_cert = carregar_certificado(user["username"], cnpj_ch)
+            if not resultado_cert:
+                st.error("Certificado não encontrado.")
+                return
+            pfx_bytes, pfx_senha = resultado_cert
+            with st.spinner("Consultando SEFAZ..."):
+                from core.nfe_sefaz import consultar_chave_avulsa
+                dados, erro = consultar_chave_avulsa(pfx_bytes, pfx_senha, cnpj_ch, chave_digits)
+            if dados:
+                fonte = "sefaz"
 
         if erro:
             partes = erro.split("\n\n", 1)
@@ -449,11 +463,15 @@ def _render_tab_chave(user, certs):
         modelo = dados.get("modelo", "NF-e")
         papel  = dados.get("papel", "?")
         ic_ok  = icon("check-circle", 15, "#10B981")
+        fonte_label = "📦 acervo local" if fonte == "local" else "🌐 SEFAZ"
         st.markdown(f"""
 <div style="background:#0a2a1a;border:1px solid rgba(16,185,129,.3);border-radius:8px;
             padding:14px 18px;margin:12px 0;">
   <div style="color:#10B981;font-weight:700;font-size:.95rem;margin-bottom:10px;">
     {ic_ok}&nbsp; {modelo} encontrada — {papel}
+    <span style="font-size:.72rem;font-weight:400;color:#475569;margin-left:8px;">
+      via {fonte_label}
+    </span>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
     <div><div style="color:#475569;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;">Número / Série</div>
