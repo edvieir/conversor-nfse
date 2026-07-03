@@ -134,12 +134,18 @@ def _make_session(cert_path: str, key_path: str) -> requests.Session:
     return s
 
 
+_CSTAT_AUTORIZADO = {
+    "100",  # NFS-e autorizada (emitente regular)
+    "107",  # NFS-e do MEI Gerada (também autorizada — MEI NFS-e Nacional)
+}
+
+
 def _is_cancelada(root) -> bool:
-    """Detecta nota cancelada: nfseCanc, cStat != 100, ou cSitNFSe/tpSit fora do valor ativo."""
+    """Detecta nota cancelada: nfseCanc, cStat fora dos códigos autorizados, ou cSitNFSe/tpSit."""
     if any(e.tag.endswith("nfseCanc") for e in root.iter()):
         return True
     el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
-    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() != "100":
+    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() not in _CSTAT_AUTORIZADO:
         return True
     for tag in ("cSitNFSe", "tpSit", "cSit"):
         el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
