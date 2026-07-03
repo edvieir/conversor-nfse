@@ -29,18 +29,25 @@ def _uf_from_cmun(cmun: str) -> str:
     return _IBGE_UF.get(digits[:2], "")
 
 
+_CSTAT_CANCELADO = {
+    "101",  # NFS-e Cancelada (emitente regular)
+    "108",  # NFS-e do MEI Cancelada
+}
+
+
 def _nota_cancelada(root) -> bool:
-    """Retorna True se o XML indica nota cancelada."""
+    """
+    Dois filtros independentes — basta um ser verdadeiro para classificar como cancelada.
+
+    Filtro 1 (estrutural): presença do elemento <nfseCanc> no XML.
+    Filtro 2 (cStat):      valor em {101, 108} — códigos de cancelamento NFS-e Nacional.
+                           cStat=107 = NFS-e do MEI Gerada = AUTORIZADA (não é cancelamento).
+    """
     if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
         return True
-    # cStat: 100 = autorizada; qualquer outro (101, 107, 108...) = cancelada/denegada
     el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
-    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() != "100":
+    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() in _CSTAT_CANCELADO:
         return True
-    for tag in ("cSitNFSe", "tpSit", "cSit"):
-        el = next((e for e in root.iter() if e.tag.split("}")[-1] == tag), None)
-        if el is not None and el.text and el.text.strip() not in ("1", ""):
-            return True
     return False
 
 
