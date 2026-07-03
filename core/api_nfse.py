@@ -8,6 +8,7 @@ Ref:  swagger.json v1 / GET /DFe/{NSU}, GET /DANFSe/{chaveAcesso}
 import io
 import re
 import ssl
+import unicodedata
 import base64
 import gzip
 import zipfile
@@ -145,6 +146,20 @@ def _is_cancelada(root) -> bool:
         if el is not None and el.text and el.text.strip() not in ("1", ""):
             return True
     return False
+
+
+def _nome_arquivo(n_nfse: str, x_nome: str) -> str:
+    """Gera identificador legível para nome de arquivo: {nNFSe}_{fornecedor_sanitizado}"""
+    # remove CNPJ/CPF que prefixam o xNome (ex: "50.838.797 ANA CRISTINA...")
+    nome = re.sub(r"^\d[\d.\-/]+\s*", "", x_nome).strip()
+    # remove acentos
+    nome = unicodedata.normalize("NFKD", nome)
+    nome = "".join(c for c in nome if not unicodedata.combining(c))
+    # substitui qualquer char não alfanumérico por underscore e colapsa múltiplos
+    nome = re.sub(r"[^\w]", "_", nome)
+    nome = re.sub(r"_+", "_", nome).strip("_")
+    nome = nome[:40].rstrip("_")
+    return f"{n_nfse}_{nome}" if nome else (n_nfse or "sem_identificacao")
 
 
 def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict | None:
@@ -349,6 +364,7 @@ def baixar_xmls_nfse(
                     continue
 
                 chave = doc.get("ChaveAcesso") or str(nsu_doc)
+                nome_arq = chave  # fallback: usa chave de acesso se XML não parsear
                 try:
                     xml_bytes = _decodificar_xml(arquivo_b64)
 
@@ -401,6 +417,21 @@ def baixar_xmls_nfse(
                                     continue
                             except ValueError:
                                 log.append(f"    -> data formato invalido '{_data_filtro}', incluido")
+
+                        # extrai número da nota e nome do emitente para compor o nome do arquivo
+                        _n_nfse = next(
+                            (e.text.strip() for e in _root.iter() if e.tag.endswith("nNFSe") and e.text),
+                            ""
+                        )
+                        _emit_el = next((e for e in _root.iter() if e.tag.endswith("emit")), None)
+                        _x_nome  = ""
+                        if _emit_el is not None:
+                            _x_nome = next(
+                                (e.text.strip() for e in _emit_el.iter() if e.tag.endswith("xNome") and e.text),
+                                ""
+                            )
+                        nome_arq = _nome_arquivo(_n_nfse, _x_nome)
+
                     except Exception as parse_err:
                         log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
@@ -427,7 +458,7 @@ def baixar_xmls_nfse(
                         except Exception:
                             pass
 
-                    xmls_aprovados.append((chave, xml_bytes, chave_pdf, cancelada, papel))
+                    xmls_aprovados.append((chave, xml_bytes, chave_pdf, cancelada, papel, nome_arq))
                     total_ok += 1
 
                 except Exception as e:
@@ -444,7 +475,7 @@ def baixar_xmls_nfse(
             if progress_cb:
                 progress_cb(min(lote_num / (lote_num + 3), 0.5))
 
-        total_canc = sum(1 for _, _, _, c, _ in xmls_aprovados if c)
+        total_canc = sum(1 for _, _, _, c, _, _ in xmls_aprovados if c)
         log.append(f"  Total de NFS-e no periodo: {total_ok} ({total_canc} cancelada(s))")
         if log_cb: log_cb(log)
 
@@ -453,20 +484,20 @@ def baixar_xmls_nfse(
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
 
             if formato in ("xml", "ambos"):
-                for chave, xml_bytes, _, cancelada, papel in xmls_aprovados:
+                for chave, xml_bytes, _, cancelada, papel, nome_arq in xmls_aprovados:
                     if cancelada:
-                        zf.writestr(f"cancelados/nfse_{chave}_CANC.xml", xml_bytes)
+                        zf.writestr(f"cancelados/nfse_{nome_arq}_CANC.xml", xml_bytes)
                     else:
-                        zf.writestr(f"{papel}/nfse_{chave}.xml", xml_bytes)
+                        zf.writestr(f"{papel}/nfse_{nome_arq}.xml", xml_bytes)
                 log.append(f"  {len(xmls_aprovados)} XMLs salvos ({total_canc} em cancelados/).")
                 if log_cb: log_cb(log)
 
             if formato in ("pdf", "ambos") and xmls_aprovados:
                 tarefas_pdf = [
                     (chave_pdf,
-                     f"cancelados/nfse_{chave}_CANC.pdf" if cancelada else f"{papel}/nfse_{chave}.pdf",
+                     f"cancelados/nfse_{nome_arq}_CANC.pdf" if cancelada else f"{papel}/nfse_{nome_arq}.pdf",
                      xml_b)
-                    for chave, xml_b, chave_pdf, cancelada, papel in xmls_aprovados
+                    for chave, xml_b, chave_pdf, cancelada, papel, nome_arq in xmls_aprovados
                 ]
                 log.append(f"  Baixando {len(tarefas_pdf)} PDFs via API DANFSe...")
                 if log_cb: log_cb(log)
