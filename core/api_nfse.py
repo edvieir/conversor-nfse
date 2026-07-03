@@ -134,23 +134,32 @@ def _make_session(cert_path: str, key_path: str) -> requests.Session:
     return s
 
 
-_CSTAT_AUTORIZADO = {
-    "100",  # NFS-e autorizada (emitente regular)
-    "107",  # NFS-e do MEI Gerada (também autorizada — MEI NFS-e Nacional)
+_CSTAT_CANCELADO = {
+    "101",  # NFS-e Cancelada (emitente regular)
+    "108",  # NFS-e do MEI Cancelada
 }
 
 
 def _is_cancelada(root) -> bool:
-    """Detecta nota cancelada: nfseCanc, cStat fora dos códigos autorizados, ou cSitNFSe/tpSit."""
+    """
+    Dois filtros independentes — basta um ser verdadeiro para classificar como cancelada:
+
+    Filtro 1 (estrutural): presença do elemento <nfseCanc> no XML.
+                           A API envia esse elemento explicitamente em eventos de cancelamento.
+
+    Filtro 2 (cStat):      valor em _CSTAT_CANCELADO {101, 108}.
+                           101 = NFS-e Cancelada regular
+                           108 = NFS-e do MEI Cancelada
+    """
+    # Filtro 1 — elemento de cancelamento explícito
     if any(e.tag.endswith("nfseCanc") for e in root.iter()):
         return True
+
+    # Filtro 2 — cStat com código de cancelamento conhecido
     el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
-    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() not in _CSTAT_AUTORIZADO:
+    if el_cstat is not None and el_cstat.text and el_cstat.text.strip() in _CSTAT_CANCELADO:
         return True
-    for tag in ("cSitNFSe", "tpSit", "cSit"):
-        el = next((e for e in root.iter() if e.tag.endswith(tag)), None)
-        if el is not None and el.text and el.text.strip() not in ("1", ""):
-            return True
+
     return False
 
 
