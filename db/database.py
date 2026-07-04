@@ -711,6 +711,45 @@ def carregar_xml_resultado(cnpj: str, chave: str) -> str | None:
     return row["xml_conteudo"] if row else None
 
 
+def reparar_dados_nfe(cnpj: str) -> int:
+    """Re-extrai valor_total, modelo e papel do XML armazenado.
+    Útil para corrigir registros salvos com valor zerado ou modelo errado.
+    Retorna a quantidade de registros atualizados.
+    """
+    from core.nfe_sefaz import _extrair_dados
+    ph = "%s" if _PG else "?"
+    rows = _exec(
+        f"SELECT chave, xml_conteudo FROM nfe_resultados WHERE cnpj={ph} AND xml_conteudo IS NOT NULL AND xml_conteudo != ''",
+        (cnpj,), fetch_all=True,
+    ) or []
+    updated = 0
+    for row in rows:
+        chave = row.get("chave", "")
+        xml   = row.get("xml_conteudo", "")
+        if not xml:
+            continue
+        try:
+            dados = _extrair_dados(xml, cnpj)
+            valor  = float(dados.get("valor_total", 0) or 0)
+            modelo = dados.get("modelo") or "NF-e"
+            papel  = dados.get("papel")  or "Recebida"
+            cnpj_emit = dados.get("cnpj_emitente", "")
+            nome_emit = dados.get("nome_emitente", "")
+            cnpj_dest = dados.get("cnpj_dest_doc", "")
+            nome_dest = dados.get("nome_dest_doc", "")
+            nat_op    = dados.get("nat_operacao", "")
+            _exec(
+                f"UPDATE nfe_resultados SET valor_total={ph}, modelo={ph}, papel={ph},"
+                f" cnpj_emit={ph}, nome_emit={ph}, cnpj_dest={ph}, nome_dest={ph}, nat_operacao={ph}"
+                f" WHERE cnpj={ph} AND chave={ph}",
+                (valor, modelo, papel, cnpj_emit, nome_emit, cnpj_dest, nome_dest, nat_op, cnpj, chave),
+            )
+            updated += 1
+        except Exception as e:
+            print(f"[db] reparar_dados_nfe erro {chave}: {e}")
+    return updated
+
+
 def listar_resultados_por_periodo(
     cnpj: str, data_ini: str, data_fim: str,
     modelo: str | None = None, papel: str | None = None,

@@ -155,6 +155,11 @@ def _extrair_dados(xml_nf: str, cnpj_consultado: str) -> dict:
             d["nome_dest_doc"] = _texto(dest.find("n:xNome", ns))
         if vNF is not None:
             d["valor_total"] = float(vNF.text or 0)
+        else:
+            # fallback sem namespace (alguns XMLs SVRS omitem o prefixo)
+            vNF2 = root.find(".//vNF")
+            if vNF2 is not None:
+                d["valor_total"] = float(vNF2.text or 0)
         cfop = root.find(".//n:CFOP", ns)
         if cfop is not None:
             d["cfop"] = _texto(cfop)
@@ -325,12 +330,14 @@ def executar_consulta_sefaz(
                     continue
 
                 dados = _extrair_dados(xml_conteudo, cnpj)
+                # Prefere o modelo lido do XML (<mod>65</mod>) ao detectado pelo schema
+                modelo_final = dados.get("modelo") or modelo
                 dados.update({
                     "xml": xml_conteudo,
                     "cnpj_empresa": cnpj,
                     "nome_empresa": nome,
                     "nsu": doc["nsu"],
-                    "modelo": modelo,
+                    "modelo": modelo_final,
                 })
 
                 if not _passa_filtros(dados):

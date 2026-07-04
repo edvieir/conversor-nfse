@@ -6,7 +6,7 @@ import datetime
 import streamlit as st
 
 from auth.security import current_user
-from db.database import listar_certificados, listar_resultados_por_periodo
+from db.database import listar_certificados, listar_resultados_por_periodo, reparar_dados_nfe
 from views import nav
 
 
@@ -342,6 +342,17 @@ def render():
 
     cnpj_sel  = opcoes[empresa_label]
     razao_sel = next(c["razao_social"] for c in certs if c["cnpj"] == cnpj_sel)
+
+    with st.expander("Ferramentas de manutenção"):
+        st.caption(
+            "Use **Reparar dados** se notas aparecem com valor zerado ou NFC-e não listam corretamente. "
+            "O sistema re-processa o XML de cada nota já salva no acervo local para a empresa selecionada."
+        )
+        if st.button("Reparar dados do acervo", key="btn_reparar"):
+            with st.spinner("Re-processando XMLs armazenados..."):
+                qtd = reparar_dados_nfe(cnpj_sel)
+            st.success(f"{qtd} registro(s) atualizados. Clique em **Consultar** para recarregar.")
+            st.session_state.pop("siga_resultado", None)
 
     if consultar:
         data_ini   = f"{ano_sel}-{mes_sel:02d}-01"
