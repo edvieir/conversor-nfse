@@ -214,6 +214,7 @@ def executar_consulta_sefaz(
     incluir_excel: bool = True,
     log_cb: Callable[[str], None] | None = None,
     progress_cb: Callable[[float], None] | None = None,
+    salvar_db: bool = False,
 ) -> tuple[bytes | None, list[str]]:
     """
     Consulta a SEFAZ para cada empresa e retorna um ZIP com XMLs, PDFs e/ou Excel.
@@ -224,6 +225,7 @@ def executar_consulta_sefaz(
     from datetime import date as _date
     log: list[str] = []
     todos_docs: list[dict] = []
+    docs_para_db: list[dict] = []  # todos os docs (sem filtro de período/tipo) para salvar no acervo
 
     # Deduplica CNPJs
     cnpjs_vistos: set[str] = set()
@@ -300,14 +302,14 @@ def executar_consulta_sefaz(
 
             if not docs:
                 _log(f"  Sem novos documentos.")
-                proxima_dt = datetime.now() + timedelta(minutes=65)
+                proxima_dt = datetime.now() + timedelta(minutes=61)
                 break
 
             if "_erro" in docs[0]:
                 if novo_nsu != nsu:
                     set_nsu_cnpj(cnpj, novo_nsu)
                     _log(f"  NSU salvo da resposta de erro: {novo_nsu}")
-                proxima_dt = datetime.now() + timedelta(minutes=65)
+                proxima_dt = datetime.now() + timedelta(minutes=61)
                 _log(f"  AVISO SEFAZ: {docs[0]['_erro']}")
                 break
 
@@ -340,6 +342,25 @@ def executar_consulta_sefaz(
                     "modelo": modelo_final,
                 })
 
+                # Salva TODOS os docs no acervo (sem filtro de período/tipo)
+                if salvar_db:
+                    docs_para_db.append({
+                        "cnpj_empresa":  cnpj,
+                        "chave":         dados.get("chave", ""),
+                        "modelo":        modelo_final,
+                        "papel":         dados.get("papel", "Recebida"),
+                        "numero":        dados.get("numero", ""),
+                        "serie":         dados.get("serie", ""),
+                        "data_emissao":  dados.get("data_emissao", ""),
+                        "cnpj_emitente": dados.get("cnpj_emitente", ""),
+                        "nome_emitente": dados.get("nome_emitente", ""),
+                        "cnpj_dest_doc": dados.get("cnpj_dest_doc", ""),
+                        "nome_dest_doc": dados.get("nome_dest_doc", ""),
+                        "valor_total":   float(dados.get("valor_total", 0) or 0),
+                        "nat_operacao":  dados.get("nat_operacao", ""),
+                        "xml":           xml_conteudo,
+                    })
+
                 if not _passa_filtros(dados):
                     continue
 
@@ -352,7 +373,7 @@ def executar_consulta_sefaz(
             nsu = novo_nsu
             set_nsu_cnpj(cnpj, novo_nsu)
             if len(docs) < 50:
-                proxima_dt = datetime.now() + timedelta(minutes=65)
+                proxima_dt = datetime.now() + timedelta(minutes=61)
                 break
             time.sleep(2)
 
@@ -365,8 +386,14 @@ def executar_consulta_sefaz(
         recebidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Recebida")
         _log(f"  Subtotal {nome}: {docs_empresa} docs (emitidas={emitidas} recebidas={recebidas})")
 
+    # Persiste no acervo local (independente dos filtros de período/tipo do ZIP)
+    if salvar_db and docs_para_db:
+        from db.database import salvar_resultados_nfe
+        salvar_resultados_nfe(docs_para_db, baixado_por="auto")
+        _log(f"Acervo: {len(docs_para_db)} documento(s) persistido(s) no banco.")
+
     if not todos_docs:
-        _log("Nenhum documento encontrado para os filtros aplicados.")
+        _log("Nenhum documento novo encontrado para os filtros aplicados.")
         return None, log
 
     zip_buf = io.BytesIO()

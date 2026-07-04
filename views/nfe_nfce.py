@@ -285,6 +285,7 @@ def _render_tab_lote(user, certs):
                         incluir_excel=(saida_sel in ("excel", "xml_excel", "xml_pdf_excel")),
                         log_cb=on_log,
                         progress_cb=on_progress,
+                        salvar_db=True,
                     )
 
                     progress_bar.progress(1.0, text="Concluído!")
