@@ -649,6 +649,231 @@ def _render_tab_auto(user, certs):
 """, unsafe_allow_html=True)
 
 
+def _render_tab_importar(user, certs):
+    """Tab 4 — Importação manual de XMLs (NFC-e de PDV ou NF-e avulsas)"""
+
+    st.markdown("""
+<div style="background:#0f172a;border:1px solid rgba(0,229,255,.1);border-radius:8px;
+            padding:12px 16px;margin-bottom:16px;">
+  <div style="color:#94a3b8;font-size:.8rem;line-height:1.7;">
+    📤 <b>Importação Manual:</b> para NFC-e emitidas pelo PDV (Stone, TOTVS, Linx, etc.)
+    que <b>não aparecem no distNSU</b> da SEFAZ Nacional — pois são documentos
+    de consumidor final sem CNPJ destinatário.<br>
+    Faça o export dos XMLs no seu sistema PDV e importe aqui.
+    Aceita <b>arquivos .xml individuais</b> ou um <b>.zip</b> com vários XMLs.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        ic = icon("shield", 16, "#00CED1")
+        st.markdown(f"""
+<div class="step-header">
+  <div class="step-num">1</div>
+  <div class="step-info"><div class="step-title">{ic}&nbsp; Empresa</div></div>
+</div>""", unsafe_allow_html=True)
+
+        opcoes = {
+            f"{c['razao_social'] or c['cnpj']}  —  {_fmt_cnpj(c['cnpj'])}": c
+            for c in certs
+        }
+        escolha  = st.selectbox("empresa_imp", list(opcoes.keys()),
+                                label_visibility="collapsed", key="imp_empresa")
+        cert_sel = opcoes[escolha]
+        cnpj_imp = "".join(d for d in cert_sel["cnpj"] if d.isdigit())
+        nome_imp = cert_sel.get("razao_social") or cnpj_imp
+
+    with st.container(border=True):
+        ic = icon("upload", 16, "#00CED1")
+        st.markdown(f"""
+<div class="step-header">
+  <div class="step-num">2</div>
+  <div class="step-info">
+    <div class="step-title">{ic}&nbsp; Arquivos XML</div>
+    <div class="step-desc">Selecione um ou mais .xml, ou um .zip contendo XMLs de NF-e/NFC-e.</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        arquivos = st.file_uploader(
+            "xmls",
+            type=["xml", "zip"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            key="imp_files",
+        )
+
+    if not arquivos:
+        return
+
+    # Coleta todos os XMLs dos arquivos enviados
+    xmls_brutos: list[tuple[str, str]] = []  # (nome, conteudo_xml)
+    for arq in arquivos:
+        if arq.name.lower().endswith(".zip"):
+            try:
+                with _zf.ZipFile(io.BytesIO(arq.read())) as zf:
+                    for nome_z in zf.namelist():
+                        if nome_z.lower().endswith(".xml"):
+                            try:
+                                conteudo = zf.read(nome_z).decode("utf-8", errors="replace")
+                                xmls_brutos.append((nome_z, conteudo))
+                            except Exception:
+                                pass
+            except Exception as e:
+                st.warning(f"ZIP {arq.name} inválido: {e}")
+        else:
+            conteudo = arq.read().decode("utf-8", errors="replace")
+            xmls_brutos.append((arq.name, conteudo))
+
+    if not xmls_brutos:
+        st.warning("Nenhum XML encontrado nos arquivos enviados.")
+        return
+
+    # Processa os XMLs
+    from core.nfe_sefaz import _extrair_dados
+    docs_processados: list[dict] = []
+    erros: list[str] = []
+
+    for nome_arq, xml_str in xmls_brutos:
+        try:
+            dados = _extrair_dados(xml_str, cnpj_imp)
+            if not dados.get("chave"):
+                erros.append(f"{nome_arq}: chave de acesso não encontrada")
+                continue
+            docs_processados.append({
+                **dados,
+                "cnpj_empresa": cnpj_imp,
+                "nome_empresa": nome_imp,
+                "xml": xml_str,
+                "arquivo": nome_arq,
+                "cnpj_emitente": dados.get("cnpj_emitente", ""),
+                "nome_emitente": dados.get("nome_emitente", ""),
+                "cnpj_dest_doc": dados.get("cnpj_dest_doc", ""),
+                "nome_dest_doc": dados.get("nome_dest_doc", ""),
+            })
+        except Exception as e:
+            erros.append(f"{nome_arq}: {e}")
+
+    if erros:
+        with st.expander(f"⚠️ {len(erros)} arquivo(s) com problema", expanded=False):
+            for e in erros:
+                st.caption(e)
+
+    if not docs_processados:
+        st.error("Nenhum XML válido processado.")
+        return
+
+    with st.container(border=True):
+        ic = icon("list", 16, "#00CED1")
+        st.markdown(f"""
+<div class="step-header">
+  <div class="step-num">3</div>
+  <div class="step-info">
+    <div class="step-title">{ic}&nbsp; Prévia — {len(docs_processados)} documento(s) encontrado(s)</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        # Métricas resumo
+        col_a, col_b, col_c, col_d = st.columns(4)
+        total_nfe  = sum(1 for d in docs_processados if d.get("modelo") == "NF-e")
+        total_nfce = sum(1 for d in docs_processados if d.get("modelo") == "NFC-e")
+        total_emit = sum(1 for d in docs_processados if d.get("papel") == "Emitida")
+        total_val  = sum(d.get("valor_total", 0) or 0 for d in docs_processados)
+
+        col_a.metric("NF-e", total_nfe)
+        col_b.metric("NFC-e", total_nfce)
+        col_c.metric("Emitidas", total_emit)
+        col_d.metric("Total R$", f"{total_val:,.2f}")
+
+        # Tabela prévia
+        rows_html = ""
+        for d in docs_processados[:50]:
+            modelo_cor = "#a78bfa" if d.get("modelo") == "NFC-e" else "#60a5fa"
+            papel_cor  = "#10B981" if d.get("papel") == "Recebida" else "#f59e0b"
+            rows_html += (
+                f'<tr>'
+                f'<td style="color:#94a3b8;font-size:.7rem;padding:3px 6px">{d.get("arquivo","")[:30]}</td>'
+                f'<td style="color:{modelo_cor};padding:3px 6px;font-weight:600">{d.get("modelo","")}</td>'
+                f'<td style="color:{papel_cor};padding:3px 6px">{d.get("papel","")}</td>'
+                f'<td style="color:#e2e8f0;padding:3px 6px">{d.get("data_emissao","?")}</td>'
+                f'<td style="color:#e2e8f0;padding:3px 6px;font-family:monospace;font-size:.7rem">'
+                f'{d.get("chave","")[:20]}...</td>'
+                f'<td style="color:#10B981;padding:3px 6px;text-align:right">'
+                f'R$ {d.get("valor_total",0):,.2f}</td>'
+                f'</tr>'
+            )
+        if len(docs_processados) > 50:
+            rows_html += (
+                f'<tr><td colspan="6" style="color:#475569;font-size:.7rem;padding:4px 6px">'
+                f'... e mais {len(docs_processados)-50} documento(s)</td></tr>'
+            )
+
+        st.markdown(f"""
+<div style="overflow-x:auto;margin-top:8px;">
+<table style="width:100%;border-collapse:collapse;font-size:.78rem;">
+  <thead><tr style="border-bottom:1px solid #1e293b;">
+    <th style="color:#475569;text-align:left;padding:4px 6px">Arquivo</th>
+    <th style="color:#475569;text-align:left;padding:4px 6px">Modelo</th>
+    <th style="color:#475569;text-align:left;padding:4px 6px">Papel</th>
+    <th style="color:#475569;text-align:left;padding:4px 6px">Emissão</th>
+    <th style="color:#475569;text-align:left;padding:4px 6px">Chave</th>
+    <th style="color:#475569;text-align:right;padding:4px 6px">Valor</th>
+  </tr></thead>
+  <tbody>{rows_html}</tbody>
+</table></div>
+""", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        ic = icon("save", 16, "#00CED1")
+        st.markdown(f"""
+<div class="step-header">
+  <div class="step-num">4</div>
+  <div class="step-info">
+    <div class="step-title">{ic}&nbsp; Salvar no Acervo</div>
+    <div class="step-desc">Duplicatas são ignoradas automaticamente (por chave de acesso).</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        if st.button(
+            f"✅  Importar {len(docs_processados)} documento(s) para {nome_imp}",
+            type="primary", use_container_width=True, key="imp_btn_salvar",
+        ):
+            from db.database import salvar_resultados_nfe
+            docs_db = [
+                {
+                    "cnpj_empresa":  d["cnpj_empresa"],
+                    "chave":         d["chave"],
+                    "modelo":        d.get("modelo", "NF-e"),
+                    "papel":         d.get("papel", "Emitida"),
+                    "numero":        d.get("numero", ""),
+                    "serie":         d.get("serie", ""),
+                    "data_emissao":  d.get("data_emissao", ""),
+                    "cnpj_emitente": d.get("cnpj_emitente", ""),
+                    "nome_emitente": d.get("nome_emitente", ""),
+                    "cnpj_dest_doc": d.get("cnpj_dest_doc", ""),
+                    "nome_dest_doc": d.get("nome_dest_doc", ""),
+                    "valor_total":   float(d.get("valor_total", 0) or 0),
+                    "nat_operacao":  d.get("nat_operacao", ""),
+                    "xml":           d["xml"],
+                }
+                for d in docs_processados
+            ]
+            try:
+                salvar_resultados_nfe(docs_db, baixado_por=user["username"])
+                log_conversion(user["username"], "NFE_IMPORT", len(docs_db), True)
+                ic_ok = icon("check-circle", 15, "#10B981")
+                st.markdown(
+                    f'<div class="result-success">{ic_ok}'
+                    f'<div><div class="result-success-title">'
+                    f'{len(docs_db)} documento(s) importado(s) com sucesso!</div>'
+                    f'<div class="result-success-meta">Acervo atualizado · duplicatas ignoradas</div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.balloons()
+            except Exception as e:
+                st.error(f"Erro ao salvar: {e}")
+
+
 def render():
     nav.render("nfe_nfce")
     user = current_user()
@@ -690,10 +915,11 @@ def render():
                 st.rerun()
         return
 
-    tab_lote, tab_chave, tab_auto = st.tabs([
+    tab_lote, tab_chave, tab_auto, tab_import = st.tabs([
         "📦  Consulta em Lote",
         "🔍  Por Chave de Acesso",
         "⚙️  Sincronização Automática",
+        "📤  Importar XMLs",
     ])
 
     with tab_lote:
@@ -704,6 +930,9 @@ def render():
 
     with tab_auto:
         _render_tab_auto(user, certs)
+
+    with tab_import:
+        _render_tab_importar(user, certs)
 
     st.markdown("""
 <div class="footer">
