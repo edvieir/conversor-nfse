@@ -212,15 +212,15 @@ def _gerar_pdf(dados_rec, dados_emit, dados_nfce, cnpj, razao, periodo):
         col_ws = [40, 28, 52, 82, 150, 90, 62]
 
         rows = [headers]
-        for doc in docs:
-            cnpj_p = _fmt_cnpj(doc.get("cnpj_emit", "") if tipo == "recebida" else doc.get("cnpj_dest", ""))
-            nome_p = (doc.get("nome_emit", "") if tipo == "recebida" else doc.get("nome_dest", ""))[:35]
-            nat    = (doc.get("nat_operacao", "") or "")[:22]
+        for item in docs:
+            cnpj_p = _fmt_cnpj(item.get("cnpj_emit", "") if tipo == "recebida" else item.get("cnpj_dest", ""))
+            nome_p = (item.get("nome_emit", "") if tipo == "recebida" else item.get("nome_dest", ""))[:35]
+            nat    = (item.get("nat_operacao", "") or "")[:22]
             rows.append([
-                doc.get("numero", ""), doc.get("serie", ""),
-                (doc.get("data_emissao", "") or "")[:10],
+                item.get("numero", ""), item.get("serie", ""),
+                (item.get("data_emissao", "") or "")[:10],
                 cnpj_p, nome_p, nat,
-                _fmt_brl(doc.get("valor_total", 0)),
+                _fmt_brl(item.get("valor_total", 0)),
             ])
 
         subtotal = sum(float(d.get("valor_total", 0)) for d in docs)
