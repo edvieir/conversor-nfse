@@ -711,6 +711,44 @@ def carregar_xml_resultado(cnpj: str, chave: str) -> str | None:
     return row["xml_conteudo"] if row else None
 
 
+def listar_resultados_por_periodo(
+    cnpj: str, data_ini: str, data_fim: str,
+    modelo: str | None = None, papel: str | None = None,
+) -> list[dict]:
+    """Retorna NF-es/NFC-es de um CNPJ filtradas por período e tipo.
+    modelo: '55' → NF-e, '65' → NFC-e, None → todos.
+    papel:  'Recebida' | 'Emitida' | None → todos.
+    data_ini/data_fim: formato YYYY-MM-DD.
+    """
+    ph = "%s" if _PG else "?"
+    conditions = [f"cnpj={ph}"]
+    params: list = [cnpj]
+
+    if data_ini:
+        conditions.append(f"data_emissao >= {ph}")
+        params.append(data_ini)
+    if data_fim:
+        conditions.append(f"data_emissao <= {ph}")
+        params.append(data_fim + "T23:59:59")
+    if modelo == "55":
+        conditions.append(f"modelo = {ph}")
+        params.append("NF-e")
+    elif modelo == "65":
+        conditions.append(f"modelo = {ph}")
+        params.append("NFC-e")
+    if papel:
+        conditions.append(f"papel = {ph}")
+        params.append(papel)
+
+    where = " AND ".join(conditions)
+    return _exec(
+        f"SELECT chave,modelo,papel,numero,serie,data_emissao,cnpj_emit,nome_emit,"
+        f"cnpj_dest,nome_dest,valor_total,nat_operacao FROM nfe_resultados "
+        f"WHERE {where} ORDER BY data_emissao DESC",
+        tuple(params), fetch_all=True,
+    ) or []
+
+
 def listar_xmls_resultados(cnpj: str) -> list[dict]:
     """Retorna (chave, xml_conteudo) de todos os resultados para gerar ZIP."""
     ph = "%s" if _PG else "?"

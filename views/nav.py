@@ -11,6 +11,7 @@ _PAGES = [
     ("certificados",    "verified_user",  "Certificados"),
     ("milhao",          "receipt_long",   "Notas do Milhão"),
     ("dashboard",       "monitoring",     "Dashboard"),
+    ("siga_consulta",  "summarize",      "Consulta DTE"),
 ]
 _ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
 
