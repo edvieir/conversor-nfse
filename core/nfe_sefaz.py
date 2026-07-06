@@ -301,7 +301,12 @@ def executar_consulta_sefaz(
             paginas += 1
 
             if not docs:
-                _log(f"  Sem novos documentos.")
+                # Avança NSU para maxNSU mesmo sem documentos (cStat=137)
+                if novo_nsu != nsu:
+                    set_nsu_cnpj(cnpj, novo_nsu)
+                    _log(f"  Sem novos documentos. NSU avançado para {novo_nsu}.")
+                else:
+                    _log(f"  Sem novos documentos.")
                 proxima_dt = datetime.now() + timedelta(minutes=61)
                 break
 
