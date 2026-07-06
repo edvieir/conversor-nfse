@@ -226,6 +226,13 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 except Exception:
                     pass
 
+    def _sanitize_semicolons_xml(data: bytes) -> bytes:
+        """Substitui ';' dentro de nós de texto XML por espaço.
+        Evita que campos como xCpl com ';' quebrem o delimitador do TXT."""
+        def _rep(m):
+            return m.group(0).replace(b";", b" ")
+        return _re.sub(rb">([^<]+)<", _rep, data)
+
     _CSTAT_CANCELADO_TXT = {"101", "108"}
 
     def _is_cancelada_bytes(content: bytes) -> bool:
@@ -265,7 +272,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 pj_ignorados += 1
                 continue
             with open(os.path.join(tmp, uf.name), "wb") as fh:
-                fh.write(content)
+                fh.write(_sanitize_semicolons_xml(content) if modo == "txt" else content)
         ext   = "txt" if modo == "txt" else "xlsx"
         saida = os.path.join(tmp, f"resultado.{ext}")
         buf   = io.StringIO()
