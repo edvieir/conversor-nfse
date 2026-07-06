@@ -130,8 +130,9 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 reg_esp = next((e.text or "0" for e in prest.iter()
                                if e.tag.endswith("regEspTrib")), "0")
                 # opSimpNac=2 → MEI (padrão NFS-e Nacional SPED)
-                # regEspTrib 5 ou 6 → MEI/EPP (formatos municipais antigos)
-                if op_simp.strip() == "2" or reg_esp.strip() in ("5", "6"):
+                # regEspTrib=5 → MEI do Simples Nacional
+                # regEspTrib=6 → ME/EPP do Simples Nacional (NÃO é MEI)
+                if op_simp.strip() == "2" or reg_esp.strip() == "5":
                     return False  # MEI confirmado pelo XML → incluir
 
             # ── Camada 2: Razão social com CPF embutido (padrão de nome MEI) ─
