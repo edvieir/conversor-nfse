@@ -795,3 +795,25 @@ def listar_xmls_resultados(cnpj: str) -> list[dict]:
         f"SELECT chave, modelo, papel, xml_conteudo FROM nfe_resultados WHERE cnpj={ph} ORDER BY data_emissao",
         (cnpj,), fetch_all=True,
     ) or []
+
+
+def listar_xmls_por_periodo(
+    cnpj: str, data_ini: str, data_fim: str,
+    modelo: str | None = None, papel: str | None = None,
+) -> list[dict]:
+    """Retorna XMLs do acervo filtrados por período, modelo e papel."""
+    ph = "%s" if _PG else "?"
+    conditions = [f"cnpj={ph}", f"data_emissao >= {ph}", f"data_emissao <= {ph}"]
+    params: list = [cnpj, data_ini, data_fim + "T23:59:59"]
+    if modelo == "NF-e":
+        conditions.append(f"modelo = {ph}"); params.append("NF-e")
+    elif modelo == "NFC-e":
+        conditions.append(f"modelo = {ph}"); params.append("NFC-e")
+    if papel:
+        conditions.append(f"papel = {ph}"); params.append(papel)
+    where = " AND ".join(conditions)
+    return _exec(
+        f"SELECT chave, modelo, papel, numero, serie, data_emissao, nome_emit, valor_total, xml_conteudo"
+        f" FROM nfe_resultados WHERE {where} ORDER BY data_emissao",
+        tuple(params), fetch_all=True,
+    ) or []

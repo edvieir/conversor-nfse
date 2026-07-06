@@ -12,6 +12,7 @@ from db.database import (
     listar_certificados, carregar_certificado, log_conversion,
     get_nsu_cnpj, reset_nsu_cnpj, set_auto_sync, get_auto_sync,
     listar_resultados_nfe, contar_resultados_nfe, listar_xmls_resultados,
+    listar_xmls_por_periodo,
 )
 from views import nav
 
@@ -354,6 +355,126 @@ def _render_tab_lote(user, certs):
                         f'<span class="box-text">Erro: {exc}</span></div>',
                         unsafe_allow_html=True,
                     )
+
+    # ── Acervo do período (sempre visível, bloqueado ou não) ─────────────────
+    _render_acervo_periodo(cnpj_principal, nome_principal, data_ini, data_fim,
+                           tipo_doc, papel_filtro, user)
+
+
+def _render_acervo_periodo(cnpj, nome, data_ini, data_fim, tipo_doc, papel_filtro, user):
+    """Seção de acervo local — mostra e permite baixar notas já no banco."""
+    modelo_filtro = None
+    if tipo_doc == "nfe":
+        modelo_filtro = "NF-e"
+    elif tipo_doc == "nfce":
+        modelo_filtro = "NFC-e"
+
+    papel_db = None
+    if papel_filtro == "emitidas":
+        papel_db = "Emitida"
+    elif papel_filtro == "recebidas":
+        papel_db = "Recebida"
+
+    data_ini_str = data_ini.strftime("%Y-%m-%d")
+    data_fim_str = data_fim.strftime("%Y-%m-%d")
+
+    xmls = listar_xmls_por_periodo(cnpj, data_ini_str, data_fim_str, modelo_filtro, papel_db)
+
+    st.markdown("---")
+    ic = icon("archive", 16, "#00CED1")
+    st.markdown(
+        f'<div style="color:#94a3b8;font-size:.8rem;font-weight:600;margin-bottom:8px;">'
+        f'{ic}&nbsp; Acervo local para o período selecionado</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not xmls:
+        ic_w = icon("info", 13, "#475569")
+        st.markdown(
+            f'<div style="color:#475569;font-size:.78rem;">'
+            f'{ic_w}&nbsp; Nenhuma nota no acervo para este período ainda. '
+            f'Aguarde a próxima sincronização automática.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    total_val = sum(float(r.get("valor_total") or 0) for r in xmls)
+    emit_qt   = sum(1 for r in xmls if r.get("papel") == "Emitida")
+    rec_qt    = sum(1 for r in xmls if r.get("papel") == "Recebida")
+    nfce_qt   = sum(1 for r in xmls if r.get("modelo") == "NFC-e")
+
+    col_a, col_b, col_c, col_d = st.columns(4)
+    col_a.metric("Total", len(xmls))
+    col_b.metric("Recebidas", rec_qt)
+    col_c.metric("Emitidas", emit_qt)
+    col_d.metric("NFC-e", nfce_qt)
+
+    # Tabela resumo
+    rows_html = ""
+    for r in xmls:
+        modelo_cor = "#a78bfa" if r.get("modelo") == "NFC-e" else "#60a5fa"
+        papel_cor  = "#10B981" if r.get("papel") == "Recebida" else "#f59e0b"
+        rows_html += (
+            f'<tr>'
+            f'<td style="color:#e2e8f0;padding:3px 8px">{r.get("data_emissao","?")[:10]}</td>'
+            f'<td style="color:{modelo_cor};padding:3px 8px;font-weight:600">{r.get("modelo","?")}</td>'
+            f'<td style="color:{papel_cor};padding:3px 8px">{r.get("papel","?")}</td>'
+            f'<td style="color:#94a3b8;padding:3px 8px">{(r.get("nome_emit") or "?")[:30]}</td>'
+            f'<td style="color:#e2e8f0;padding:3px 8px;font-family:monospace;font-size:.7rem">'
+            f'{r.get("chave","")[:20]}...</td>'
+            f'<td style="color:#10B981;padding:3px 8px;text-align:right">'
+            f'R$ {float(r.get("valor_total") or 0):,.2f}</td>'
+            f'</tr>'
+        )
+    st.markdown(f"""
+<div style="overflow-x:auto;margin:8px 0;">
+<table style="width:100%;border-collapse:collapse;font-size:.78rem;">
+  <thead><tr style="border-bottom:1px solid #1e293b;">
+    <th style="color:#475569;text-align:left;padding:3px 8px">Emissão</th>
+    <th style="color:#475569;text-align:left;padding:3px 8px">Modelo</th>
+    <th style="color:#475569;text-align:left;padding:3px 8px">Papel</th>
+    <th style="color:#475569;text-align:left;padding:3px 8px">Emitente</th>
+    <th style="color:#475569;text-align:left;padding:3px 8px">Chave</th>
+    <th style="color:#475569;text-align:right;padding:3px 8px">Valor</th>
+  </tr></thead>
+  <tbody>{rows_html}</tbody>
+  <tfoot><tr style="border-top:1px solid #1e293b;">
+    <td colspan="5" style="color:#94a3b8;font-size:.72rem;padding:4px 8px;text-align:right">
+      Total {len(xmls)} nota(s)</td>
+    <td style="color:#10B981;font-weight:700;padding:4px 8px;text-align:right">
+      R$ {total_val:,.2f}</td>
+  </tr></tfoot>
+</table></div>
+""", unsafe_allow_html=True)
+
+    # Botão de download do acervo
+    if st.button(
+        f"⬇  Baixar {len(xmls)} XML(s) do acervo ({data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')})",
+        key="nfe_dl_acervo_periodo",
+        use_container_width=True,
+    ):
+        buf = io.BytesIO()
+        with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as zf:
+            for r in xmls:
+                pasta = f"{r.get('modelo','NF-e')}_{r.get('papel','?')}"
+                chave = r.get("chave", "x")
+                xml   = r.get("xml_conteudo", "")
+                if xml:
+                    zf.writestr(f"XMLs/{pasta}/{chave}.xml", xml)
+        ts_dl   = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_dl = (
+            f"acervo_{cnpj[:8]}_"
+            f"{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}_{ts_dl}.zip"
+        )
+        log_conversion(user["username"], "NFE_NFCE", len(xmls), True)
+        st.download_button(
+            label=f"⬇  {nome_dl}",
+            data=buf.getvalue(),
+            file_name=nome_dl,
+            mime="application/zip",
+            use_container_width=True,
+            key="nfe_dl_acervo_btn",
+        )
 
 
 def _render_tab_chave(user, certs):
