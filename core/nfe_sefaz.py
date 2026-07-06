@@ -117,6 +117,56 @@ def _extrair_chave_resumo(xml: str) -> str:
         return ""
 
 
+def _extrair_dados_resumo(xml_resumo: str, cnpj_consultado: str) -> dict:
+    """Extrai dados básicos de um resNFe/resNFCe quando o XML completo não está disponível."""
+    d = {
+        "chave": "", "numero": "", "serie": "", "data_emissao": "",
+        "cnpj_emitente": "", "nome_emitente": "",
+        "cnpj_dest_doc": cnpj_consultado, "nome_dest_doc": "",
+        "valor_total": 0.0, "cfop": "", "nat_operacao": "",
+        "papel": "Recebida", "modelo": "NF-e",
+    }
+    try:
+        root = ET.fromstring(xml_resumo)
+        ns = {"n": NS}
+
+        def _find(tag):
+            el = root.find(f".//n:{tag}", ns)
+            return el if el is not None else root.find(f".//{tag}")
+
+        chave_el  = _find("chNFe")
+        cnpj_e_el = _find("CNPJ")
+        nome_e_el = _find("xNome")
+        dh_emi_el = _find("dhEmi") or _find("dEmi")
+        vnf_el    = _find("vNF")
+        tp_nf_el  = _find("tpNF")
+        mod_el    = _find("mod")
+
+        if chave_el is not None and chave_el.text:
+            d["chave"] = chave_el.text.strip()
+        if cnpj_e_el is not None and cnpj_e_el.text:
+            d["cnpj_emitente"] = cnpj_e_el.text.strip()
+            if cnpj_e_el.text.strip() == cnpj_consultado:
+                d["papel"] = "Emitida"
+                d["cnpj_dest_doc"] = ""
+        if nome_e_el is not None:
+            d["nome_emitente"] = _texto(nome_e_el)
+        if dh_emi_el is not None and dh_emi_el.text:
+            d["data_emissao"] = dh_emi_el.text[:10]
+        if vnf_el is not None and vnf_el.text:
+            try:
+                d["valor_total"] = float(vnf_el.text)
+            except Exception:
+                pass
+        if tp_nf_el is not None:
+            d["papel"] = "Emitida" if tp_nf_el.text == "1" else "Recebida"
+        if mod_el is not None and mod_el.text == "65":
+            d["modelo"] = "NFC-e"
+    except Exception:
+        pass
+    return d
+
+
 def _extrair_dados(xml_nf: str, cnpj_consultado: str) -> dict:
     d = {
         "chave": "", "numero": "", "serie": "", "data_emissao": "",
@@ -328,7 +378,27 @@ def executar_consulta_sefaz(
                         xml_conteudo = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
                         time.sleep(0.5)
                         if not xml_conteudo:
-                            _log(f"  Resumo NSU={doc['nsu']} — XML indisponível")
+                            # XML completo indisponível — salva dados do resumo no acervo
+                            _log(f"  Resumo NSU={doc['nsu']} — XML indisponível, salvando resumo")
+                            if salvar_db:
+                                d_res = _extrair_dados_resumo(doc["xml"], cnpj)
+                                if d_res.get("chave"):
+                                    docs_para_db.append({
+                                        "cnpj_empresa":  cnpj,
+                                        "chave":         d_res["chave"],
+                                        "modelo":        d_res.get("modelo", "NF-e"),
+                                        "papel":         d_res.get("papel", "Recebida"),
+                                        "numero":        "",
+                                        "serie":         "",
+                                        "data_emissao":  d_res.get("data_emissao", ""),
+                                        "cnpj_emitente": d_res.get("cnpj_emitente", ""),
+                                        "nome_emitente": d_res.get("nome_emitente", ""),
+                                        "cnpj_dest_doc": d_res.get("cnpj_dest_doc", ""),
+                                        "nome_dest_doc": d_res.get("nome_dest_doc", ""),
+                                        "valor_total":   float(d_res.get("valor_total", 0) or 0),
+                                        "nat_operacao":  "",
+                                        "xml":           doc["xml"],  # resumo XML
+                                    })
                             continue
                 else:
                     xml_conteudo = doc["xml"]
