@@ -587,6 +587,228 @@ def consultar_chave_avulsa(
         return None, f"Erro na comunicação com SEFAZ: {e}"
 
 
+# ── SAE NFC-e (NFCeListagemChaves + NFCeDownloadXML) ─────────────────────────
+
+# Estados com SAE disponível e suas URLs base
+_SAE_URLS: dict[int, str] = {
+    35: "https://nfce.fazenda.sp.gov.br/ws",       # SP — implementado desde fev/2026
+    # SVRS states — aguardando implementação (CE=23, AM=13, GO=52, MS=50, MT=51, PR=41, RS=43)
+    # Quando disponível, adicionar: 23: "https://nfce.svrs.rs.gov.br/ws", etc.
+}
+
+# UFs que usam SVRS (quando SVRS implementar SAE, basta adicionar a URL acima)
+_SVRS_UFS = {13, 23, 41, 43, 50, 51, 52}
+
+_SAE_NS_LISTAGEM  = "http://www.portalfiscal.inf.br/nfe/wsdl/NFCeListagemChaves"
+_SAE_NS_DOWNLOAD  = "http://www.portalfiscal.inf.br/nfe/wsdl/NFCeDownloadXML"
+_SAE_ACTION_LIST  = f"{_SAE_NS_LISTAGEM}/nfeDadosMsg"
+_SAE_ACTION_DOWN  = f"{_SAE_NS_DOWNLOAD}/nfeDadosMsg"
+
+_ENVELOPE_SAE_LIST = """<?xml version="1.0" encoding="UTF-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="{ns}">
+      <nfceListagemChaves versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+        <tpAmb>{amb}</tpAmb>
+        <dataHoraInicial>{dh_ini}</dataHoraInicial>
+        <dataHoraFinal>{dh_fim}</dataHoraFinal>
+      </nfceListagemChaves>
+    </nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>"""
+
+_ENVELOPE_SAE_DOWN = """<?xml version="1.0" encoding="UTF-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="{ns}">
+      <nfceDownloadXML versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+        <tpAmb>{amb}</tpAmb>
+        <chNFCe>{chave}</chNFCe>
+      </nfceDownloadXML>
+    </nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>"""
+
+
+def _sae_url_base(cuf: int) -> str | None:
+    """Retorna URL base SAE para o cUF, ou None se não disponível."""
+    return _SAE_URLS.get(cuf)
+
+
+def _listar_chaves_sae(
+    sessao: requests.Session,
+    url_base: str,
+    amb: str,
+    dh_ini: str,
+    dh_fim: str,
+) -> tuple[list[str], str | None]:
+    """
+    Chama NFCeListagemChaves e retorna (lista_de_chaves, erro_ou_None).
+    Lida com cStat=101 (lista incompleta) internamente via paginação por dhEmisUltNfce.
+    """
+    todas_chaves: list[str] = []
+    dh_atual = dh_ini
+    url = f"{url_base}/NFCeListagemChaves.asmx"
+    headers = {
+        "Content-Type": "application/soap+xml; charset=utf-8",
+        "SOAPAction": _SAE_ACTION_LIST,
+    }
+
+    for _ in range(20):  # máximo 20 páginas de 2000 = 40.000 NFC-e
+        env = _ENVELOPE_SAE_LIST.format(
+            ns=_SAE_NS_LISTAGEM,
+            amb=amb,
+            dh_ini=dh_atual,
+            dh_fim=dh_fim,
+        )
+        try:
+            r = sessao.post(url, data=env.encode("utf-8"), headers=headers, timeout=60)
+            r.raise_for_status()
+        except Exception as e:
+            return todas_chaves, f"Erro de comunicação: {e}"
+
+        try:
+            root = ET.fromstring(r.text)
+        except Exception as e:
+            return todas_chaves, f"Resposta inválida: {e}"
+
+        ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+        cstat_el  = root.find(f".//{{{ns_nfe}}}cStat")
+        motivo_el = root.find(f".//{{{ns_nfe}}}xMotivo")
+        cstat  = cstat_el.text.strip()  if cstat_el  is not None else "999"
+        motivo = motivo_el.text.strip() if motivo_el is not None else ""
+
+        if cstat not in ("100", "101", "107"):
+            return todas_chaves, f"SEFAZ SAE cStat={cstat}: {motivo}"
+
+        chaves = [el.text.strip() for el in root.findall(f".//{{{ns_nfe}}}chNFCe") if el.text]
+        todas_chaves.extend(chaves)
+
+        if cstat == "101":
+            # Lista incompleta — avança usando dhEmisUltNfce
+            ult_el = root.find(f".//{{{ns_nfe}}}dhEmisUltNfce")
+            if ult_el is not None and ult_el.text:
+                dh_atual = ult_el.text[:16]  # AAAA-MM-DDThh:mm
+            else:
+                break
+        else:
+            break  # cStat=100 (completo) ou 107 (sem registros)
+
+    return todas_chaves, None
+
+
+def _baixar_xml_sae(
+    sessao: requests.Session,
+    url_base: str,
+    amb: str,
+    chave: str,
+) -> tuple[str | None, str | None]:
+    """
+    Chama NFCeDownloadXML para uma chave específica.
+    Retorna (xml_str, erro_ou_None).
+    """
+    url = f"{url_base}/NFCeDownloadXML.asmx"
+    headers = {
+        "Content-Type": "application/soap+xml; charset=utf-8",
+        "SOAPAction": _SAE_ACTION_DOWN,
+    }
+    env = _ENVELOPE_SAE_DOWN.format(ns=_SAE_NS_DOWNLOAD, amb=amb, chave=chave)
+
+    try:
+        r = sessao.post(url, data=env.encode("utf-8"), headers=headers, timeout=60)
+        r.raise_for_status()
+    except Exception as e:
+        return None, f"Erro: {e}"
+
+    try:
+        root = ET.fromstring(r.text)
+    except Exception as e:
+        return None, f"Resposta inválida: {e}"
+
+    ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+    cstat_el = root.find(f".//{{{ns_nfe}}}cStat")
+    cstat = cstat_el.text.strip() if cstat_el is not None else "999"
+
+    if cstat != "200":
+        motivo_el = root.find(f".//{{{ns_nfe}}}xMotivo")
+        motivo = motivo_el.text.strip() if motivo_el is not None else ""
+        return None, f"cStat={cstat}: {motivo}"
+
+    # Extrai o XML da NFC-e do grupo proc/nfeProc/NFe
+    nfe_el = root.find(f".//{{{ns_nfe}}}NFe")
+    if nfe_el is not None:
+        return ET.tostring(nfe_el, encoding="unicode"), None
+
+    # Fallback: procura nfeProc inteiro
+    nfe_proc_el = root.find(f".//{{{ns_nfe}}}nfeProc")
+    if nfe_proc_el is not None:
+        return ET.tostring(nfe_proc_el, encoding="unicode"), None
+
+    return None, "XML da NFC-e não encontrado na resposta"
+
+
+def sincronizar_nfce_sae(
+    pfx_bytes: bytes,
+    pfx_senha: str,
+    cnpj: str,
+    cuf: int,
+    ambiente: str,
+    data_ini: str,
+    data_fim: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> tuple[list[dict], str | None]:
+    """
+    Sincroniza NFC-e emitidas via SAE (NFCeListagemChaves + NFCeDownloadXML).
+    Retorna (lista_de_docs_com_xml, erro_ou_None).
+
+    data_ini/data_fim: strings no formato 'AAAA-MM-DD'.
+    """
+    url_base = _sae_url_base(cuf)
+    if url_base is None:
+        if cuf in _SVRS_UFS:
+            return [], (
+                f"SAE NFC-e ainda não disponível para estados SVRS (cUF={cuf}).\n"
+                "A SEFAZ-SP implementou em fev/2026 — aguardando SVRS. "
+                "Quando disponível, o sistema funcionará automaticamente."
+            )
+        return [], f"SAE NFC-e não disponível para cUF={cuf}."
+
+    def _log(msg: str):
+        if log_cb:
+            log_cb(msg)
+
+    sessao = _sessao(pfx_bytes, pfx_senha)
+    dh_ini = f"{data_ini}T00:00"
+    dh_fim = f"{data_fim}T23:59"
+
+    _log(f"SAE NFC-e: listando chaves de {data_ini} a {data_fim}...")
+    chaves, erro = _listar_chaves_sae(sessao, url_base, ambiente, dh_ini, dh_fim)
+    if erro:
+        return [], erro
+
+    _log(f"SAE NFC-e: {len(chaves)} chave(s) encontrada(s). Baixando XMLs...")
+    docs: list[dict] = []
+    for i, chave in enumerate(chaves):
+        _log(f"  [{i+1}/{len(chaves)}] Baixando {chave[:20]}...")
+        xml_str, err_xml = _baixar_xml_sae(sessao, url_base, ambiente, chave)
+        time.sleep(0.3)  # respeita rate limit por IP/min
+        if err_xml:
+            _log(f"  AVISO: {err_xml}")
+            continue
+        if xml_str:
+            dados = _extrair_dados(xml_str, cnpj)
+            dados["xml"] = xml_str
+            dados["cnpj_empresa"] = cnpj
+            docs.append(dados)
+
+    _log(f"SAE NFC-e: {len(docs)} NFC-e obtida(s).")
+    return docs, None
+
+
 # ── Geração do Excel ──────────────────────────────────────────────────────────
 
 def _gerar_excel(docs: list[dict]) -> bytes:

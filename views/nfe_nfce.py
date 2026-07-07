@@ -12,7 +12,7 @@ from db.database import (
     listar_certificados, carregar_certificado, log_conversion,
     get_nsu_cnpj, reset_nsu_cnpj, set_auto_sync, get_auto_sync,
     listar_resultados_nfe, contar_resultados_nfe, listar_xmls_resultados,
-    listar_xmls_por_periodo,
+    listar_xmls_por_periodo, salvar_resultados_nfe,
 )
 from views import nav
 
@@ -72,6 +72,190 @@ def _countdown_html(segundos: int) -> str:
   tick();
 </script>
 """
+
+
+_SAE_DISPONIVEL = {
+    "SP": "Disponível",
+}
+_SVRS_UFS_NOMES = {"CE", "AM", "GO", "MS", "MT", "PR", "RS"}
+
+
+def _render_sae_nfce(cnpj: str, nome: str,
+                     data_ini: date, data_fim: date, ambiente: str, user: dict):
+    """Seção SAE NFC-e — busca NFC-e emitidas diretamente na SEFAZ do estado."""
+    from core.nfe_sefaz import sincronizar_nfce_sae, UF_CODIGOS
+
+    st.markdown("---")
+    ic_sae = icon("search", 16, "#8B5CF6")
+    with st.expander(
+        f"{ic_sae} &nbsp; Busca NFC-e Emitidas via SAE (Sistema de Apoio à Escrituração)",
+        expanded=False,
+    ):
+        st.markdown(
+            '<div style="color:#94a3b8;font-size:.8rem;margin-bottom:12px;">'
+            'Serviço SAE: lista e baixa NFC-e emitidas diretamente na SEFAZ do estado '
+            'usando o certificado da empresa. Diferente do distNSU, alcança NFC-e de '
+            'consumidor final (sem CPF/CNPJ do destinatário).'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        col_uf, col_info = st.columns([1, 3], gap="medium")
+        with col_uf:
+            st.markdown(
+                '<div style="font-size:.78rem;color:#94a3b8;font-weight:600;margin-bottom:4px;">'
+                'Estado da empresa</div>',
+                unsafe_allow_html=True,
+            )
+            todas_ufs = sorted(UF_CODIGOS.keys())
+            uf_sel = st.selectbox(
+                "uf_sae", todas_ufs,
+                index=todas_ufs.index("CE") if "CE" in todas_ufs else 0,
+                label_visibility="collapsed",
+                key="sae_uf_sel",
+            )
+
+        with col_info:
+            if uf_sel in _SAE_DISPONIVEL:
+                ic_ok = icon("check-circle", 13, "#10B981")
+                st.markdown(
+                    f'<div style="color:#10B981;font-size:.8rem;margin-top:22px;">'
+                    f'{ic_ok} &nbsp; SAE disponível para <b>{uf_sel}</b> — '
+                    f'pronto para buscar NFC-e emitidas.</div>',
+                    unsafe_allow_html=True,
+                )
+            elif uf_sel in _SVRS_UFS_NOMES:
+                ic_w = icon("clock", 13, "#C97400")
+                st.markdown(
+                    f'<div style="color:#C97400;font-size:.8rem;margin-top:22px;">'
+                    f'{ic_w} &nbsp; <b>{uf_sel} usa SVRS</b> — SAE ainda não implementado '
+                    f'pelo SVRS (disponível apenas em SP por enquanto). '
+                    f'Quando o SVRS implementar, funcionará automaticamente aqui.</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                ic_i = icon("info", 13, "#475569")
+                st.markdown(
+                    f'<div style="color:#475569;font-size:.8rem;margin-top:22px;">'
+                    f'{ic_i} &nbsp; SAE não confirmado para <b>{uf_sel}</b>. '
+                    f'Tentará conectar ao endpoint — pode não estar disponível.</div>',
+                    unsafe_allow_html=True,
+                )
+
+        cuf = UF_CODIGOS.get(uf_sel, 23)
+        btn_disabled = uf_sel in _SVRS_UFS_NOMES  # desabilita para SVRS até implementar
+
+        if not btn_disabled:
+            if st.button(
+                f"🔎  Buscar NFC-e Emitidas ({uf_sel}) — {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}",
+                key="sae_buscar_btn",
+                type="primary",
+                use_container_width=True,
+            ):
+                log_area = st.empty()
+                logs: list[str] = []
+
+                def _log(m):
+                    logs.append(m)
+                    log_area.text("\n".join(logs[-10:]))
+
+                with st.spinner("Consultando SAE NFC-e..."):
+                    resultado_cert = carregar_certificado(user["username"], cnpj)
+                    if not resultado_cert:
+                        st.error("Certificado não encontrado.")
+                        st.stop()
+                    pfx_bytes_sae, pfx_senha_sae = resultado_cert
+
+                    docs, erro = sincronizar_nfce_sae(
+                        pfx_bytes=pfx_bytes_sae,
+                        pfx_senha=pfx_senha_sae,
+                        cnpj=cnpj,
+                        cuf=cuf,
+                        ambiente=ambiente,
+                        data_ini=data_ini.strftime("%Y-%m-%d"),
+                        data_fim=data_fim.strftime("%Y-%m-%d"),
+                        log_cb=_log,
+                    )
+
+                log_area.empty()
+
+                if erro:
+                    ic_err = icon("x-circle", 14, "#D93025")
+                    st.markdown(
+                        f'<div class="error-box">{ic_err}'
+                        f'<span class="box-text">{erro}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                elif not docs:
+                    ic_w = icon("info", 14, "#475569")
+                    st.markdown(
+                        f'<div style="color:#475569;font-size:.8rem;">'
+                        f'{ic_w} &nbsp; Nenhuma NFC-e emitida encontrada no período via SAE.</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    # Salva no acervo
+                    docs_db = [{
+                        "cnpj_empresa":  cnpj,
+                        "chave":         d.get("chave", ""),
+                        "modelo":        d.get("modelo", "NFC-e"),
+                        "papel":         "Emitida",
+                        "numero":        d.get("numero", ""),
+                        "serie":         d.get("serie", ""),
+                        "data_emissao":  d.get("data_emissao", ""),
+                        "cnpj_emitente": d.get("cnpj_emitente", ""),
+                        "nome_emitente": d.get("nome_emitente", ""),
+                        "cnpj_dest_doc": d.get("cnpj_dest_doc", ""),
+                        "nome_dest_doc": d.get("nome_dest_doc", ""),
+                        "valor_total":   float(d.get("valor_total", 0) or 0),
+                        "nat_operacao":  d.get("nat_operacao", ""),
+                        "xml":           d.get("xml", ""),
+                    } for d in docs if d.get("chave")]
+
+                    if docs_db:
+                        salvar_resultados_nfe(docs_db, baixado_por="sae")
+
+                    ic_ok = icon("check-circle", 14, "#10B981")
+                    st.markdown(
+                        f'<div class="success-box">{ic_ok}'
+                        f'<span class="box-text">'
+                        f'{len(docs)} NFC-e emitida(s) encontrada(s) e salvas no acervo.</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    # ZIP para download imediato
+                    zip_buf = io.BytesIO()
+                    import zipfile as _zf2
+                    with _zf2.ZipFile(zip_buf, "w", _zf2.ZIP_DEFLATED) as zf:
+                        for d in docs:
+                            chave = d.get("chave") or "sem_chave"
+                            zf.writestr(f"NFC-e_SAE/{chave}.xml", d.get("xml", ""))
+                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    st.download_button(
+                        label=f"⬇  Baixar {len(docs)} NFC-e (XMLs)",
+                        data=zip_buf.getvalue(),
+                        file_name=f"nfce_sae_{cnpj}_{ts}.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                    )
+                    st.rerun()
+        else:
+            # SVRS: botão desabilitado com mensagem explicativa
+            ic_lock = icon("lock", 14, "#C97400")
+            st.markdown(
+                f'<div style="background:#1e1e2e;border:1px solid #3a3a5c;border-radius:8px;'
+                f'padding:12px 16px;margin-top:8px;">'
+                f'{ic_lock} &nbsp; <span style="color:#C97400;font-size:.85rem;">'
+                f'<b>SAE NFC-e não disponível para {uf_sel} (SVRS)</b></span>'
+                f'<br><span style="color:#64748b;font-size:.78rem;">'
+                f'A SEFAZ-SP lançou este serviço em fevereiro/2026 como Nota Técnica Nacional. '
+                f'O SVRS ainda não implementou. Assim que disponível, o sistema funcionará '
+                f'automaticamente — acompanhe os avisos em '
+                f'<a href="https://dfe-portal.svrs.rs.gov.br/DFE/Avisos" target="_blank" '
+                f'style="color:#8B5CF6;">dfe-portal.svrs.rs.gov.br</a>.'
+                f'</span></div>',
+                unsafe_allow_html=True,
+            )
 
 
 def _render_tab_lote(user, certs):
@@ -359,6 +543,10 @@ def _render_tab_lote(user, certs):
     # ── Acervo do período (sempre visível, bloqueado ou não) ─────────────────
     _render_acervo_periodo(cnpj_principal, nome_principal, data_ini, data_fim,
                            tipo_doc, papel_filtro, user)
+
+    # ── SAE NFC-e — busca NFC-e emitidas via API estadual ────────────────────
+    _render_sae_nfce(cnpj_principal, nome_principal,
+                     data_ini, data_fim, "1", user)
 
 
 def _render_acervo_periodo(cnpj, nome, data_ini, data_fim, tipo_doc, papel_filtro, user):
