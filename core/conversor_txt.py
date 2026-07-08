@@ -107,24 +107,25 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
             if emit is None:
                 return False
 
-            # ── Camada 0: CPF → Pessoa Física → incluir sempre ───────────────
-            cpf = next((c.text or "" for c in emit if c.tag.endswith("CPF")), "")
-            if cpf.strip():
-                return False
-
-            # Sem CNPJ e sem CPF → incluir (não conseguimos identificar)
-            cnpj = next((c.text or "" for c in emit if c.tag.endswith("CNPJ")), "")
-            if not cnpj.strip():
-                return False
-
-            # ── Município: só filtra emitentes de Fortaleza ───────────────────
+            # ── Município: filtra apenas emitentes de Fortaleza ───────────────
             loc_emi = next((e.text or "" for e in root.iter()
                            if e.tag.endswith("cLocEmi")), "")
             if loc_emi.strip() != "2304400":
-                return False  # PJ de outro município → incluir sempre
+                return False  # Emitente de outro município → incluir sempre
 
-            # ── A partir daqui: PJ de Fortaleza ──────────────────────────────
-            # Regra: só inclui se MEI CONFIRMADO. Inconclusivo → filtrar.
+            # ── A partir daqui: emitente de Fortaleza ────────────────────────
+            # Regra: só inclui se MEI CONFIRMADO (usa CNPJ). Inconclusivo → filtrar.
+            # CPF de Fortaleza também é filtrado: cartório/PF não é MEI.
+
+            # Camada 0: CPF de Fortaleza → filtrar (PF não é MEI)
+            cpf = next((c.text or "" for c in emit if c.tag.endswith("CPF")), "")
+            if cpf.strip():
+                return True
+
+            # Sem CNPJ e sem CPF → não conseguimos identificar → incluir
+            cnpj = next((c.text or "" for c in emit if c.tag.endswith("CNPJ")), "")
+            if not cnpj.strip():
+                return False
 
             # ── Camada 1: Campos XML (opSimpNac / regEspTrib) ────────────────
             prest = next((e for e in root.iter() if e.tag.endswith("prest")), None)
