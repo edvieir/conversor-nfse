@@ -134,9 +134,14 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # regEspTrib=6 → ME/EPP do Simples Nacional (NÃO é MEI)
                 if op_simp.strip() == "2" or reg_esp.strip() == "5":
                     return False  # MEI confirmado pelo XML → incluir
+                # opSimpNac=1 (Simples) ou =3 (Regime Normal) → definitivamente NÃO é MEI
+                # Encerra aqui sem passar pela Camada 2 (nome), que pode dar falso positivo
+                # quando o nome termina com 11 dígitos mas não é MEI (ex: "KARYO ... 03235047360")
+                if op_simp.strip() in ("1", "3"):
+                    return True   # não-MEI confirmado pelo XML → filtrar
 
             # ── Camada 2: Razão social com CPF embutido (padrão de nome MEI) ─
-            # MEIs registram como "NOME SOBRENOME CPFNUMERO" (11 dígitos no fim)
+            # Só chega aqui se opSimpNac ausente/0 — MEIs sem o campo preenchido
             nome = next((c.text or "" for c in emit if c.tag.endswith("xNome")), "")
             if _re.search(r"\s\d{11}$", nome.strip()):
                 return False  # Nome com CPF → MEI → incluir
