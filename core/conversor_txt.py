@@ -328,6 +328,14 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         if _rinfo_pf.get("cpf_emit"):
                             cs[3] = _rinfo_pf["cpf_emit"]
 
+                    # Campo 5 (índice 4) – nome do prestador: remove caracteres especiais
+                    # Cobre casos como "RUBEM GARCIA-05CP-CNPJ:60.048.261/0001-03"
+                    _nome = "".join(
+                        c for c in _ud.normalize("NFD", cs[4]) if ord(c) < 128
+                    )
+                    _nome = _re.sub(r"[^A-Za-z0-9 ]", " ", _nome)
+                    cs[4] = _re.sub(r" {2,}", " ", _nome).strip()
+
                     # Campo 26 (índice 25) – descrição: remove acentos E pontuações
                     _desc = "".join(
                         c for c in _ud.normalize("NFD", cs[25]) if ord(c) < 128
