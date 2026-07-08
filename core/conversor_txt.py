@@ -86,19 +86,20 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
 
     def _emit_pj_nao_mei(content: bytes) -> bool:
         """
-        Retorna True SOMENTE quando o emitente é PJ de Fortaleza comprovadamente
-        não-MEI. Nesse caso o XML é ignorado no TXT ISS Fortaleza.
+        Retorna True quando o emitente é PJ de Fortaleza e NÃO é MEI.
+        Nesse caso o XML é ignorado no TXT ISS Fortaleza.
 
-        Três camadas de detecção MEI (qualquer uma basta para incluir):
-          1. Campos XML: opSimpNac=2 (NFS-e Nacional) ou regEspTrib=5/6
-          2. Razão social: nome termina com 11 dígitos (CPF embutido — padrão MEI)
-          3. BrasilAPI:   consulta Receita Federal (com cache — 1 req por CNPJ)
+        Lógica: para Fortaleza PJ, só inclui se MEI for CONFIRMADO.
+        Inconclusivo → filtrar (o oposto da cautela geral):
+          - Pessoa Física (CPF)    → incluir sempre
+          - PJ de outro município  → incluir sempre
+          - MEI de Fortaleza       → incluir (qualquer camada confirma)
+          - PJ Fortaleza inconclusivo → filtrar (seguro para ISS Fortaleza)
 
-        Regras de inclusão (retorna False → mantém no TXT):
-          - Pessoa Física (CPF)        → incluir sempre
-          - PJ de outro município      → incluir sempre
-          - MEI de Fortaleza           → incluir (qualquer camada confirma)
-          - CNPJ não confirmado (API fora) → incluir por cautela
+        Camadas de confirmação MEI:
+          1. opSimpNac=2 ou regEspTrib=5 no XML
+          2. Nome termina com 11 dígitos (padrão MEI: "NOME SOBRENOME CPF")
+          3. BrasilAPI / Receita Federal (com cache por sessão)
         """
         try:
             root = _ET.fromstring(content)
@@ -111,7 +112,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
             if cpf.strip():
                 return False
 
-            # Sem CNPJ e sem CPF → incluir por cautela
+            # Sem CNPJ e sem CPF → incluir (não conseguimos identificar)
             cnpj = next((c.text or "" for c in emit if c.tag.endswith("CNPJ")), "")
             if not cnpj.strip():
                 return False
@@ -120,7 +121,10 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
             loc_emi = next((e.text or "" for e in root.iter()
                            if e.tag.endswith("cLocEmi")), "")
             if loc_emi.strip() != "2304400":
-                return False  # PJ de outro município → incluir
+                return False  # PJ de outro município → incluir sempre
+
+            # ── A partir daqui: PJ de Fortaleza ──────────────────────────────
+            # Regra: só inclui se MEI CONFIRMADO. Inconclusivo → filtrar.
 
             # ── Camada 1: Campos XML (opSimpNac / regEspTrib) ────────────────
             prest = next((e for e in root.iter() if e.tag.endswith("prest")), None)
@@ -129,32 +133,27 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                                if e.tag.endswith("opSimpNac")), "0")
                 reg_esp = next((e.text or "0" for e in prest.iter()
                                if e.tag.endswith("regEspTrib")), "0")
-                # opSimpNac=2 → MEI (padrão NFS-e Nacional SPED)
-                # regEspTrib=5 → MEI do Simples Nacional
-                # regEspTrib=6 → ME/EPP do Simples Nacional (NÃO é MEI)
                 if op_simp.strip() == "2" or reg_esp.strip() == "5":
                     return False  # MEI confirmado pelo XML → incluir
-                # opSimpNac=1 (Simples) ou =3 (Regime Normal) → definitivamente NÃO é MEI
-                # Encerra aqui sem passar pela Camada 2 (nome), que pode dar falso positivo
-                # quando o nome termina com 11 dígitos mas não é MEI (ex: "KARYO ... 03235047360")
+                # opSimpNac 1=Simples ou 3=Regime Normal → definitivamente não-MEI
                 if op_simp.strip() in ("1", "3"):
-                    return True   # não-MEI confirmado pelo XML → filtrar
+                    return True
 
             # ── Camada 2: Razão social com CPF embutido (padrão de nome MEI) ─
-            # Só chega aqui se opSimpNac ausente/0 — MEIs sem o campo preenchido
             nome = next((c.text or "" for c in emit if c.tag.endswith("xNome")), "")
             if _re.search(r"\s\d{11}$", nome.strip()):
-                return False  # Nome com CPF → MEI → incluir
+                return False  # MEI confirmado pelo nome → incluir
 
             # ── Camada 3: BrasilAPI — consulta Receita Federal ───────────────
             api_mei = _consulta_cnpj_mei(cnpj.strip())
             if api_mei is True:
                 return False  # API confirma MEI → incluir
             if api_mei is False:
-                return True   # API confirma não-MEI → ignorar
+                return True   # API confirma não-MEI → filtrar
 
-            # API indisponível / inconclusivo → incluir por cautela
-            return False
+            # BrasilAPI indisponível e MEI não confirmado por nenhuma camada:
+            # filtrar por segurança (PJ Fortaleza só entra se MEI confirmado)
+            return True
         except Exception:
             return False
 
