@@ -221,6 +221,17 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         (e.text.strip() for e in _emit_el2 if e.tag.endswith("CPF") and e.text),
                         ""
                     )
+                # Competência (dCompet): mês e ano corretos da prestação do serviço.
+                # nfse_xml_to_txt.py usa dhEmi (emissão), o que quebra quando a nota
+                # é emitida em mês diferente da competência (ex: emitida 01/07, dCompet 06/2026).
+                _comp_mes = ""
+                _comp_ano = ""
+                _dCompet_el = next((e for e in _root.iter() if e.tag.endswith("dCompet")), None)
+                if _dCompet_el is not None and _dCompet_el.text:
+                    _dc = _dCompet_el.text.strip()  # formato: YYYY-MM-DD
+                    if len(_dc) >= 7:
+                        _comp_ano = _dc[:4]
+                        _comp_mes = _dc[5:7]
                 _rinfo = {
                     "tpRet":    _tpRet,
                     "aliq":     _aliq,
@@ -229,6 +240,8 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     "nNFSe":    _nNFSe_val,   # número oficial (DANFSe)
                     "vCSLL":    _vCSLL,
                     "cpf_emit": _cpf_emit,    # CPF do prestador PF (vazio se CNPJ)
+                    "comp_mes": _comp_mes,    # mês da competência (dCompet)
+                    "comp_ano": _comp_ano,    # ano da competência (dCompet)
                 }
                 if _nota_num:
                     _ret_lookup[_nota_num] = _rinfo
@@ -356,6 +369,13 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     # pelo portal é sempre o nNFSe. Substitui sempre por ele.
                     if _rinfo.get("nNFSe"):
                         cs[17] = _rinfo["nNFSe"]
+
+                    # Campos 22/23 (índices 21/22) – mês e ano de competência
+                    # nfse_xml_to_txt.py usa dhEmi; corrige pelo dCompet do XML
+                    if _rinfo.get("comp_mes"):
+                        cs[21] = _rinfo["comp_mes"]
+                    if _rinfo.get("comp_ano"):
+                        cs[22] = _rinfo["comp_ano"]
 
                     # Campo 21 (índice 20) – tipo recolhimento
                     # tpRetISSQN=2 → ISS retido pelo tomador
