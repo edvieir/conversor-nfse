@@ -2,6 +2,7 @@
 pages/baixar_xmls.py — Baixar XMLs/PDFs via API NFS-e usando certificado salvo
 """
 
+import re
 import streamlit as st
 from datetime import date
 from auth.security import current_user, is_admin, logout
@@ -61,6 +62,32 @@ def render():
             f'{ic_ok}&nbsp; Certificado salvo -- sem necessidade de upload</div>',
             unsafe_allow_html=True,
         )
+
+        st.markdown(_label("CNPJ da Filial (opcional)"), unsafe_allow_html=True)
+        cnpj_filial_raw = st.text_input(
+            "cnpj_filial",
+            placeholder="Deixe vazio para usar o CNPJ da empresa acima",
+            label_visibility="collapsed",
+            key="cnpj_filial_input",
+        )
+        cnpj_filial = re.sub(r"\D", "", cnpj_filial_raw or "")
+        if cnpj_filial and len(cnpj_filial) != 14:
+            ic_err2 = icon("alert-triangle", 13, "#C97400")
+            st.markdown(
+                f'<div style="color:#C97400;font-size:.78rem;margin-top:2px;">'
+                f'{ic_err2}&nbsp; CNPJ inválido — informe os 14 dígitos.</div>',
+                unsafe_allow_html=True,
+            )
+        elif cnpj_filial:
+            ic_fil = icon("git-branch", 13, "#00CED1")
+            st.markdown(
+                f'<div style="color:#00CED1;font-size:.78rem;margin-top:2px;">'
+                f'{ic_fil}&nbsp; Filial: {_fmt_cnpj(cnpj_filial)} — usando certificado da matriz acima.</div>',
+                unsafe_allow_html=True,
+            )
+
+        # CNPJ efetivo para a consulta: filial se informada e válida, senão matriz
+        cnpj_consulta = cnpj_filial if len(cnpj_filial) == 14 else cnpj_sel
 
     with st.container(border=True):
         ic = icon("settings", 16, "#00CED1")
@@ -179,7 +206,7 @@ def render():
                 zip_bytes, log = baixar_xmls_nfse(
                     pfx_bytes=pfx_bytes,
                     senha=senha,
-                    cnpj=cnpj_sel,
+                    cnpj=cnpj_consulta,
                     data_ini=data_ini,
                     data_fim=data_fim,
                     tipo=tipo_sel,
@@ -206,7 +233,7 @@ def render():
                     _tipo_nome = {"tomados": "tomados", "prestados": "prestados", "todos": "todos"}
                     _fmt_nome  = {"xml": "xml", "pdf": "pdf", "ambos": "xml_pdf"}
                     nome_zip = (
-                        f"nfse_{_tipo_nome[tipo_sel]}_{_fmt_nome[fmt_sel]}_{cnpj_sel[:8]}_"
+                        f"nfse_{_tipo_nome[tipo_sel]}_{_fmt_nome[fmt_sel]}_{cnpj_consulta[:8]}_"
                         f"{data_ini.strftime('%Y%m%d')}_{data_fim.strftime('%Y%m%d')}.zip"
                     )
                     ic_ok = icon("check-circle", 32, "#1AB87A")
