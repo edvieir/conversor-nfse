@@ -86,9 +86,8 @@ def _render_sae_nfce(cnpj: str, nome: str,
     from core.nfe_sefaz import sincronizar_nfce_sae, UF_CODIGOS
 
     st.markdown("---")
-    ic_sae = icon("search", 16, "#8B5CF6")
     with st.expander(
-        f"{ic_sae} &nbsp; Busca NFC-e Emitidas via SAE (Sistema de Apoio à Escrituração)",
+        "🔍 Busca NFC-e Emitidas via SAE (Sistema de Apoio à Escrituração)",
         expanded=False,
     ):
         st.markdown(
