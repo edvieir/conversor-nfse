@@ -99,8 +99,11 @@ def _descompactar_docs(xml_resposta: str) -> list[dict]:
                 xml = gzip.decompress(base64.b64decode(doc.text)).decode("utf-8")
             except Exception:
                 continue
-            resumo = "resNFe" in schema
-            modelo = "NFC-e" if ("nfce" in schema.lower() or "NFCe" in schema) else "NF-e"
+            schema_lower = schema.lower()
+            # resNFe_v1.01.xsd  → resumo NF-e
+            # resNFCe_v1.00.xsd → resumo NFC-e  ("resNFe" NÃO é substring de "resNFCe")
+            resumo = "resnfe" in schema_lower or "resnfce" in schema_lower
+            modelo = "NFC-e" if ("nfce" in schema_lower) else "NF-e"
             docs.append({"nsu": nsu, "schema": schema, "xml": xml,
                          "resumo": resumo, "modelo": modelo})
     except Exception:
@@ -111,8 +114,15 @@ def _descompactar_docs(xml_resposta: str) -> list[dict]:
 def _extrair_chave_resumo(xml: str) -> str:
     try:
         root = ET.fromstring(xml)
-        el = root.find(".//{http://www.portalfiscal.inf.br/nfe}chNFe")
-        return el.text.strip() if el is not None else ""
+        ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+        # resNFCe pode usar chNFCe; resNFe usa chNFe — testa ambos
+        for tag in ("chNFe", "chNFCe"):
+            el = root.find(f".//{{{ns_nfe}}}{tag}")
+            if el is None:
+                el = root.find(f".//{tag}")
+            if el is not None and el.text:
+                return el.text.strip()
+        return ""
     except Exception:
         return ""
 
@@ -134,7 +144,7 @@ def _extrair_dados_resumo(xml_resumo: str, cnpj_consultado: str) -> dict:
             el = root.find(f".//n:{tag}", ns)
             return el if el is not None else root.find(f".//{tag}")
 
-        chave_el  = _find("chNFe")
+        chave_el  = _find("chNFe") or _find("chNFCe")
         cnpj_e_el = _find("CNPJ")
         nome_e_el = _find("xNome")
         dh_emi_el = _find("dhEmi") or _find("dEmi")
@@ -371,6 +381,7 @@ def executar_consulta_sefaz(
             for doc in docs:
                 xml_conteudo = None
                 modelo = doc.get("modelo", "NF-e")
+                _log(f"  NSU={doc['nsu']} schema={doc['schema']} resumo={doc['resumo']} modelo={modelo}")
 
                 if doc.get("resumo"):
                     chave = _extrair_chave_resumo(doc["xml"])
