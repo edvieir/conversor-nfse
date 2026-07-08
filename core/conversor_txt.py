@@ -213,13 +213,22 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # Valor bruto (base de cálculo do ISS, antes de deduções)
                 _vBC  = next((e.text or "" for e in _root.iter()
                               if e.tag.endswith("vBC")), "")
+                # CPF do emitente (quando prestador é Pessoa Física)
+                _emit_el2 = next((e for e in _root.iter() if e.tag.endswith("emit")), None)
+                _cpf_emit = ""
+                if _emit_el2 is not None:
+                    _cpf_emit = next(
+                        (e.text.strip() for e in _emit_el2 if e.tag.endswith("CPF") and e.text),
+                        ""
+                    )
                 _rinfo = {
-                    "tpRet":  _tpRet,
-                    "aliq":   _aliq,
-                    "vISS":   _vISS,
-                    "vBC":    _vBC,
-                    "nNFSe":  _nNFSe_val,   # número oficial (DANFSe)
-                    "vCSLL":  _vCSLL,
+                    "tpRet":    _tpRet,
+                    "aliq":     _aliq,
+                    "vISS":     _vISS,
+                    "vBC":      _vBC,
+                    "nNFSe":    _nNFSe_val,   # número oficial (DANFSe)
+                    "vCSLL":    _vCSLL,
+                    "cpf_emit": _cpf_emit,    # CPF do prestador PF (vazio se CNPJ)
                 }
                 if _nota_num:
                     _ret_lookup[_nota_num] = _rinfo
@@ -311,9 +320,13 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         return linha
 
                     # Campo 3 (índice 2) – tipo de pessoa: 1=Física, 2=Jurídica
-                    # Quando CNPJ (índice 3) está vazio, o tomador é CPF (Pessoa Física)
+                    # Campo 4 (índice 3) – CNPJ do prestador (vazio quando é CPF/PF)
+                    # Lookup pelo número da nota para obter o CPF quando o campo está vazio
+                    _rinfo_pf = _ret_lookup.get(cs[17].strip(), {})
                     if not cs[3].strip():
                         cs[2] = "1"
+                        if _rinfo_pf.get("cpf_emit"):
+                            cs[3] = _rinfo_pf["cpf_emit"]
 
                     # Campo 26 (índice 25) – descrição: remove acentos E pontuações
                     _desc = "".join(
