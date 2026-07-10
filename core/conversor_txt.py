@@ -191,17 +191,19 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 # Tipo retenção ISS (1=não retido, 2=retido pelo tomador)
                 _tpRet = next((e.text or "1" for e in _root.iter()
                                if e.tag.endswith("tpRetISSQN")), "1")
-                # Tipo retenção PIS/COFINS (1=só PIS, 2=só COFINS, 3=ambos)
-                _tpRetPC = next((e.text or "0" for e in _root.iter()
-                                 if e.tag.endswith("tpRetPisCofins")), "0")
-                # Valores de PIS, COFINS e CSLL
-                # Busca case-insensitive (XML usa vPis/vCofins, script buscava vPIS/vCOFINS)
+                # Retenções federais (tags explícitas de retenção, não valores calculados)
                 _vPis    = next((e.text or "" for e in _root.iter()
-                                 if e.tag.lower().endswith("vpis")), "")
+                                 if e.tag.lower().endswith("vretpis")), "")
                 _vCofins = next((e.text or "" for e in _root.iter()
-                                 if e.tag.lower().endswith("vcofins")), "")
+                                 if e.tag.lower().endswith("vretcofins")), "")
                 _vCSLL   = next((e.text or "" for e in _root.iter()
                                  if e.tag.lower().endswith("vretcsll")), "")
+                # INSS retido: campo vRetCP no NFS-e Nacional (Contribuição Previdenciária)
+                _vINSS   = next((e.text or "" for e in _root.iter()
+                                 if e.tag.lower().endswith("vretcp")), "")
+                # IR retido na fonte
+                _vIRRF   = next((e.text or "" for e in _root.iter()
+                                 if e.tag.lower().endswith("vretirrf")), "")
                 # Alíquota ISS: busca pAliqAplic (nível NFSe) ou pAliq (nível DPS/tribMun)
                 _aliq = (next((e.text or "" for e in _root.iter()
                                 if e.tag.endswith("pAliqAplic")), "")
@@ -238,7 +240,11 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                     "vISS":     _vISS,
                     "vBC":      _vBC,
                     "nNFSe":    _nNFSe_val,   # número oficial (DANFSe)
-                    "vCSLL":    _vCSLL,
+                    "vPis":     _vPis,        # PIS retido na fonte (vRetPis)
+                    "vCofins":  _vCofins,     # COFINS retido na fonte (vRetCofins)
+                    "vCSLL":    _vCSLL,       # CSLL retido na fonte
+                    "vINSS":    _vINSS,       # INSS retido (vRetCP)
+                    "vIRRF":    _vIRRF,       # IR retido na fonte
                     "cpf_emit": _cpf_emit,    # CPF do prestador PF (vazio se CNPJ)
                     "comp_mes": _comp_mes,    # mês da competência (dCompet)
                     "comp_ano": _comp_ano,    # ano da competência (dCompet)
@@ -414,10 +420,38 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         # 0 = não retido (padrão)  |  1 = retido pelo tomador
                         cs[43] = "1"
 
-                    # Campo 41 (índice 40) – Contribuições Sociais retidas (CSLL)
-                    if _rinfo.get("vCSLL") and not cs[40].strip():
+                    # Campo 39 (índice 38) – PIS retido na fonte
+                    if _rinfo.get("vPis") and not cs[38].strip():
                         try:
-                            cs[40] = str(int(round(float(_rinfo["vCSLL"]) * 100)))
+                            cs[38] = str(int(round(float(_rinfo["vPis"]) * 100)))
+                        except Exception:
+                            pass
+
+                    # Campo 40 (índice 39) – COFINS retido na fonte
+                    if _rinfo.get("vCofins") and not cs[39].strip():
+                        try:
+                            cs[39] = str(int(round(float(_rinfo["vCofins"]) * 100)))
+                        except Exception:
+                            pass
+
+                    # Campo 41 (índice 40) – INSS retido (vRetCP no NFS-e Nacional)
+                    if _rinfo.get("vINSS") and not cs[40].strip():
+                        try:
+                            cs[40] = str(int(round(float(_rinfo["vINSS"]) * 100)))
+                        except Exception:
+                            pass
+
+                    # Campo 42 (índice 41) – CSLL retido na fonte
+                    if _rinfo.get("vCSLL") and not cs[41].strip():
+                        try:
+                            cs[41] = str(int(round(float(_rinfo["vCSLL"]) * 100)))
+                        except Exception:
+                            pass
+
+                    # Campo 43 (índice 42) – IRRF retido na fonte
+                    if _rinfo.get("vIRRF") and not cs[42].strip():
+                        try:
+                            cs[42] = str(int(round(float(_rinfo["vIRRF"]) * 100)))
                         except Exception:
                             pass
 
