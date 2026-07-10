@@ -420,20 +420,6 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         # 0 = não retido (padrão)  |  1 = retido pelo tomador
                         cs[43] = "1"
 
-                    # Campo 39 (índice 38) – PIS retido na fonte
-                    if _rinfo.get("vPis") and not cs[38].strip():
-                        try:
-                            cs[38] = str(int(round(float(_rinfo["vPis"]) * 100)))
-                        except Exception:
-                            pass
-
-                    # Campo 40 (índice 39) – COFINS retido na fonte
-                    if _rinfo.get("vCofins") and not cs[39].strip():
-                        try:
-                            cs[39] = str(int(round(float(_rinfo["vCofins"]) * 100)))
-                        except Exception:
-                            pass
-
                     # Campo 41 (índice 40) – INSS retido (vRetCP no NFS-e Nacional)
                     if _rinfo.get("vINSS") and not cs[40].strip():
                         try:
@@ -441,10 +427,17 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         except Exception:
                             pass
 
-                    # Campo 42 (índice 41) – CSLL retido na fonte
-                    if _rinfo.get("vCSLL") and not cs[41].strip():
+                    # Campo 42 (índice 41) – CSRF: soma de PIS + COFINS + CSLL retidos
+                    # Esses três tributos federais vão juntos no mesmo campo
+                    if not cs[41].strip():
                         try:
-                            cs[41] = str(int(round(float(_rinfo["vCSLL"]) * 100)))
+                            _csrf = (
+                                float(_rinfo.get("vPis")    or "0") +
+                                float(_rinfo.get("vCofins") or "0") +
+                                float(_rinfo.get("vCSLL")   or "0")
+                            )
+                            if _csrf > 0:
+                                cs[41] = str(int(round(_csrf * 100)))
                         except Exception:
                             pass
 
