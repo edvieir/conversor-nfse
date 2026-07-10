@@ -387,11 +387,7 @@ def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
         num_nota  = n["n_nfse"].zfill(15)
         v_total   = n["v_bc"]
         iss_retido = n.get("tp_ret_iss") == "2"
-        try:
-            _has_iss = float(n.get("v_iss") or "0") > 0
-        except Exception:
-            _has_iss = False
-        tributacao = "4" if (iss_retido or not _has_iss) else "1"
+        tributacao = "1" if iss_retido else "4"
         aliq_iss   = n.get("p_aliq", "")
         chave      = n.get("chave_acesso", "")
 
@@ -463,12 +459,7 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao"):
         v_total    = n["v_bc"]
         # tpRetISSQN=2 → ISS retido pelo tomador; qualquer outro → não retido
         iss_retido = n.get("tp_ret_iss") == "2"
-        try:
-            _has_iss = float(n.get("v_iss") or "0") > 0
-        except Exception:
-            _has_iss = False
-        # "4"=Não-Incidência quando sem ISS ou retido; "1"=Normal quando ISS existe
-        tributacao = "4" if (iss_retido or not _has_iss) else "1"
+        tributacao = "1" if iss_retido else "4"
         aliq_iss   = n["p_aliq"] if iss_retido else ""
 
         linhas.append(_esi_line(
