@@ -112,7 +112,7 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         v_ret_pis    = _t(inf_dps, "vRetPis")    or _t(inf_dps, "vPis")
         v_ret_csl    = _t(inf_dps, "vRetCSLL")   or _t(inf_dps, "vCSLL") or _t(inf_dps, "vRetCsll") or _t(inf_dps, "vCsll")
         v_ret_irrf   = _t(inf_dps, "vRetIRRF")   or _t(inf_dps, "vIRRF")
-        v_ret_inss   = _t(inf_dps, "vRetInss")   or _t(inf_dps, "vInss")
+        v_ret_inss   = _t(inf_dps, "vRetCP") or _t(inf_dps, "vRetInss") or _t(inf_dps, "vInss")
 
     cnae = _t(inf_dps, "CNAE") if inf_dps is not None else ""
 
@@ -385,9 +385,13 @@ def gerar_fortes_prestados(notas, nome_empresa, observacao=""):
         d_compet_yyyymm01 = d_comp_raw[:6] + "01"
 
         num_nota  = n["n_nfse"].zfill(15)
-        v_total   = n["v_liq"] or n["v_bc"]
+        v_total   = n["v_bc"]
         iss_retido = n.get("tp_ret_iss") == "2"
-        tributacao = "4" if iss_retido else "3"
+        try:
+            _has_iss = float(n.get("v_iss") or "0") > 0
+        except Exception:
+            _has_iss = False
+        tributacao = "4" if (iss_retido or not _has_iss) else "1"
         aliq_iss   = n.get("p_aliq", "")
         chave      = n.get("chave_acesso", "")
 
@@ -456,10 +460,15 @@ def gerar_fortes(notas, nome_empresa, observacao="NFS-e Importacao"):
         par_id     = prestadores[cnpj]["id"]
         data_emi   = n["d_compet"].replace("-", "")
         num_nota   = n["n_nfse"].zfill(15)
-        v_total    = n["v_liq"]
+        v_total    = n["v_bc"]
         # tpRetISSQN=2 → ISS retido pelo tomador; qualquer outro → não retido
         iss_retido = n.get("tp_ret_iss") == "2"
-        tributacao = "4" if iss_retido else "3"
+        try:
+            _has_iss = float(n.get("v_iss") or "0") > 0
+        except Exception:
+            _has_iss = False
+        # "4"=Não-Incidência quando sem ISS ou retido; "1"=Normal quando ISS existe
+        tributacao = "4" if (iss_retido or not _has_iss) else "1"
         aliq_iss   = n["p_aliq"] if iss_retido else ""
 
         linhas.append(_esi_line(
