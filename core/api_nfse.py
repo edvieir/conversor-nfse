@@ -393,6 +393,12 @@ def baixar_xmls_nfse(
                     try:
                         _root = _ET2.fromstring(xml_bytes)
 
+                        # ignora documentos que não são NFS-e (eventos: cancelamento, substituição, etc.)
+                        _root_local = _root.tag.split("}")[-1] if "}" in _root.tag else _root.tag
+                        if _root_local == "evento":
+                            log.append(f"    -> evento administrativo (não é NFS-e), ignorado")
+                            continue
+
                         # determina papel (tomados/prestados) para filtro e pasta
                         _toma_el  = next((e for e in _root.iter() if e.tag.endswith("toma")), None)
                         _prest_el = next((e for e in _root.iter() if e.tag.endswith("prest")), None)
