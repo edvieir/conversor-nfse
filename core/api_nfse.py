@@ -455,15 +455,17 @@ def baixar_xmls_nfse(
                     except Exception as parse_err:
                         log.append(f"    -> aviso parse XML: {parse_err}, incluido")
 
-                    # detecta cancelamento: eventos não-NFSE com XML são sempre cancelamentos
-                    cancelada = tipo_doc != "NFSE"
-                    if not cancelada:
-                        try:
-                            cancelada = _is_cancelada(_root)
-                        except Exception:
-                            pass
+                    # detecta cancelamento pelo conteúdo do XML (não pelo TipoDocumento)
+                    # isso permite processar notas com IBSCBS/IBS que chegam com tipo != "NFSE"
+                    cancelada = False
+                    try:
+                        cancelada = _is_cancelada(_root)
+                    except Exception:
+                        pass
                     if cancelada:
-                        log.append(f"    -> CANCELADA")
+                        log.append(f"    -> CANCELADA (tipo={tipo_doc})")
+                    elif tipo_doc and tipo_doc != "NFSE":
+                        log.append(f"    -> incluida (tipo={tipo_doc})")
 
                     # determina chave para PDF
                     chave_pdf = chave
