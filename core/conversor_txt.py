@@ -463,6 +463,9 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         except Exception:
                             pass
 
+                    # Fortaleza não aceita "0" em campos monetários — exige "000"
+                    cs = ["000" if v.strip() == "0" else v for v in cs]
+
                     return ";".join(cs)
 
                 texto  = data.decode("utf-8")
