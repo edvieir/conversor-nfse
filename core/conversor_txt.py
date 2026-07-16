@@ -463,14 +463,9 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                         except Exception:
                             pass
 
-                    # Fortaleza exige "000" (não "0") nos campos de valor monetário
-                    # Índices dos campos de valor em centavos no layout de 46 campos:
-                    # 24=alíquota, 30=ISS, 32=serviço, 38=PIS, 39=COFINS,
-                    # 40=INSS, 41=CSRF, 42=IRRF
-                    _IDX_MONETARIOS = {24, 30, 32, 38, 39, 40, 41, 42}
-                    for _i in _IDX_MONETARIOS:
-                        if cs[_i].strip() == "0":
-                            cs[_i] = "000"
+                    # Campo 33 (índice 32) – Fortaleza exige "000" quando valor do serviço é zero
+                    if cs[32].strip() == "0":
+                        cs[32] = "000"
 
                     return ";".join(cs)
 
