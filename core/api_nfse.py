@@ -104,9 +104,15 @@ def extrair_cnpj_do_pfx(pfx_bytes: bytes, senha: str) -> str:
 def _decodificar_xml(arquivo_xml_b64: str) -> bytes:
     raw = base64.b64decode(arquivo_xml_b64)
     try:
-        return gzip.decompress(raw)
+        raw = gzip.decompress(raw)
     except Exception:
-        return raw
+        pass
+    # Escapa & soltos que causam "invalid token" em XMLs mal-formados da API
+    return re.sub(
+        rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)',
+        b'&amp;',
+        raw,
+    )
 
 
 class _MTLSAdapter(HTTPAdapter):
@@ -379,6 +385,7 @@ def baixar_xmls_nfse(
 
                 chave = doc.get("ChaveAcesso") or str(nsu_doc)
                 nome_arq = chave  # fallback: usa chave de acesso se XML não parsear
+                papel    = "tomados"  # fallback caso parse XML falhe
                 try:
                     xml_bytes = _decodificar_xml(arquivo_b64)
 
