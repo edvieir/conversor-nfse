@@ -2,8 +2,18 @@
 core/fortes_converter.py — Conversor NFS-e XML → Fortes ACFiscal (.fs)
 """
 
+import re as _re
 import defusedxml.ElementTree as ET
 from datetime import date
+
+
+def _sanitize_xml_bytes(data: bytes) -> bytes:
+    """Escapa & soltos que causam 'invalid token' em XMLs mal-formados da API."""
+    return _re.sub(
+        rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)',
+        b'&amp;',
+        data,
+    )
 
 _NS = "http://www.sped.fazenda.gov.br/nfse"
 
@@ -53,7 +63,7 @@ def _nota_cancelada(root) -> bool:
 
 def parse_nfse_xml(xml_bytes: bytes) -> dict:
     try:
-        root = ET.fromstring(xml_bytes)
+        root = ET.fromstring(_sanitize_xml_bytes(xml_bytes))
     except ET.ParseError as exc:
         raise ValueError(f"XML inválido: {exc}") from exc
 
