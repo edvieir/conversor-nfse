@@ -8,7 +8,8 @@ from datetime import date
 
 
 def _sanitize_xml_bytes(data: bytes) -> bytes:
-    """Escapa & soltos que causam 'invalid token' em XMLs mal-formados da API."""
+    """Remove &#13; e escapa & soltos que causam 'invalid token' no Expat."""
+    data = data.replace(b'&#13;', b'')
     return _re.sub(
         rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)',
         b'&amp;',

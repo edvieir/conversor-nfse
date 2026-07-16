@@ -107,7 +107,8 @@ def _decodificar_xml(arquivo_xml_b64: str) -> bytes:
         raw = gzip.decompress(raw)
     except Exception:
         pass
-    # Escapa & soltos que causam "invalid token" em XMLs mal-formados da API
+    # Remove &#13; e escapa & soltos que causam "invalid token" no Expat
+    raw = raw.replace(b'&#13;', b'')
     return re.sub(
         rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)',
         b'&amp;',

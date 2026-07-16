@@ -75,7 +75,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
     def _comp_bytes(b):
         """Extrai competência MM/AAAA do conteúdo do XML."""
         try:
-            root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', b))
+            root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', b.replace(b'&#13;', b'')))
             el = next((e for e in root.iter() if e.tag.endswith("dCompet")), None)
             if el is not None and el.text:
                 p = el.text.strip()[:7].split("-")
@@ -102,7 +102,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
           3. BrasilAPI / Receita Federal (com cache por sessão)
         """
         try:
-            root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', content))
+            root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', content.replace(b'&#13;', b'')))
             emit = next((e for e in root.iter() if e.tag.endswith("emit")), None)
             if emit is None:
                 return False
@@ -262,9 +262,12 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
     def _sanitize_xml(data: bytes) -> bytes:
         """
         Sanitiza bytes XML antes do parse:
-        1. Escapa & que não pertencem a entidades válidas (causa "invalid token")
-        2. Substitui ';' em nós de texto por espaço (evita quebrar delimitador TXT)
+        1. Remove &#13; (CR via referência de caractere) que o Expat rejeita em texto
+        2. Escapa & soltos que não pertencem a entidades válidas
+        3. Substitui ';' em nós de texto por espaço (evita quebrar delimitador TXT)
         """
+        # &#13; aparece em blocos de assinatura digital (base64) e causa "invalid token"
+        data = data.replace(b'&#13;', b'')
         # Escapa & soltos que não são &amp; &lt; &gt; &quot; &apos; &#N; &#xN;
         data = _re.sub(
             rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)',
@@ -287,7 +290,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
         cStat=107 = NFS-e do MEI Gerada = AUTORIZADA.
         """
         try:
-            root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', content))
+            root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', content.replace(b'&#13;', b'')))
             if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
                 return True
             el_cstat = next((e for e in root.iter() if e.tag.split("}")[-1] == "cStat"), None)
