@@ -101,7 +101,10 @@ def parse_nfse_xml(xml_bytes: bytes) -> dict:
         toma_uf = _uf_from_cmun(toma_cmun)
 
     vals_nfse = inf.find(f"{{{_NS}}}valores")
-    v_bc   = (_t(vals_nfse, "vBC")        if vals_nfse is not None else "") or "0.00"
+    # MEI notes omit <vBC> in <infNFSe/valores>; fall back to <vServ> from the DPS
+    v_bc   = ((_t(vals_nfse, "vBC")        if vals_nfse is not None else "")
+              or (_t(inf_dps, "vServ")      if inf_dps  is not None else "")
+              or "0.00")
     v_iss  = (_t(vals_nfse, "vISSQN")     if vals_nfse is not None else "") or "0.00"
     v_liq  = (_t(vals_nfse, "vLiq")       if vals_nfse is not None else "") or v_bc
     p_aliq = (_t(vals_nfse, "pAliqAplic") if vals_nfse is not None else "") or ""
