@@ -359,6 +359,11 @@ def render():
                             else:
                                 caminho.parent.mkdir(parents=True, exist_ok=True)
                                 caminho.write_bytes(conteudo)
+                                try:
+                                    from core.siga_sefaz import persistir_relatorio
+                                    persistir_relatorio(cnpj_sel, nome_arquivo, tipo, conteudo, periodo)
+                                except Exception as e_db:
+                                    st.warning(f"Salvo em cache, mas falhou ao persistir no banco (Power BI): {e_db}")
                                 st.success(f"{label} atualizado ({len(conteudo)} bytes).")
                             st.rerun()
 

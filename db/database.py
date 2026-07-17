@@ -179,6 +179,53 @@ def _init_pg():
                 UNIQUE(cnpj, chave)
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS siga_documentos_fiscais (
+                id               SERIAL PRIMARY KEY,
+                cnpj             TEXT NOT NULL,
+                tipo             TEXT NOT NULL,
+                aba              TEXT NOT NULL,
+                periodo          TEXT NOT NULL,
+                chave            TEXT NOT NULL,
+                numero           TEXT DEFAULT '',
+                data_emissao     TEXT DEFAULT '',
+                valor            NUMERIC DEFAULT 0,
+                uf               TEXT DEFAULT '',
+                contraparte_cnpj TEXT DEFAULT '',
+                contraparte_nome TEXT DEFAULT '',
+                situacao         TEXT DEFAULT '',
+                atualizado_em    TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cnpj, tipo, aba, periodo, chave)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS siga_indicadores_malha (
+                id            SERIAL PRIMARY KEY,
+                cnpj          TEXT NOT NULL,
+                indicador     TEXT NOT NULL,
+                descricao     TEXT DEFAULT '',
+                grupo_cfop    TEXT DEFAULT '',
+                valor         NUMERIC DEFAULT 0,
+                unidade       TEXT DEFAULT '',
+                qtd_indicios  INTEGER DEFAULT 0,
+                atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cnpj, indicador, grupo_cfop)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS siga_indicadores_malha_detalhe (
+                id               SERIAL PRIMARY KEY,
+                cnpj             TEXT NOT NULL,
+                indicador        TEXT NOT NULL,
+                chave            TEXT NOT NULL,
+                numero           TEXT DEFAULT '',
+                data_emissao     TEXT DEFAULT '',
+                valor            NUMERIC DEFAULT 0,
+                contraparte_cnpj TEXT DEFAULT '',
+                atualizado_em    TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cnpj, indicador, chave)
+            )
+        """)
 
 
 def _init_sqlite():
@@ -255,6 +302,47 @@ def _init_sqlite():
                 criado_em     TEXT DEFAULT (datetime('now','localtime')),
                 processado_em TEXT,
                 UNIQUE(cnpj, chave)
+            );
+            CREATE TABLE IF NOT EXISTS siga_documentos_fiscais (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj             TEXT NOT NULL,
+                tipo             TEXT NOT NULL,
+                aba              TEXT NOT NULL,
+                periodo          TEXT NOT NULL,
+                chave            TEXT NOT NULL,
+                numero           TEXT DEFAULT '',
+                data_emissao     TEXT DEFAULT '',
+                valor            REAL DEFAULT 0,
+                uf               TEXT DEFAULT '',
+                contraparte_cnpj TEXT DEFAULT '',
+                contraparte_nome TEXT DEFAULT '',
+                situacao         TEXT DEFAULT '',
+                atualizado_em    TEXT DEFAULT (datetime('now','localtime')),
+                UNIQUE(cnpj, tipo, aba, periodo, chave)
+            );
+            CREATE TABLE IF NOT EXISTS siga_indicadores_malha (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj          TEXT NOT NULL,
+                indicador     TEXT NOT NULL,
+                descricao     TEXT DEFAULT '',
+                grupo_cfop    TEXT DEFAULT '',
+                valor         REAL DEFAULT 0,
+                unidade       TEXT DEFAULT '',
+                qtd_indicios  INTEGER DEFAULT 0,
+                atualizado_em TEXT DEFAULT (datetime('now','localtime')),
+                UNIQUE(cnpj, indicador, grupo_cfop)
+            );
+            CREATE TABLE IF NOT EXISTS siga_indicadores_malha_detalhe (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj             TEXT NOT NULL,
+                indicador        TEXT NOT NULL,
+                chave            TEXT NOT NULL,
+                numero           TEXT DEFAULT '',
+                data_emissao     TEXT DEFAULT '',
+                valor            REAL DEFAULT 0,
+                contraparte_cnpj TEXT DEFAULT '',
+                atualizado_em    TEXT DEFAULT (datetime('now','localtime')),
+                UNIQUE(cnpj, indicador, chave)
             );
         """)
     try:
@@ -554,6 +642,99 @@ def status_fila_xml(cnpj: str) -> dict:
         (cnpj,), fetch_all=True,
     ) or []
     return {r["status"]: r["qtd"] for r in rows}
+
+
+# ── Dados estruturados do SIGA (fonte pro Power BI via Postgres) ────────────
+
+def upsert_documentos_fiscais(docs: list[dict]):
+    """Insere/atualiza linhas de siga_documentos_fiscais. Cada dict precisa ter
+    cnpj, tipo, aba, periodo, chave -- os demais campos são opcionais."""
+    if not docs:
+        return
+    ph = "%s" if _PG else "?"
+    campos = ["cnpj", "tipo", "aba", "periodo", "chave", "numero", "data_emissao",
+              "valor", "uf", "contraparte_cnpj", "contraparte_nome", "situacao"]
+    agora = "NOW()" if _PG else "datetime('now','localtime')"
+    for d in docs:
+        valores = [d.get(c, "") for c in campos]
+        placeholders = ",".join([ph] * len(campos))
+        if _PG:
+            sets = ",".join(f"{c}=EXCLUDED.{c}" for c in campos if c not in ("cnpj", "tipo", "aba", "periodo", "chave"))
+            _exec(
+                f"""INSERT INTO siga_documentos_fiscais ({",".join(campos)}, atualizado_em)
+                    VALUES ({placeholders}, {agora})
+                    ON CONFLICT (cnpj, tipo, aba, periodo, chave) DO UPDATE SET {sets}, atualizado_em={agora}""",
+                valores,
+            )
+        else:
+            _exec(
+                f"""INSERT OR REPLACE INTO siga_documentos_fiscais
+                    ({",".join(campos)}, atualizado_em) VALUES ({placeholders}, {agora})""",
+                valores,
+            )
+
+
+def upsert_indicadores_malha(cnpj: str, indicadores: list[dict]):
+    """indicadores: lista de dicts com indicador, descricao, grupo_cfop, valor, unidade, qtd_indicios."""
+    if not indicadores:
+        return
+    ph = "%s" if _PG else "?"
+    agora = "NOW()" if _PG else "datetime('now','localtime')"
+    for ind in indicadores:
+        valores = [
+            cnpj, str(ind.get("indicador", "")), ind.get("descricao", ""),
+            ind.get("grupo_cfop", ""), ind.get("valor", 0), ind.get("unidade", ""),
+            ind.get("qtd_indicios", 0),
+        ]
+        if _PG:
+            _exec(
+                f"""INSERT INTO siga_indicadores_malha
+                    (cnpj, indicador, descricao, grupo_cfop, valor, unidade, qtd_indicios, atualizado_em)
+                    VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph}, {agora})
+                    ON CONFLICT (cnpj, indicador, grupo_cfop) DO UPDATE SET
+                        descricao=EXCLUDED.descricao, valor=EXCLUDED.valor,
+                        unidade=EXCLUDED.unidade, qtd_indicios=EXCLUDED.qtd_indicios,
+                        atualizado_em={agora}""",
+                valores,
+            )
+        else:
+            _exec(
+                f"""INSERT OR REPLACE INTO siga_indicadores_malha
+                    (cnpj, indicador, descricao, grupo_cfop, valor, unidade, qtd_indicios, atualizado_em)
+                    VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph}, {agora})""",
+                valores,
+            )
+
+
+def upsert_indicadores_malha_detalhe(cnpj: str, indicador: str, itens: list[dict]):
+    """itens: lista de dicts com chave, numero, data_emissao, valor, contraparte_cnpj."""
+    if not itens:
+        return
+    ph = "%s" if _PG else "?"
+    agora = "NOW()" if _PG else "datetime('now','localtime')"
+    for item in itens:
+        valores = [
+            cnpj, indicador, item.get("chave", ""), item.get("numero", ""),
+            item.get("data_emissao", ""), item.get("valor", 0), item.get("contraparte_cnpj", ""),
+        ]
+        if _PG:
+            _exec(
+                f"""INSERT INTO siga_indicadores_malha_detalhe
+                    (cnpj, indicador, chave, numero, data_emissao, valor, contraparte_cnpj, atualizado_em)
+                    VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph}, {agora})
+                    ON CONFLICT (cnpj, indicador, chave) DO UPDATE SET
+                        numero=EXCLUDED.numero, data_emissao=EXCLUDED.data_emissao,
+                        valor=EXCLUDED.valor, contraparte_cnpj=EXCLUDED.contraparte_cnpj,
+                        atualizado_em={agora}""",
+                valores,
+            )
+        else:
+            _exec(
+                f"""INSERT OR REPLACE INTO siga_indicadores_malha_detalhe
+                    (cnpj, indicador, chave, numero, data_emissao, valor, contraparte_cnpj, atualizado_em)
+                    VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph}, {agora})""",
+                valores,
+            )
 
 
 def get_stats(usuario: str | None = None) -> dict:

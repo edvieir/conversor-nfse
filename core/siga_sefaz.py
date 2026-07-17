@@ -382,3 +382,157 @@ def extrair_chaves_xlsx(conteudo_xlsx: bytes) -> list[str]:
             if idx_chave < len(row) and row[idx_chave]:
                 chaves.add(str(row[idx_chave]).strip())
     return sorted(chaves)
+
+
+def _indice_coluna(cabecalho: list[str], *palavras_chave: str):
+    cab_lower = [c.lower() for c in cabecalho]
+    for palavra in palavras_chave:
+        idx = next((i for i, c in enumerate(cab_lower) if palavra in c), None)
+        if idx is not None:
+            return idx
+    return None
+
+
+def parse_documentos_fiscais(conteudo_xlsx: bytes, tipo: str, aba: str, periodo: str) -> list[dict]:
+    """
+    Lê um relatório de documentos fiscais (NF-e/NFC-e emitidas/recebidas/
+    canceladas) e retorna linhas prontas pra upsert_documentos_fiscais().
+    Colunas variam entre NF-e (completo) e NFC-e (só chave/data/valor) --
+    usa busca por palavra-chave no cabeçalho em vez de nome fixo.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo_xlsx), data_only=True)
+    ws = wb.worksheets[0]
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    cabecalho = [str(c or "") for c in rows[0]]
+    idx_chave = _indice_coluna(cabecalho, "chave")
+    if idx_chave is None:
+        return []
+    idx_numero = _indice_coluna(cabecalho, "número", "numero")
+    idx_data   = _indice_coluna(cabecalho, "data")
+    idx_valor  = _indice_coluna(cabecalho, "valor")
+    idx_uf     = _indice_coluna(cabecalho, "uf")
+    idx_cnpj   = _indice_coluna(cabecalho, "cnpj")
+    idx_nome   = _indice_coluna(cabecalho, "razão social", "razao social")
+    idx_ind    = _indice_coluna(cabecalho, "indicador")
+
+    def _val(row, idx):
+        return row[idx] if idx is not None and idx < len(row) and row[idx] is not None else ""
+
+    docs = []
+    for row in rows[1:]:
+        chave = _val(row, idx_chave)
+        if not chave:
+            continue
+        docs.append({
+            "tipo": tipo, "aba": aba, "periodo": periodo,
+            "chave": str(chave).strip(),
+            "numero": str(_val(row, idx_numero)),
+            "data_emissao": str(_val(row, idx_data)),
+            "valor": float(_val(row, idx_valor) or 0),
+            "uf": str(_val(row, idx_uf)),
+            "contraparte_cnpj": str(_val(row, idx_cnpj)),
+            "contraparte_nome": str(_val(row, idx_nome)),
+            "situacao": str(_val(row, idx_ind)),
+        })
+    return docs
+
+
+def parse_indicadores_malha(conteudo_xlsx: bytes) -> tuple[list[dict], dict[str, list[dict]]]:
+    """
+    Lê o relatório de índices de malha. Retorna (resumo, detalhes):
+    - resumo: lista de {indicador, descricao, grupo_cfop, valor, unidade, qtd_indicios}
+      a partir da aba "Resumo".
+    - detalhes: {codigo_indicador: [ {chave, numero, data_emissao, valor,
+      contraparte_cnpj}, ... ]} a partir das abas "IND {codigo}" que tiverem
+      coluna de chave (indicadores sem chave, como saldo credor, ficam de fora).
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo_xlsx), data_only=True)
+
+    resumo = []
+    if "Resumo" in wb.sheetnames:
+        rows = list(wb["Resumo"].iter_rows(values_only=True))
+        if rows:
+            cabecalho = [str(c or "") for c in rows[0]]
+            idx_ind   = _indice_coluna(cabecalho, "indicador")
+            idx_desc  = _indice_coluna(cabecalho, "descrição", "descricao")
+            idx_valor = _indice_coluna(cabecalho, "valor")
+            idx_unid  = _indice_coluna(cabecalho, "unidade")
+            idx_qtd   = _indice_coluna(cabecalho, "qtd", "quantidade")
+            for row in rows[1:]:
+                if idx_ind is None or idx_ind >= len(row) or row[idx_ind] is None:
+                    continue
+                indicador_val = row[idx_ind]
+                indicador_str = str(int(indicador_val)) if isinstance(indicador_val, float) and indicador_val.is_integer() else str(indicador_val)
+                resumo.append({
+                    "indicador": indicador_str,
+                    "descricao": str(row[idx_desc]) if idx_desc is not None and idx_desc < len(row) else "",
+                    "grupo_cfop": "",
+                    "valor": float(row[idx_valor] or 0) if idx_valor is not None and idx_valor < len(row) else 0,
+                    "unidade": str(row[idx_unid]) if idx_unid is not None and idx_unid < len(row) else "",
+                    "qtd_indicios": int(row[idx_qtd] or 0) if idx_qtd is not None and idx_qtd < len(row) else 0,
+                })
+
+    detalhes: dict[str, list[dict]] = {}
+    for ws in wb.worksheets:
+        if ws.title == "Resumo":
+            continue
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            continue
+        cabecalho = [str(c or "") for c in rows[0]]
+        idx_chave = _indice_coluna(cabecalho, "chave")
+        if idx_chave is None:
+            continue
+        idx_numero = _indice_coluna(cabecalho, "número", "numero")
+        idx_data   = _indice_coluna(cabecalho, "data")
+        idx_valor  = _indice_coluna(cabecalho, "valor")
+        idx_cnpj   = _indice_coluna(cabecalho, "cnpj")
+
+        codigo = ws.title.replace("IND ", "").strip() or ws.title
+        itens = []
+        for row in rows[1:]:
+            if idx_chave >= len(row) or not row[idx_chave]:
+                continue
+            itens.append({
+                "chave": str(row[idx_chave]).strip(),
+                "numero": str(row[idx_numero]) if idx_numero is not None and idx_numero < len(row) and row[idx_numero] else "",
+                "data_emissao": str(row[idx_data]) if idx_data is not None and idx_data < len(row) and row[idx_data] else "",
+                "valor": float(row[idx_valor] or 0) if idx_valor is not None and idx_valor < len(row) else 0,
+                "contraparte_cnpj": str(row[idx_cnpj]) if idx_cnpj is not None and idx_cnpj < len(row) and row[idx_cnpj] else "",
+            })
+        if itens:
+            detalhes[codigo] = itens
+
+    return resumo, detalhes
+
+
+def persistir_relatorio(cnpj: str, nome_arquivo: str, tipo: str | None, conteudo: bytes, periodo: str):
+    """
+    Estrutura o conteúdo de um relatório já baixado (xlsx) e grava nas
+    tabelas siga_documentos_fiscais / siga_indicadores_malha(_detalhe) --
+    é a fonte que o Power BI consulta via Postgres. Chamar sempre depois de
+    salvar o .xlsx em cache, tanto no scheduler quanto no "Atualizar agora".
+    """
+    from db.database import (
+        upsert_documentos_fiscais, upsert_indicadores_malha, upsert_indicadores_malha_detalhe,
+    )
+
+    if nome_arquivo == "INDICADORES_MALHA_pendencias":
+        resumo, detalhes = parse_indicadores_malha(conteudo)
+        upsert_indicadores_malha(cnpj, resumo)
+        for codigo, itens in detalhes.items():
+            upsert_indicadores_malha_detalhe(cnpj, codigo, itens)
+    else:
+        # nome_arquivo é "{TIPO}_{aba}", ex.: "NF_E_emitidas"
+        aba = nome_arquivo[len(tipo) + 1:] if tipo and nome_arquivo.startswith(tipo) else nome_arquivo
+        docs = parse_documentos_fiscais(conteudo, tipo or "", aba, periodo)
+        for d in docs:
+            d["cnpj"] = cnpj
+        upsert_documentos_fiscais(docs)

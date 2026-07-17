@@ -74,14 +74,14 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
     token = token_resp["access_token"]
 
     # 1ª passada: dispara a solicitação de cada aba (tipo x papel/resultado)
-    pendentes = []  # (nome_arquivo, solicitacao_id)
+    pendentes = []  # (nome_arquivo, tipo_ou_None, solicitacao_id)
     for tipo, abas in ABAS.items():
         for nome_aba, filtros in abas:
             try:
                 solicitacao_id = siga_sefaz.solicitar_download(
                     sessao, token, cnpj, tipo, dat_referencia=[periodo], **filtros,
                 )
-                pendentes.append((f"{tipo}_{nome_aba}", solicitacao_id))
+                pendentes.append((f"{tipo}_{nome_aba}", tipo, solicitacao_id))
                 _log(f"  [{cnpj}] {tipo} ({nome_aba}): solicitação {solicitacao_id} criada.")
             except Exception as e:
                 _log(f"  [{cnpj}] ERRO ao solicitar {tipo} ({nome_aba}): {e}")
@@ -93,7 +93,7 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
         indicadores = siga_sefaz.listar_indicadores_malha(sessao, token, cnpj)
         if indicadores:
             solicitacao_id = siga_sefaz.solicitar_download_indicadores(sessao, token, cnpj)
-            pendentes.append(("INDICADORES_MALHA_pendencias", solicitacao_id))
+            pendentes.append(("INDICADORES_MALHA_pendencias", None, solicitacao_id))
             _log(f"  [{cnpj}] Indicadores de malha: {len(indicadores)} pendência(s), solicitação {solicitacao_id} criada.")
         else:
             _log(f"  [{cnpj}] Indicadores de malha: sem pendências, nada a baixar.")
@@ -103,16 +103,21 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
     if not pendentes:
         return
 
-    # 2ª passada: espera cada uma concluir e baixa
+    # 2ª passada: espera cada uma concluir, baixa e persiste (pro Power BI)
     destino = SAIDA_DIR / cnpj
     destino.mkdir(parents=True, exist_ok=True)
 
-    for nome_arquivo, solicitacao_id in pendentes:
+    for nome_arquivo, tipo_doc, solicitacao_id in pendentes:
         try:
             conteudo = siga_sefaz.aguardar_e_baixar(sessao, token, solicitacao_id)
             arquivo = destino / f"{nome_arquivo}_{periodo}.xlsx"
             arquivo.write_bytes(conteudo)
             _log(f"  [{cnpj}] {nome_arquivo}: salvo em {arquivo} ({len(conteudo)} bytes).")
+
+            try:
+                siga_sefaz.persistir_relatorio(cnpj, nome_arquivo, tipo_doc, conteudo, periodo)
+            except Exception as e_db:
+                _log(f"  [{cnpj}] AVISO: falha ao persistir {nome_arquivo} no banco (Power BI): {e_db}")
         except Exception as e:
             _log(f"  [{cnpj}] ERRO ao baixar {nome_arquivo} (solicitação {solicitacao_id}): {e}")
 
