@@ -87,12 +87,12 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
                 _log(f"  [{cnpj}] ERRO ao solicitar {tipo} ({nome_aba}): {e}")
 
     # Índices de malha (pendências) -- só baixa se houver algo; senão fica em branco.
+    # dat-referencia NÃO se aplica aqui (a malha é uma foto atual, não por período) --
+    # passar esse filtro zera o resultado mesmo havendo pendências.
     try:
         indicadores = siga_sefaz.listar_indicadores_malha(sessao, token, cnpj)
         if indicadores:
-            solicitacao_id = siga_sefaz.solicitar_download_indicadores(
-                sessao, token, cnpj, dat_referencia=[periodo],
-            )
+            solicitacao_id = siga_sefaz.solicitar_download_indicadores(sessao, token, cnpj)
             pendentes.append(("INDICADORES_MALHA_pendencias", solicitacao_id))
             _log(f"  [{cnpj}] Indicadores de malha: {len(indicadores)} pendência(s), solicitação {solicitacao_id} criada.")
         else:

@@ -6,20 +6,19 @@ Aceita certificado como bytes (vindo do banco), sem gravar em disco.
 Mapeamento de endpoints obtido do OpenAPI publico em
 https://siga.sefaz.ce.gov.br/api/v3/api-docs (sem autenticacao).
 
-Login (OIDC/Keycloak com certificado digital) ainda NAO foi validado contra
-o site ao vivo -- o SIGA estava fora do ar durante o levantamento. A funcao
-`login()` implementa o fluxo Authorization Code + PKCE padrao do Keycloak
-com o certificado anexado via mTLS (a especificacao do realm expõe
-`tls_client_certificate_bound_access_tokens: true`), mas o passo exato de
-"Entrar com Certificado Digital" precisa ser confirmado com uma captura de
-rede real antes de considerar este modulo pronto para producao.
+Login (OIDC/Keycloak + mTLS via broker "certificado-digital") validado
+contra o site real: sso.sefaz.ce.gov.br delega para um realm dedicado a
+mTLS em cert-sso.sefaz.ce.gov.br, que e onde o certificado do cliente e
+de fato exigido na camada TLS.
 """
 
 import base64
 import hashlib
+import io
 import os
 import re
 import time
+import zipfile
 from urllib.parse import urlencode, urlparse, parse_qs
 
 import requests
@@ -266,13 +265,34 @@ def listar_solicitacoes(sessao: requests.Session, token: str) -> list[dict]:
     return r.json().get("data", [])
 
 
+def _desembrulhar_zip_aninhado(conteudo: bytes) -> bytes:
+    """
+    Alguns tipos (ex.: INDICADORES_MALHA) retornam um .zip contendo um único
+    .xlsx dentro, em vez do .xlsx puro (que os demais tipos retornam). Um
+    .xlsx normal também é um zip, então a distinção é: se o zip tem
+    "[Content_Types].xml" na raiz, já é o próprio xlsx; senão, é um wrapper
+    -- extrai o primeiro .xlsx interno.
+    """
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(conteudo))
+    except zipfile.BadZipFile:
+        return conteudo
+    nomes = zf.namelist()
+    if "[Content_Types].xml" in nomes:
+        return conteudo
+    interno = next((n for n in nomes if n.lower().endswith(".xlsx")), None)
+    if interno:
+        return zf.read(interno)
+    return conteudo
+
+
 def baixar_solicitacao(sessao: requests.Session, token: str, solicitacao_id: str) -> bytes:
     r = sessao.get(
         f"{SIGA_API}/v1/solicitacoes/{solicitacao_id}/download",
         headers=_headers(token), timeout=60,
     )
     r.raise_for_status()
-    return r.content
+    return _desembrulhar_zip_aninhado(r.content)
 
 
 def aguardar_e_baixar(
