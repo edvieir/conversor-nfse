@@ -63,9 +63,9 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
         return
 
     pfx_bytes, pfx_senha = cert
-    sessao = siga_sefaz._sessao(pfx_bytes, pfx_senha)
 
     try:
+        sessao = siga_sefaz._sessao(pfx_bytes, pfx_senha)
         token_resp = siga_sefaz.login(sessao)
     except Exception as e:
         _log(f"  [{cnpj}] ERRO no login: {e}")
@@ -139,7 +139,10 @@ def main():
         cnpjs_processados.add(cnpj)
 
         _log(f"[{cnpj}] {c.get('razao_social', '')} — iniciando (usuário: {c['usuario']})...")
-        _processar_empresa(c["usuario"], cnpj, c.get("razao_social", ""), periodo)
+        try:
+            _processar_empresa(c["usuario"], cnpj, c.get("razao_social", ""), periodo)
+        except Exception as e:
+            _log(f"  [{cnpj}] ERRO inesperado, pulando para a próxima empresa: {e}")
 
     _log("=== SIGA Scheduler concluído ===")
 
