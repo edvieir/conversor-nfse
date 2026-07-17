@@ -238,6 +238,8 @@ def listar_indicadores_malha(sessao: requests.Session, token: str, cnpj: str, da
         f"{SIGA_API}/v1/unidades/{cnpj}/malhas-fiscais/indicadores",
         headers=_headers(token), params=params, timeout=30,
     )
+    if r.status_code == 404:
+        return []  # CNPJ sem malha calculada -- equivale a "sem pendências"
     r.raise_for_status()
     return r.json().get("data", [])
 
