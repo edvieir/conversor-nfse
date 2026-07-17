@@ -166,6 +166,19 @@ def _init_pg():
             ALTER TABLE users ADD COLUMN IF NOT EXISTS
             validade DATE DEFAULT NULL
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS siga_xml_fila (
+                id            SERIAL PRIMARY KEY,
+                usuario       TEXT NOT NULL,
+                cnpj          TEXT NOT NULL,
+                chave         TEXT NOT NULL,
+                status        TEXT DEFAULT 'PENDENTE',
+                erro          TEXT DEFAULT '',
+                criado_em     TIMESTAMPTZ DEFAULT NOW(),
+                processado_em TIMESTAMPTZ,
+                UNIQUE(cnpj, chave)
+            )
+        """)
 
 
 def _init_sqlite():
@@ -231,6 +244,17 @@ def _init_sqlite():
                 senha_enc     TEXT NOT NULL,
                 criado_em     TEXT DEFAULT (datetime('now','localtime')),
                 UNIQUE(usuario, cnpj)
+            );
+            CREATE TABLE IF NOT EXISTS siga_xml_fila (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario       TEXT NOT NULL,
+                cnpj          TEXT NOT NULL,
+                chave         TEXT NOT NULL,
+                status        TEXT DEFAULT 'PENDENTE',
+                erro          TEXT DEFAULT '',
+                criado_em     TEXT DEFAULT (datetime('now','localtime')),
+                processado_em TEXT,
+                UNIQUE(cnpj, chave)
             );
         """)
     try:
@@ -467,6 +491,69 @@ def carregar_certificado(usuario: str, cnpj: str) -> tuple[bytes, str] | None:
 def remover_certificado(usuario: str, cnpj: str):
     ph = "%s" if _PG else "?"
     _exec(f"DELETE FROM certificados WHERE usuario={ph} AND cnpj={ph}", (usuario, cnpj))
+
+
+# ── Fila de XML avulso (SIGA chave -> SEFAZ Nacional, limite 20/hora) ────────
+
+def enfileirar_xml(usuario: str, cnpj: str, chaves: list[str]) -> int:
+    """Adiciona chaves novas à fila (ignora as já enfileiradas/concluídas). Retorna quantas foram adicionadas."""
+    ph = "%s" if _PG else "?"
+    adicionadas = 0
+    for chave in chaves:
+        try:
+            if _PG:
+                _exec(
+                    f"""INSERT INTO siga_xml_fila (usuario, cnpj, chave) VALUES ({ph},{ph},{ph})
+                        ON CONFLICT (cnpj, chave) DO NOTHING""",
+                    (usuario, cnpj, chave),
+                )
+            else:
+                _exec(
+                    f"""INSERT OR IGNORE INTO siga_xml_fila (usuario, cnpj, chave) VALUES ({ph},{ph},{ph})""",
+                    (usuario, cnpj, chave),
+                )
+            adicionadas += 1
+        except Exception as e:
+            print(f"[db] enfileirar_xml erro para {chave}: {e}")
+    return adicionadas
+
+
+def cnpjs_com_fila_pendente() -> list[str]:
+    rows = _exec(
+        "SELECT DISTINCT cnpj FROM siga_xml_fila WHERE status='PENDENTE'",
+        fetch_all=True,
+    ) or []
+    return [r["cnpj"] for r in rows]
+
+
+def proximos_pendentes(cnpj: str, limite: int = 20) -> list[dict]:
+    ph = "%s" if _PG else "?"
+    return _exec(
+        f"SELECT id, usuario, chave FROM siga_xml_fila WHERE cnpj={ph} AND status='PENDENTE' ORDER BY criado_em LIMIT {int(limite)}",
+        (cnpj,),
+        fetch_all=True,
+    ) or []
+
+
+def marcar_fila_concluido(item_id: int):
+    ph = "%s" if _PG else "?"
+    agora = "NOW()" if _PG else "datetime('now','localtime')"
+    _exec(f"UPDATE siga_xml_fila SET status='CONCLUIDO', processado_em={agora} WHERE id={ph}", (item_id,))
+
+
+def marcar_fila_erro(item_id: int, erro: str):
+    ph = "%s" if _PG else "?"
+    agora = "NOW()" if _PG else "datetime('now','localtime')"
+    _exec(f"UPDATE siga_xml_fila SET status='ERRO', erro={ph}, processado_em={agora} WHERE id={ph}", (erro, item_id))
+
+
+def status_fila_xml(cnpj: str) -> dict:
+    ph = "%s" if _PG else "?"
+    rows = _exec(
+        f"SELECT status, COUNT(*) as qtd FROM siga_xml_fila WHERE cnpj={ph} GROUP BY status",
+        (cnpj,), fetch_all=True,
+    ) or []
+    return {r["status"]: r["qtd"] for r in rows}
 
 
 def get_stats(usuario: str | None = None) -> dict:

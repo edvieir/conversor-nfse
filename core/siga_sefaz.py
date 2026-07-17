@@ -316,3 +316,29 @@ def aguardar_e_baixar(
         time.sleep(intervalo)
         decorrido += intervalo
     raise TimeoutError(f"Solicitação {solicitacao_id} não concluiu em {timeout}s.")
+
+
+def extrair_chaves_malha(conteudo_xlsx: bytes) -> list[str]:
+    """
+    Extrai as chaves de acesso de um relatório de índices de malha (todas as
+    abas exceto "Resumo" têm uma coluna "Chave NF-e"; indicadores sem essa
+    coluna, como o de saldo credor, são ignorados).
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo_xlsx), data_only=True)
+    chaves: set[str] = set()
+    for ws in wb.worksheets:
+        if ws.title == "Resumo":
+            continue
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            continue
+        cabecalho = [str(c or "") for c in rows[0]]
+        idx_chave = next((i for i, c in enumerate(cabecalho) if "chave" in c.lower()), None)
+        if idx_chave is None:
+            continue
+        for row in rows[1:]:
+            if idx_chave < len(row) and row[idx_chave]:
+                chaves.add(str(row[idx_chave]).strip())
+    return sorted(chaves)

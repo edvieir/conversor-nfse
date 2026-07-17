@@ -328,6 +328,7 @@ def render():
         ("baixar_xmls",    "Baixar XML"),
         ("nfe_nfce",       "NFE / NFCE"),
         ("siga_consulta",  "Consulta DTE"),
+        ("siga_downloads", "Relatórios SIGA"),
         ("certificados",   "Certificados"),
         ("milhao",         "Milhão"),
         ("dashboard",      "Dashboard"),
