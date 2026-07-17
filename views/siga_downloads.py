@@ -293,12 +293,14 @@ def render():
 
     st.markdown("---")
 
+    from core.siga_sefaz import extrair_chaves_xlsx
+
     for nome_arquivo, tipo, nome_aba, filtros in _listar_abas():
         label = _LABELS.get(nome_arquivo, nome_arquivo)
         caminho = _caminho_cache(cnpj_sel, nome_arquivo, periodo)
 
         with st.container(border=True):
-            col_info, col_baixar, col_atualizar = st.columns([3, 1, 1])
+            col_info, col_baixar, col_fila, col_atualizar = st.columns([3, 1, 1, 1])
 
             with col_info:
                 if caminho.exists():
@@ -333,6 +335,14 @@ def render():
                         key=f"dl_{nome_arquivo}",
                     )
 
+            with col_fila:
+                if caminho.exists():
+                    if st.button("Enfileirar XML", key=f"fila_{nome_arquivo}", use_container_width=True):
+                        chaves = extrair_chaves_xlsx(caminho.read_bytes())
+                        qtd = enfileirar_xml(user["username"], cnpj_sel, chaves)
+                        st.success(f"{qtd} chave(s) enfileirada(s) ({len(chaves)} encontradas em {label}).")
+                        st.rerun()
+
             with col_atualizar:
                 if st.button("Atualizar agora", key=f"upd_{nome_arquivo}", use_container_width=True):
                     with st.spinner(f"Buscando {label} no SIGA..."):
@@ -352,51 +362,41 @@ def render():
                                 st.success(f"{label} atualizado ({len(conteudo)} bytes).")
                             st.rerun()
 
-    # ── XML das notas não escrituradas (fila com limite de 20/hora) ─────────
-    caminho_malha = _caminho_cache(cnpj_sel, "INDICADORES_MALHA_pendencias", periodo)
-    if caminho_malha.exists():
-        st.markdown("---")
-        st.markdown("### XML das notas não escrituradas")
-        st.caption(
-            "O SIGA só traz a chave de acesso de cada nota, não o XML. O XML completo "
-            "vem da SEFAZ Nacional, que limita a **20 consultas por hora por certificado** — "
-            "por isso o download roda em fila, não na hora."
+    # ── Fila de XML avulso (limite de 20/hora) ───────────────────────────────
+    st.markdown("---")
+    st.markdown("### Fila de XML avulso")
+    st.caption(
+        "Os relatórios do SIGA acima só trazem a chave de acesso de cada nota, não "
+        "o XML. Use \"Enfileirar XML\" em qualquer aba pra buscar o XML completo "
+        "dessas chaves na SEFAZ Nacional — limite de **20 consultas por hora por "
+        "certificado**, por isso roda em fila, não na hora."
+    )
+
+    status = status_fila_xml(cnpj_sel)
+    pendente  = status.get("PENDENTE", 0)
+    concluido = status.get("CONCLUIDO", 0)
+    erro      = status.get("ERRO", 0)
+
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Pendentes", pendente)
+    col_b.metric("Concluídos", concluido)
+    col_c.metric("Com erro", erro)
+
+    if pendente:
+        horas = -(-pendente // 20)  # arredonda pra cima
+        st.info(f"Fila roda a cada hora (até 20 por vez) — previsão de ~{horas}h para concluir os {pendente} pendentes.")
+
+    pasta_xml = XML_DIR / cnpj_sel
+    arquivos_xml = sorted(pasta_xml.glob("*.xml")) if pasta_xml.exists() else []
+    if arquivos_xml:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in arquivos_xml:
+                zf.write(f, arcname=f.name)
+        st.download_button(
+            f"Baixar {len(arquivos_xml)} XML(s) prontos (.zip)",
+            data=buf.getvalue(),
+            file_name=f"xml_fila_{cnpj_sel}.zip",
+            mime="application/zip",
+            use_container_width=True,
         )
-
-        from core.siga_sefaz import extrair_chaves_malha
-
-        status = status_fila_xml(cnpj_sel)
-        pendente  = status.get("PENDENTE", 0)
-        concluido = status.get("CONCLUIDO", 0)
-        erro      = status.get("ERRO", 0)
-
-        col_a, col_b, col_c, col_d = st.columns(4)
-        col_a.metric("Pendentes", pendente)
-        col_b.metric("Concluídos", concluido)
-        col_c.metric("Com erro", erro)
-        with col_d:
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Enfileirar XML de todas as chaves", use_container_width=True):
-                chaves = extrair_chaves_malha(caminho_malha.read_bytes())
-                qtd = enfileirar_xml(user["username"], cnpj_sel, chaves)
-                st.success(f"{qtd} chave(s) verificada(s)/enfileirada(s) ({len(chaves)} encontradas no relatório).")
-                st.rerun()
-
-        if pendente:
-            horas = -(-pendente // 20)  # arredonda pra cima
-            st.info(f"Fila roda a cada hora (até 20 por vez) — previsão de ~{horas}h para concluir os {pendente} pendentes.")
-
-        pasta_xml = XML_DIR / cnpj_sel
-        arquivos_xml = sorted(pasta_xml.glob("*.xml")) if pasta_xml.exists() else []
-        if arquivos_xml:
-            buf = io.BytesIO()
-            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                for f in arquivos_xml:
-                    zf.write(f, arcname=f.name)
-            st.download_button(
-                f"Baixar {len(arquivos_xml)} XML(s) prontos (.zip)",
-                data=buf.getvalue(),
-                file_name=f"xml_nao_escrituradas_{cnpj_sel}.zip",
-                mime="application/zip",
-                use_container_width=True,
-            )

@@ -357,11 +357,12 @@ def aguardar_e_baixar(
     raise TimeoutError(f"Solicitação {solicitacao_id} não concluiu em {timeout}s.")
 
 
-def extrair_chaves_malha(conteudo_xlsx: bytes) -> list[str]:
+def extrair_chaves_xlsx(conteudo_xlsx: bytes) -> list[str]:
     """
-    Extrai as chaves de acesso de um relatório de índices de malha (todas as
-    abas exceto "Resumo" têm uma coluna "Chave NF-e"; indicadores sem essa
-    coluna, como o de saldo credor, são ignorados).
+    Extrai as chaves de acesso de qualquer relatório do SIGA (índices de
+    malha, NF-e/NFC-e emitidas/recebidas/canceladas etc.) -- procura em
+    todas as abas exceto "Resumo" por uma coluna com "chave" no nome;
+    abas sem essa coluna (ex.: saldo credor) são ignoradas.
     """
     import openpyxl
 
