@@ -7,11 +7,9 @@ _PAGES = [
     ("conversor",       "sync",           "Converter"),
     ("arquivo_fortes",  "description",    "Arquivo Fortes"),
     ("baixar_xmls",     "cloud_download", "Baixar XML"),
-    ("nfe_nfce",        "receipt",        "NFE / NFCE"),
     ("certificados",    "verified_user",  "Certificados"),
     ("milhao",          "receipt_long",   "Notas do Milhão"),
     ("dashboard",       "monitoring",     "Dashboard"),
-    ("siga_consulta",  "summarize",      "Consulta DTE"),
     ("siga_downloads", "cloud_sync",     "Relatórios SIGA"),
 ]
 _ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
