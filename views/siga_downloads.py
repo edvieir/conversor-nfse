@@ -79,6 +79,105 @@ def _gerar_ao_vivo(usuario: str, cnpj: str, nome_arquivo: str, tipo, nome_aba, f
     return siga_sefaz.aguardar_e_baixar(sessao, token, sid)
 
 
+def _segundos_restantes(proxima_consulta: str | None) -> int:
+    if not proxima_consulta:
+        return 0
+    try:
+        dt = datetime.datetime.fromisoformat(proxima_consulta)
+        return max(0, int((dt - datetime.datetime.now()).total_seconds()))
+    except Exception:
+        return 0
+
+
+def _secao_baixar_tudo(user: dict, cnpj: str, razao_social: str):
+    """Baixa o XML completo (NF-e + NFC-e, emitidas e recebidas) via distribuição
+    NSU da SEFAZ Nacional -- mesmo motor da página NFE/NFCE, sem o limite de
+    20/hora (esse aqui é 1 consulta/hora por CNPJ, controlado por NSU)."""
+    from db.database import get_nsu_cnpj
+
+    with st.container(border=True):
+        st.markdown("**Baixar tudo (XML completo via SEFAZ Nacional)**")
+        st.caption(
+            "NF-e e NFC-e, emitidas e recebidas, direto em XML (não resumo). "
+            "Limite da SEFAZ: 1 consulta por hora por CNPJ."
+        )
+
+        estado_nsu = get_nsu_cnpj(cnpj)
+        seg_rest = _segundos_restantes(estado_nsu.get("proxima_consulta"))
+
+        if seg_rest > 0:
+            minutos = seg_rest // 60
+            st.warning(f"Bloqueado pela SEFAZ — tente novamente em ~{minutos} min.")
+            return
+
+        col_ini, col_fim, col_btn = st.columns([1, 1, 1])
+        with col_ini:
+            data_ini = st.date_input("De", value=datetime.date.today().replace(day=1), key="siga_dl_tudo_ini")
+        with col_fim:
+            data_fim = st.date_input("Até", value=datetime.date.today(), key="siga_dl_tudo_fim")
+        with col_btn:
+            st.markdown("<br>", unsafe_allow_html=True)
+            disparar = st.button("Baixar tudo", type="primary", use_container_width=True, key="siga_dl_tudo_btn")
+
+        if disparar:
+            cert = carregar_certificado(user["username"], cnpj)
+            if not cert:
+                st.error("Certificado não encontrado para esta empresa.")
+                return
+            pfx_bytes, pfx_senha = cert
+
+            progress_bar = st.progress(0, text="Conectando na SEFAZ Nacional...")
+            log_placeholder = st.empty()
+
+            def on_progress(frac: float):
+                progress_bar.progress(min(frac, 1.0), text=f"Processando... {int(min(frac,1.0)*100)}%")
+
+            def on_log(linhas: list):
+                log_placeholder.code("\n".join(linhas[-30:]), language="")
+
+            try:
+                from core.nfe_sefaz import executar_consulta_sefaz
+
+                zip_bytes, log_final = executar_consulta_sefaz(
+                    pfx_bytes=pfx_bytes,
+                    pfx_senha=pfx_senha,
+                    empresas=[{"cnpj": cnpj, "nome": razao_social}],
+                    ambiente="1",
+                    uf="CE",
+                    data_ini=data_ini,
+                    data_fim=data_fim,
+                    tipo_doc="ambos",
+                    papel_filtro="ambos",
+                    incluir_xml=True,
+                    incluir_pdf=False,
+                    incluir_excel=False,
+                    log_cb=on_log,
+                    progress_cb=on_progress,
+                    salvar_db=True,
+                )
+                progress_bar.progress(1.0, text="Concluído!")
+                log_placeholder.empty()
+
+                with st.expander("Log da consulta", expanded=not bool(zip_bytes)):
+                    st.code("\n".join(log_final), language="")
+
+                if zip_bytes:
+                    st.success(f"{len(zip_bytes) // 1024} KB de XML baixados.")
+                    st.download_button(
+                        "Baixar ZIP com os XMLs",
+                        data=zip_bytes,
+                        file_name=f"xml_completo_{cnpj}_{data_ini}_{data_fim}.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                    )
+                else:
+                    st.info("Nenhum documento novo encontrado no período (ou já sincronizado antes).")
+            except Exception as e:
+                progress_bar.empty()
+                log_placeholder.empty()
+                st.error(f"Erro: {e}")
+
+
 def render():
     user = current_user()
     nav.render("siga_downloads")
@@ -113,6 +212,11 @@ def render():
         )
 
     cnpj_sel = opcoes[empresa_label]
+    razao_sel = next(c["razao_social"] for c in certs if c["cnpj"] == cnpj_sel)
+
+    st.markdown("---")
+
+    _secao_baixar_tudo(user, cnpj_sel, razao_sel)
 
     st.markdown("---")
 
