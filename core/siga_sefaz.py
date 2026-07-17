@@ -198,8 +198,25 @@ def solicitar_download(
         timeout=30,
     )
     r.raise_for_status()
-    body = r.json()
-    return body.get("data", {}).get("id") or body.get("id")
+
+    # A API não retorna corpo (200/202 vazio) -- a solicitação é assíncrona.
+    # Confirma tentando ler o JSON; se vier vazio, busca a mais recente na listagem.
+    try:
+        body = r.json()
+        solicitacao_id = body.get("data", {}).get("id") or body.get("id")
+        if solicitacao_id:
+            return solicitacao_id
+    except ValueError:
+        pass
+
+    solicitacoes = listar_solicitacoes(sessao, token)
+    mais_recente = next((s for s in solicitacoes if s.get("cnpj") == cnpj and s.get("tipo") == tipo), None)
+    if not mais_recente:
+        raise RuntimeError(
+            f"Solicitação de {tipo} para {cnpj} criada (status {r.status_code}), "
+            "mas não foi encontrada em /v1/solicitacoes logo em seguida."
+        )
+    return mais_recente["id"]
 
 
 def listar_solicitacoes(sessao: requests.Session, token: str) -> list[dict]:
