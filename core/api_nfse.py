@@ -505,7 +505,7 @@ def baixar_xmls_nfse(
                 log.append("NSU nao avancou, encerrando.")
                 if log_cb: log_cb(log)
                 break
-            nsu = nsu_max + 1
+            nsu = nsu_max
 
             if log_cb: log_cb(log)
             if progress_cb:
