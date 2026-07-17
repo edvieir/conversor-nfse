@@ -163,18 +163,43 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _kebab_para_camel(s: str) -> str:
+    partes = s.split("-")
+    return partes[0] + "".join(p.capitalize() for p in partes[1:])
+
+
+def _filtro_bate(filtro: dict, params_enviados: dict) -> bool:
+    """Compara o filtro de uma solicitação já existente com os params que
+    acabamos de enviar. dat-referencia é comparado por prefixo, pois a API
+    normaliza "2026-07" para "2026-07-01" ao salvar."""
+    filtro = filtro or {}
+    for chave_kebab, valor_enviado in params_enviados.items():
+        chave_camel = _kebab_para_camel(chave_kebab)
+        valor_salvo = filtro.get(chave_camel)
+        if chave_kebab == "dat-referencia":
+            enviados = valor_enviado if isinstance(valor_enviado, list) else [valor_enviado]
+            salvos = valor_salvo if isinstance(valor_salvo, list) else ([valor_salvo] if valor_salvo else [])
+            if not all(any(str(s or "").startswith(str(e)) for s in salvos) for e in enviados):
+                return False
+            continue
+        if str(valor_salvo) != str(valor_enviado):
+            return False
+    return True
+
+
 def _solicitar(
     sessao: requests.Session, token: str, url: str, params: dict,
     cnpj: str, tipo: str, descricao: str,
 ) -> str:
     """POST genérico de solicitação de download assíncrona. Trata corpo vazio
     (comum: 200/202 sem JSON) e 409 (solicitação igual já existe) buscando o
-    id em /v1/solicitacoes."""
+    id em /v1/solicitacoes -- comparando os filtros de verdade, não só
+    cnpj+tipo, para não reaproveitar uma solicitação com outro período/papel."""
     r = sessao.post(
         url, headers=_headers(token), params=params,
         json={"descricao": descricao}, timeout=30,
     )
-    # 409 = já existe uma solicitação igual (mesmo tipo/cnpj/período) pendente
+    # 409 = já existe uma solicitação igual (mesmo tipo/cnpj/filtros) pendente
     # ou concluída -- não é erro, só reaproveita a existente.
     if r.status_code != 409:
         r.raise_for_status()
@@ -187,13 +212,18 @@ def _solicitar(
             pass
 
     solicitacoes = listar_solicitacoes(sessao, token)
-    mais_recente = next((s for s in solicitacoes if s.get("cnpj") == cnpj and s.get("tipo") == tipo), None)
-    if not mais_recente:
+    candidatas = [
+        s for s in solicitacoes
+        if s.get("cnpj") == cnpj and s.get("tipo") == tipo
+        and _filtro_bate(s.get("filtro"), params)
+    ]
+    if not candidatas:
         raise RuntimeError(
             f"Solicitação de {tipo} para {cnpj} criada (status {r.status_code}), "
-            "mas não foi encontrada em /v1/solicitacoes logo em seguida."
+            f"mas nenhuma em /v1/solicitacoes bate com os filtros enviados ({params})."
         )
-    return mais_recente["id"]
+    # listar_solicitacoes já vem ordenado por criacao desc -- pega a mais nova.
+    return candidatas[0]["id"]
 
 
 def solicitar_download(
@@ -292,7 +322,16 @@ def baixar_solicitacao(sessao: requests.Session, token: str, solicitacao_id: str
         headers=_headers(token), timeout=60,
     )
     r.raise_for_status()
-    return _desembrulhar_zip_aninhado(r.content)
+    conteudo = _desembrulhar_zip_aninhado(r.content)
+    # Um .xlsx (ou o .zip que o embrulha) sempre começa com a assinatura PK.
+    # Se não bater, a solicitação encontrada não é o arquivo esperado --
+    # melhor falhar alto do que salvar um arquivo quebrado como "sucesso".
+    if conteudo[:2] != b"PK":
+        raise RuntimeError(
+            f"Conteúdo inesperado para a solicitação {solicitacao_id} "
+            f"({len(conteudo)} bytes, não é um arquivo válido)."
+        )
+    return conteudo
 
 
 def aguardar_e_baixar(

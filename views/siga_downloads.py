@@ -126,12 +126,14 @@ def render():
             with col_info:
                 if caminho.exists():
                     mtime = datetime.datetime.fromtimestamp(caminho.stat().st_mtime)
+                    tamanho = caminho.stat().st_size
+                    tamanho_fmt = f"{tamanho} bytes" if tamanho < 1024 else f"{tamanho / 1024:.1f} KB"
                     ic = icon("check-circle", 16, "#10B981")
                     st.markdown(
                         f"**{label}**<br>"
                         f'<span style="color:#64748B;font-size:.8rem;">{ic} '
                         f'Atualizado em {mtime.strftime("%d/%m/%Y %H:%M")} '
-                        f'({caminho.stat().st_size // 1024} KB)</span>',
+                        f'({tamanho_fmt})</span>',
                         unsafe_allow_html=True,
                     )
                 else:
