@@ -5,6 +5,7 @@ em data/siga_downloads/<cnpj>/. Esta tela lista o que já está em cache (rápid
 funciona mesmo com o SIGA fora do ar) e oferece "Atualizar agora" por aba para
 buscar ao vivo quando necessário.
 """
+import calendar
 import datetime
 import io
 import zipfile
@@ -17,6 +18,7 @@ from assets.icons import icon
 from db.database import (
     listar_certificados, carregar_certificado,
     enfileirar_xml, status_fila_xml,
+    listar_xmls_por_periodo, listar_resultados_por_periodo,
 )
 from views import nav
 from core.siga_scheduler import ABAS as _ABAS_DOCUMENTOS, SAIDA_DIR
@@ -178,6 +180,73 @@ def _secao_baixar_tudo(user: dict, cnpj: str, razao_social: str):
                 st.error(f"Erro: {e}")
 
 
+def _periodo_para_datas(periodo: str) -> tuple[str, str] | None:
+    try:
+        ano, mes = periodo.split("-")
+        ano, mes = int(ano), int(mes)
+        ultimo_dia = calendar.monthrange(ano, mes)[1]
+        return f"{ano}-{mes:02d}-01", f"{ano}-{mes:02d}-{ultimo_dia}"
+    except Exception:
+        return None
+
+
+def _secao_acervo_local(cnpj: str, razao_social: str, periodo: str):
+    """XML e planilha do que já está sincronizado no acervo local -- sem
+    chamar SEFAZ nem SIGA de novo, então sem limite de consulta."""
+    datas = _periodo_para_datas(periodo)
+    if not datas:
+        return
+    data_ini_str, data_fim_str = datas
+
+    with st.container(border=True):
+        st.markdown("**Acervo local já sincronizado**")
+        st.caption(
+            "XML e planilha do que já está salvo no banco para o período — "
+            "não chama SEFAZ nem SIGA de novo, sem limite de consulta."
+        )
+
+        col_xml, col_xlsx = st.columns(2)
+
+        with col_xml:
+            xmls = listar_xmls_por_periodo(cnpj, data_ini_str, data_fim_str)
+            st.metric("Documentos no acervo", len(xmls))
+            if xmls:
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for r in xmls:
+                        pasta = f"{r.get('modelo','NF-e')}_{r.get('papel','?')}"
+                        chave = r.get("chave", "x")
+                        xml = r.get("xml_conteudo", "")
+                        if xml:
+                            zf.writestr(f"XMLs/{pasta}/{chave}.xml", xml)
+                st.download_button(
+                    "Baixar XMLs do acervo (.zip)",
+                    data=buf.getvalue(),
+                    file_name=f"acervo_xml_{cnpj}_{periodo}.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    key="siga_acervo_xml_dl",
+                )
+
+        with col_xlsx:
+            rec  = listar_resultados_por_periodo(cnpj, data_ini_str, data_fim_str, modelo="55", papel="Recebida")
+            emit = listar_resultados_por_periodo(cnpj, data_ini_str, data_fim_str, modelo="55", papel="Emitida")
+            nfce = listar_resultados_por_periodo(cnpj, data_ini_str, data_fim_str, modelo="65")
+            total = len(rec) + len(emit) + len(nfce)
+            st.metric("Notas para planilha DTE", total)
+            if total:
+                from views.siga_consulta import _gerar_excel
+                xlsx_bytes = _gerar_excel(rec, emit, nfce, cnpj, razao_social, periodo)
+                st.download_button(
+                    "Baixar planilha Excel (DTE)",
+                    data=xlsx_bytes,
+                    file_name=f"DTE_{cnpj}_{periodo}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="siga_acervo_xlsx_dl",
+                )
+
+
 def render():
     user = current_user()
     nav.render("siga_downloads")
@@ -217,6 +286,10 @@ def render():
     st.markdown("---")
 
     _secao_baixar_tudo(user, cnpj_sel, razao_sel)
+
+    st.markdown("---")
+
+    _secao_acervo_local(cnpj_sel, razao_sel, periodo)
 
     st.markdown("---")
 
