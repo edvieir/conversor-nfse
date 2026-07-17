@@ -18,6 +18,7 @@ rede real antes de considerar este modulo pronto para producao.
 import base64
 import hashlib
 import os
+import re
 import time
 from urllib.parse import urlencode, urlparse, parse_qs
 
@@ -29,6 +30,13 @@ SSO_AUTH_ENDPOINT = f"{SSO_REALM}/protocol/openid-connect/auth"
 SSO_TOKEN_ENDPOINT = f"{SSO_REALM}/protocol/openid-connect/token"
 SSO_CLIENT_ID = "painelind-frontend"
 SSO_REDIRECT_URI = "https://siga.sefaz.ce.gov.br/ui/"
+
+# "Entrar com Certificado Digital" é um identity broker do Keycloak que
+# delega para um realm dedicado a mTLS em outro host (cert-sso). O TLS
+# client cert só é pedido nesse host -- daí a necessidade de montar o
+# adapter também nele.
+CERT_IDP_ALIAS = "certificado-digital"
+CERT_SSO_HOST = "https://cert-sso.sefaz.ce.gov.br"
 
 SIGA_API = "https://siga.sefaz.ce.gov.br/api"
 
@@ -56,8 +64,9 @@ def _sessao(pfx_bytes: bytes, pfx_senha: str) -> requests.Session:
         pkcs12_password=pfx_senha.encode() if isinstance(pfx_senha, str) else pfx_senha,
     )
     # mTLS certificate-bound tokens: o certificado precisa ir tanto no login
-    # quanto em toda chamada subsequente à API.
+    # (nos 3 hosts do fluxo de broker) quanto em toda chamada subsequente à API.
     s.mount("https://sso.sefaz.ce.gov.br", adapter)
+    s.mount(CERT_SSO_HOST, adapter)
     s.mount("https://siga.sefaz.ce.gov.br", adapter)
     return s
 
@@ -73,19 +82,19 @@ def _pkce_pair() -> tuple[str, str]:
 def login(sessao: requests.Session) -> dict:
     """
     Executa o fluxo Authorization Code + PKCE do Keycloak usando o
-    certificado digital (mTLS) já montado na sessão.
+    certificado digital (mTLS), confirmado via captura de rede real:
 
-    TODO(validar ao vivo): a tela de login do SIGA oferece 3 opções
-    ("Nome de usuário/Senha", "Entrar com Certificado Digital",
-    "Acessar como cidadão (GOV.BR)"). Não foi possível observar, em uma
-    sessão de rede real, qual requisição o botão "Entrar com Certificado
-    Digital" dispara (ex: um parâmetro extra tipo kc_idp_hint=x509, um
-    submit de formulário para um authenticator x509 do próprio Keycloak,
-    ou uma troca de porta/host dedicada a mTLS). Esta implementação assume
-    que basta apresentar o certificado durante o handshake TLS com o
-    endpoint de autorização e que o Keycloak reconhece isso via o
-    authenticator "X509/Validate Username Form". Ajustar conforme a
-    captura de rede confirmar.
+    1. GET no endpoint de autorização do realm principal (sefaz-ad-realm)
+       -> retorna a página de login (com AUTH_SESSION_ID em cookie) contendo
+       um link para o broker "certificado-digital".
+    2. GET nesse link de broker (/broker/certificado-digital/login) ->
+       Keycloak redireciona (303) para o realm dedicado a mTLS, hospedado
+       em outro host (cert-sso.sefaz.ce.gov.br, realm sefaz-x509-realm).
+       É *nesse* host que o TLS pede o certificado do cliente.
+    3. cert-sso valida o certificado e redireciona (302) de volta para o
+       endpoint do broker no realm principal, que por sua vez redireciona
+       para SSO_REDIRECT_URI com "#code=...&state=..." -- fluxo OIDC
+       original concluído.
 
     Retorna o dict de resposta do token endpoint (access_token,
     refresh_token, expires_in, ...).
@@ -112,19 +121,31 @@ def login(sessao: requests.Session) -> dict:
     )
     r.raise_for_status()
 
-    # Se o Keycloak autenticou via certificado (X509 authenticator) sem
-    # exigir formulário, ele redireciona direto para SSO_REDIRECT_URI com
-    # "#code=...&state=..." na URL final.
-    final_url = r.url
+    m = re.search(
+        rf'href="([^"]*broker/{CERT_IDP_ALIAS}/login[^"]*)"', r.text,
+    )
+    if not m:
+        raise RuntimeError(
+            "Link do broker 'certificado-digital' não encontrado na página "
+            "de login. O layout da tela pode ter mudado -- reinspecionar "
+            f"a página em {r.url}."
+        )
+    broker_url = m.group(1).replace("&amp;", "&")
+    if broker_url.startswith("/"):
+        broker_url = f"https://sso.sefaz.ce.gov.br{broker_url}"
+
+    # Segue: broker/login -> (mTLS) cert-sso -> broker/endpoint -> SSO_REDIRECT_URI
+    r2 = sessao.get(broker_url, timeout=30, allow_redirects=True)
+    r2.raise_for_status()
+
+    final_url = r2.url
     fragment = urlparse(final_url).fragment
     qs = parse_qs(fragment)
     code = qs.get("code", [None])[0]
     if not code:
         raise RuntimeError(
-            "Não foi possível extrair o 'code' do redirect final do login. "
-            f"URL final: {final_url}. É provável que o authenticator x509 "
-            "exija um passo adicional (ex: form POST) — capturar a rede "
-            "real do clique em 'Entrar com Certificado Digital' para ajustar."
+            "Não foi possível extrair o 'code' após o broker de certificado. "
+            f"URL final: {final_url}."
         )
 
     token_params = {
