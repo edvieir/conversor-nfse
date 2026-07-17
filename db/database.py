@@ -437,6 +437,14 @@ def listar_certificados(usuario: str) -> list[dict]:
     return rows or []
 
 
+def listar_todos_certificados() -> list[dict]:
+    """Retorna (usuario, cnpj, razao_social) de todo certificado salvo, de todos os usuários. Uso por schedulers."""
+    return _exec(
+        "SELECT usuario, cnpj, razao_social FROM certificados ORDER BY razao_social",
+        fetch_all=True,
+    ) or []
+
+
 def carregar_certificado(usuario: str, cnpj: str) -> tuple[bytes, str] | None:
     from core.crypto import decrypt_bytes, decrypt_str
     ph = "%s" if _PG else "?"
