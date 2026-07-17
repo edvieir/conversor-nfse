@@ -30,7 +30,17 @@ if _env_file.exists():
             k, v = linha.split("=", 1)
             os.environ.setdefault(k.strip(), v.strip())
 
-DEFAULT_TIPOS = ["NF_E", "NFC_E"]
+# Cada "aba" é (nome_do_arquivo, filtros extras passados a solicitar_download).
+ABAS = {
+    "NF_E": [
+        ("emitidas",   {"papel_operacao": "EMITENTE"}),
+        ("recebidas",  {"papel_operacao": "DESTINATARIO"}),
+        ("canceladas", {"papel_operacao": "EMITENTE", "resultado_processamento": "CANCELADA"}),
+    ],
+    "NFC_E": [
+        ("emitidas", {"papel_operacao": "EMITENTE"}),
+    ],
+}
 SAIDA_DIR = Path(__file__).parent.parent / "data" / "siga_downloads"
 
 
@@ -63,17 +73,32 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
 
     token = token_resp["access_token"]
 
-    # 1ª passada: dispara a solicitação de cada tipo
-    pendentes = []
-    for tipo in DEFAULT_TIPOS:
-        try:
-            solicitacao_id = siga_sefaz.solicitar_download(
-                sessao, token, cnpj, tipo, dat_referencia=[periodo],
+    # 1ª passada: dispara a solicitação de cada aba (tipo x papel/resultado)
+    pendentes = []  # (nome_arquivo, solicitacao_id)
+    for tipo, abas in ABAS.items():
+        for nome_aba, filtros in abas:
+            try:
+                solicitacao_id = siga_sefaz.solicitar_download(
+                    sessao, token, cnpj, tipo, dat_referencia=[periodo], **filtros,
+                )
+                pendentes.append((f"{tipo}_{nome_aba}", solicitacao_id))
+                _log(f"  [{cnpj}] {tipo} ({nome_aba}): solicitação {solicitacao_id} criada.")
+            except Exception as e:
+                _log(f"  [{cnpj}] ERRO ao solicitar {tipo} ({nome_aba}): {e}")
+
+    # Índices de malha (pendências) -- só baixa se houver algo; senão fica em branco.
+    try:
+        indicadores = siga_sefaz.listar_indicadores_malha(sessao, token, cnpj)
+        if indicadores:
+            solicitacao_id = siga_sefaz.solicitar_download_indicadores(
+                sessao, token, cnpj, dat_referencia=[periodo],
             )
-            pendentes.append((tipo, solicitacao_id))
-            _log(f"  [{cnpj}] {tipo}: solicitação {solicitacao_id} criada.")
-        except Exception as e:
-            _log(f"  [{cnpj}] ERRO ao solicitar {tipo}: {e}")
+            pendentes.append(("INDICADORES_MALHA_pendencias", solicitacao_id))
+            _log(f"  [{cnpj}] Indicadores de malha: {len(indicadores)} pendência(s), solicitação {solicitacao_id} criada.")
+        else:
+            _log(f"  [{cnpj}] Indicadores de malha: sem pendências, nada a baixar.")
+    except Exception as e:
+        _log(f"  [{cnpj}] ERRO ao consultar indicadores de malha: {e}")
 
     if not pendentes:
         return
@@ -82,14 +107,14 @@ def _processar_empresa(usuario: str, cnpj: str, razao_social: str, periodo: str)
     destino = SAIDA_DIR / cnpj
     destino.mkdir(parents=True, exist_ok=True)
 
-    for tipo, solicitacao_id in pendentes:
+    for nome_arquivo, solicitacao_id in pendentes:
         try:
             conteudo = siga_sefaz.aguardar_e_baixar(sessao, token, solicitacao_id)
-            arquivo = destino / f"{tipo}_{periodo}.xlsx"
+            arquivo = destino / f"{nome_arquivo}_{periodo}.xlsx"
             arquivo.write_bytes(conteudo)
-            _log(f"  [{cnpj}] {tipo}: salvo em {arquivo} ({len(conteudo)} bytes).")
+            _log(f"  [{cnpj}] {nome_arquivo}: salvo em {arquivo} ({len(conteudo)} bytes).")
         except Exception as e:
-            _log(f"  [{cnpj}] ERRO ao baixar {tipo} (solicitação {solicitacao_id}): {e}")
+            _log(f"  [{cnpj}] ERRO ao baixar {nome_arquivo} (solicitação {solicitacao_id}): {e}")
 
 
 def main():

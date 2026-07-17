@@ -164,6 +164,39 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _solicitar(
+    sessao: requests.Session, token: str, url: str, params: dict,
+    cnpj: str, tipo: str, descricao: str,
+) -> str:
+    """POST genérico de solicitação de download assíncrona. Trata corpo vazio
+    (comum: 200/202 sem JSON) e 409 (solicitação igual já existe) buscando o
+    id em /v1/solicitacoes."""
+    r = sessao.post(
+        url, headers=_headers(token), params=params,
+        json={"descricao": descricao}, timeout=30,
+    )
+    # 409 = já existe uma solicitação igual (mesmo tipo/cnpj/período) pendente
+    # ou concluída -- não é erro, só reaproveita a existente.
+    if r.status_code != 409:
+        r.raise_for_status()
+        try:
+            body = r.json()
+            solicitacao_id = body.get("data", {}).get("id") or body.get("id")
+            if solicitacao_id:
+                return solicitacao_id
+        except ValueError:
+            pass
+
+    solicitacoes = listar_solicitacoes(sessao, token)
+    mais_recente = next((s for s in solicitacoes if s.get("cnpj") == cnpj and s.get("tipo") == tipo), None)
+    if not mais_recente:
+        raise RuntimeError(
+            f"Solicitação de {tipo} para {cnpj} criada (status {r.status_code}), "
+            "mas não foi encontrada em /v1/solicitacoes logo em seguida."
+        )
+    return mais_recente["id"]
+
+
 def solicitar_download(
     sessao: requests.Session,
     token: str,
@@ -192,35 +225,34 @@ def solicitar_download(
     for chave, valor in filtros.items():
         params[chave.replace("_", "-")] = valor
 
-    r = sessao.post(
-        url, headers=_headers(token), params=params,
-        json={"descricao": f"{tipo} {cnpj} {filtros.get('dat_referencia', '')}"},
-        timeout=30,
+    descricao = f"{tipo} {cnpj} {filtros.get('dat_referencia', '')}"
+    return _solicitar(sessao, token, url, params, cnpj, tipo, descricao)
+
+
+def listar_indicadores_malha(sessao: requests.Session, token: str, cnpj: str, dat_referencia: str | None = None) -> list[dict]:
+    """Lista os indícios de irregularidade (malha fiscal) do CNPJ. Lista vazia = sem pendências."""
+    params = {}
+    if dat_referencia:
+        params["dat-referencia"] = dat_referencia
+    r = sessao.get(
+        f"{SIGA_API}/v1/unidades/{cnpj}/malhas-fiscais/indicadores",
+        headers=_headers(token), params=params, timeout=30,
     )
-    # 409 = já existe uma solicitação igual (mesmo tipo/cnpj/período) pendente
-    # ou concluída -- não é erro, só reaproveita a existente.
-    if r.status_code != 409:
-        r.raise_for_status()
+    r.raise_for_status()
+    return r.json().get("data", [])
 
-    # A API não retorna corpo (200/202 vazio) -- a solicitação é assíncrona.
-    # Confirma tentando ler o JSON; se vier vazio (ou 409), busca na listagem.
-    if r.status_code != 409:
-        try:
-            body = r.json()
-            solicitacao_id = body.get("data", {}).get("id") or body.get("id")
-            if solicitacao_id:
-                return solicitacao_id
-        except ValueError:
-            pass
 
-    solicitacoes = listar_solicitacoes(sessao, token)
-    mais_recente = next((s for s in solicitacoes if s.get("cnpj") == cnpj and s.get("tipo") == tipo), None)
-    if not mais_recente:
-        raise RuntimeError(
-            f"Solicitação de {tipo} para {cnpj} criada (status {r.status_code}), "
-            "mas não foi encontrada em /v1/solicitacoes logo em seguida."
-        )
-    return mais_recente["id"]
+def solicitar_download_indicadores(
+    sessao: requests.Session, token: str, cnpj: str,
+    formato_arquivo: str = "xlsx", **filtros,
+) -> str:
+    """Dispara a geração assíncrona do relatório de índices de malha fiscal (pendências)."""
+    url = f"{SIGA_API}/v1/unidades/{cnpj}/malhas-fiscais/indicadores/download"
+    params = {"formato-arquivo": formato_arquivo}
+    for chave, valor in filtros.items():
+        params[chave.replace("_", "-")] = valor
+    descricao = f"INDICADORES_MALHA {cnpj} {filtros.get('dat_referencia', '')}"
+    return _solicitar(sessao, token, url, params, cnpj, "INDICADORES_MALHA", descricao)
 
 
 def listar_solicitacoes(sessao: requests.Session, token: str) -> list[dict]:
