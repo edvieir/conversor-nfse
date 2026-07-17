@@ -197,17 +197,21 @@ def solicitar_download(
         json={"descricao": f"{tipo} {cnpj} {filtros.get('dat_referencia', '')}"},
         timeout=30,
     )
-    r.raise_for_status()
+    # 409 = já existe uma solicitação igual (mesmo tipo/cnpj/período) pendente
+    # ou concluída -- não é erro, só reaproveita a existente.
+    if r.status_code != 409:
+        r.raise_for_status()
 
     # A API não retorna corpo (200/202 vazio) -- a solicitação é assíncrona.
-    # Confirma tentando ler o JSON; se vier vazio, busca a mais recente na listagem.
-    try:
-        body = r.json()
-        solicitacao_id = body.get("data", {}).get("id") or body.get("id")
-        if solicitacao_id:
-            return solicitacao_id
-    except ValueError:
-        pass
+    # Confirma tentando ler o JSON; se vier vazio (ou 409), busca na listagem.
+    if r.status_code != 409:
+        try:
+            body = r.json()
+            solicitacao_id = body.get("data", {}).get("id") or body.get("id")
+            if solicitacao_id:
+                return solicitacao_id
+        except ValueError:
+            pass
 
     solicitacoes = listar_solicitacoes(sessao, token)
     mais_recente = next((s for s in solicitacoes if s.get("cnpj") == cnpj and s.get("tipo") == tipo), None)
