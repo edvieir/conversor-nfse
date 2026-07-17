@@ -478,6 +478,27 @@ def executar_consulta_sefaz(
         salvar_resultados_nfe(docs_para_db, baixado_por="auto")
         _log(f"Acervo: {len(docs_para_db)} documento(s) persistido(s) no banco.")
 
+    # O mesmo documento pode aparecer mais de uma vez no feed NSU da SEFAZ
+    # (ex.: republicação, ou resumo + documento completo em NSUs distintos).
+    # Deduplica por (cnpj_empresa, chave) antes de gerar o ZIP e o Excel,
+    # mantendo a primeira ocorrência.
+    vistos: set[tuple[str, str]] = set()
+    docs_unicos: list[dict] = []
+    duplicados = 0
+    for d in todos_docs:
+        chave = d.get("chave", "")
+        # Sem chave (ex.: XML de evento sem infNFe) -- usa o NSU como
+        # identidade, pra não tratar documentos distintos como duplicata.
+        chave_key = (d.get("cnpj_empresa", ""), chave or f"_nsu_{d.get('nsu', '')}")
+        if chave_key in vistos:
+            duplicados += 1
+            continue
+        vistos.add(chave_key)
+        docs_unicos.append(d)
+    if duplicados:
+        _log(f"  {duplicados} documento(s) duplicado(s) no feed NSU removido(s).")
+    todos_docs = docs_unicos
+
     if not todos_docs:
         _log("Nenhum documento novo encontrado para os filtros aplicados.")
         return None, log
