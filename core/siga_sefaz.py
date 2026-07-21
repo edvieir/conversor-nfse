@@ -171,10 +171,14 @@ def _kebab_para_camel(s: str) -> str:
 def _filtro_bate(filtro: dict, params_enviados: dict) -> bool:
     """Compara o filtro de uma solicitação já existente com os params que
     acabamos de enviar. dat-referencia é comparado por prefixo, pois a API
-    normaliza "2026-07" para "2026-07-01" ao salvar."""
+    normaliza "2026-07" para "2026-07-01" ao salvar. Se a chave nem existir no
+    filtro salvo (alguns tipos, como INDICADORES_MALHA, não ecoam certos
+    params, ex. formato-arquivo), não conta como divergência -- só ignora."""
     filtro = filtro or {}
     for chave_kebab, valor_enviado in params_enviados.items():
         chave_camel = _kebab_para_camel(chave_kebab)
+        if chave_camel not in filtro:
+            continue
         valor_salvo = filtro.get(chave_camel)
         if chave_kebab == "dat-referencia":
             enviados = valor_enviado if isinstance(valor_enviado, list) else [valor_enviado]
