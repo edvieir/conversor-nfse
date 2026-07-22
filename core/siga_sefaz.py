@@ -397,6 +397,16 @@ def _indice_coluna(cabecalho: list[str], *palavras_chave: str):
     return None
 
 
+def _float_seguro(valor, default: float = 0.0) -> float:
+    """Converte pra float tolerando placeholders do Excel (ex.: '-' para zero)."""
+    if valor is None or valor == "":
+        return default
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return default
+
+
 def parse_documentos_fiscais(conteudo_xlsx: bytes, tipo: str, aba: str, periodo: str) -> list[dict]:
     """
     Lê um relatório de documentos fiscais (NF-e/NFC-e emitidas/recebidas/
@@ -437,7 +447,7 @@ def parse_documentos_fiscais(conteudo_xlsx: bytes, tipo: str, aba: str, periodo:
             "chave": str(chave).strip(),
             "numero": str(_val(row, idx_numero)),
             "data_emissao": str(_val(row, idx_data)),
-            "valor": float(_val(row, idx_valor) or 0),
+            "valor": _float_seguro(_val(row, idx_valor)),
             "uf": str(_val(row, idx_uf)),
             "contraparte_cnpj": str(_val(row, idx_cnpj)),
             "contraparte_nome": str(_val(row, idx_nome)),
@@ -478,9 +488,9 @@ def parse_indicadores_malha(conteudo_xlsx: bytes) -> tuple[list[dict], dict[str,
                     "indicador": indicador_str,
                     "descricao": str(row[idx_desc]) if idx_desc is not None and idx_desc < len(row) else "",
                     "grupo_cfop": "",
-                    "valor": float(row[idx_valor] or 0) if idx_valor is not None and idx_valor < len(row) else 0,
+                    "valor": _float_seguro(row[idx_valor]) if idx_valor is not None and idx_valor < len(row) else 0,
                     "unidade": str(row[idx_unid]) if idx_unid is not None and idx_unid < len(row) else "",
-                    "qtd_indicios": int(row[idx_qtd] or 0) if idx_qtd is not None and idx_qtd < len(row) else 0,
+                    "qtd_indicios": int(_float_seguro(row[idx_qtd])) if idx_qtd is not None and idx_qtd < len(row) else 0,
                 })
 
     detalhes: dict[str, list[dict]] = {}
@@ -508,7 +518,7 @@ def parse_indicadores_malha(conteudo_xlsx: bytes) -> tuple[list[dict], dict[str,
                 "chave": str(row[idx_chave]).strip(),
                 "numero": str(row[idx_numero]) if idx_numero is not None and idx_numero < len(row) and row[idx_numero] else "",
                 "data_emissao": str(row[idx_data]) if idx_data is not None and idx_data < len(row) and row[idx_data] else "",
-                "valor": float(row[idx_valor] or 0) if idx_valor is not None and idx_valor < len(row) else 0,
+                "valor": _float_seguro(row[idx_valor]) if idx_valor is not None and idx_valor < len(row) else 0,
                 "contraparte_cnpj": str(row[idx_cnpj]) if idx_cnpj is not None and idx_cnpj < len(row) and row[idx_cnpj] else "",
             })
         if itens:
