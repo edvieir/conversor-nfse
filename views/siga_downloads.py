@@ -338,9 +338,17 @@ def render():
             with col_fila:
                 if caminho.exists():
                     if st.button("Enfileirar XML", key=f"fila_{nome_arquivo}", use_container_width=True):
-                        chaves = extrair_chaves_xlsx(caminho.read_bytes())
+                        todas = extrair_chaves_xlsx(caminho.read_bytes())
+                        # A consulta avulsa da SEFAZ Nacional (consChNFe) só aceita
+                        # NF-e (modelo 55) -- NFC-e (modelo 65) sempre rejeita com
+                        # cStat=618, então nem vale gastar a cota de 20/hora com isso.
+                        chaves = [c for c in todas if c[20:22] == "55"]
+                        ignoradas = len(todas) - len(chaves)
                         qtd = enfileirar_xml(user["username"], cnpj_sel, chaves)
-                        st.success(f"{qtd} chave(s) enfileirada(s) ({len(chaves)} encontradas em {label}).")
+                        msg = f"{qtd} chave(s) de NF-e enfileirada(s) ({len(todas)} encontradas em {label})."
+                        if ignoradas:
+                            msg += f" {ignoradas} chave(s) de NFC-e ignorada(s) — a SEFAZ Nacional não permite consulta avulsa desse modelo."
+                        st.success(msg)
                         st.rerun()
 
             with col_atualizar:
