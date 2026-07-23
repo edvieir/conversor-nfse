@@ -504,10 +504,11 @@ def _secao_acervo_local(cnpj: str, razao_social: str, periodo: str):
             "não chama SEFAZ nem SIGA de novo, sem limite de consulta."
         )
 
-        col_xml, col_xlsx = st.columns(2)
+        xmls = listar_xmls_por_periodo(cnpj, data_ini_str, data_fim_str)
+
+        col_xml, col_pdf, col_xlsx = st.columns(3)
 
         with col_xml:
-            xmls = listar_xmls_por_periodo(cnpj, data_ini_str, data_fim_str)
             st.metric("Documentos no acervo", len(xmls))
             if xmls:
                 buf = io.BytesIO()
@@ -519,13 +520,57 @@ def _secao_acervo_local(cnpj: str, razao_social: str, periodo: str):
                         if xml:
                             zf.writestr(f"XMLs/{pasta}/{chave}.xml", xml)
                 st.download_button(
-                    "Baixar XMLs do acervo (.zip)",
+                    "Baixar XMLs (.zip)",
                     data=buf.getvalue(),
                     file_name=f"acervo_xml_{cnpj}_{periodo}.zip",
                     mime="application/zip",
                     use_container_width=True,
                     key="siga_acervo_xml_dl",
                 )
+
+        with col_pdf:
+            nfe_xmls = [r for r in xmls if r.get("modelo") == "NF-e" and r.get("xml_conteudo")]
+            st.metric("DANFEs disponíveis", len(nfe_xmls))
+            if nfe_xmls:
+                if st.button("Gerar DANFEs (PDF)", use_container_width=True, key="siga_acervo_danfe_btn"):
+                    with st.spinner(f"Gerando {len(nfe_xmls)} DANFE(s)..."):
+                        try:
+                            from brazilfiscalreport.danfe import Danfe
+                            buf_zip = io.BytesIO()
+                            gerados = 0
+                            erros = 0
+                            with zipfile.ZipFile(buf_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+                                for r in nfe_xmls:
+                                    chave = r.get("chave", "x")
+                                    pasta = f"{r.get('papel', 'NF-e')}"
+                                    try:
+                                        xml_bytes = r["xml_conteudo"].encode("utf-8")
+                                        buf_pdf = io.BytesIO()
+                                        Danfe(xml=xml_bytes).output(buf_pdf)
+                                        zf.writestr(f"DANFEs/{pasta}/{chave}.pdf", buf_pdf.getvalue())
+                                        gerados += 1
+                                    except Exception:
+                                        erros += 1
+                            st.session_state["danfe_zip"] = buf_zip.getvalue()
+                            st.session_state["danfe_zip_name"] = f"DANFEs_{cnpj}_{periodo}.zip"
+                            msg = f"{gerados} DANFE(s) gerado(s)."
+                            if erros:
+                                msg += f" {erros} nota(s) com erro (NFC-e ou XML incompleto)."
+                            st.success(msg)
+                            st.rerun()
+                        except ImportError:
+                            st.error("Biblioteca brazilfiscalreport não instalada no servidor.")
+                        except Exception as e:
+                            st.error(f"Erro: {e}")
+                if st.session_state.get("danfe_zip"):
+                    st.download_button(
+                        "Baixar DANFEs (.zip)",
+                        data=st.session_state["danfe_zip"],
+                        file_name=st.session_state.get("danfe_zip_name", "danfes.zip"),
+                        mime="application/zip",
+                        use_container_width=True,
+                        key="siga_acervo_danfe_dl",
+                    )
 
         with col_xlsx:
             rec  = listar_resultados_por_periodo(cnpj, data_ini_str, data_fim_str, modelo="55", papel="Recebida")
