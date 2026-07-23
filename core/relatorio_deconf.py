@@ -129,7 +129,7 @@ def gerar_relatorio_deconf(
     # ── Workbook ─────────────────────────────────────────────────────────
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "DECONF"
+    ws.title = "Malhas SIGA"
 
     VERDE = PatternFill("solid", fgColor="1E3A2E")
     VERDE_FONT = Font(bold=True, color="FFFFFF", size=10)
@@ -146,7 +146,7 @@ def gerar_relatorio_deconf(
         cel.font = Font(bold=negrito, size=tamanho)
         cel.alignment = Alignment(horizontal="center")
 
-    _titulo(1, "PESQUISA SIGET - DECONF VS", tamanho=13)
+    _titulo(1, "RELATÓRIO DE MALHAS SIGA", tamanho=13)
 
     ws.cell(row=3, column=1, value=f"RAZÃO SOCIAL: {razao_social}").font = Font(bold=True)
     ws.cell(row=4, column=1, value=f"CNPJ: {_fmt_cnpj(cnpj)}").font = Font(bold=True)
