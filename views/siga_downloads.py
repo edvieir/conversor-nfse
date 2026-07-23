@@ -25,12 +25,156 @@ from core.siga_scheduler import ABAS as _ABAS_DOCUMENTOS, SAIDA_DIR
 
 XML_DIR = Path(__file__).parent.parent / "data" / "siga_xml"
 
+
+def _planilha_nfce_combinada(
+    cnpj: str, razao: str, periodo: str,
+    caminho_emit: Path, caminho_canc: Path | None,
+) -> bytes:
+    """Gera planilha NFC-e no padrão verde com autorizadas e canceladas lado a lado."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    MESES = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+    ]
+
+    def _extrair_por_mes(caminho: Path) -> dict[int, tuple[int, float]]:
+        por_mes: dict[int, tuple[int, float]] = {m: (0, 0.0) for m in range(1, 13)}
+        if not caminho or not caminho.exists():
+            return por_mes
+        wb = openpyxl.load_workbook(caminho, data_only=True)
+        ws = wb.worksheets[0]
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return por_mes
+        cab = [str(c or "").lower() for c in rows[0]]
+        idx_data = next((i for i, c in enumerate(cab) if "data" in c), None)
+        idx_valor = next((i for i, c in enumerate(cab) if "valor" in c), None)
+        for row in rows[1:]:
+            if idx_data is None or idx_data >= len(row) or not row[idx_data]:
+                continue
+            data_str = str(row[idx_data])
+            try:
+                if "-" in data_str:
+                    mes = int(data_str.split("-")[1])
+                elif "/" in data_str:
+                    partes = data_str.split("/")
+                    mes = int(partes[1]) if len(partes[0]) <= 2 else int(partes[1])
+                else:
+                    continue
+            except (ValueError, IndexError):
+                continue
+            if 1 <= mes <= 12:
+                qtd, val = por_mes[mes]
+                v = 0.0
+                if idx_valor is not None and idx_valor < len(row) and row[idx_valor]:
+                    try:
+                        v = float(row[idx_valor])
+                    except (ValueError, TypeError):
+                        pass
+                por_mes[mes] = (qtd + 1, val + v)
+        return por_mes
+
+    emit_mes = _extrair_por_mes(caminho_emit)
+    canc_mes = _extrair_por_mes(caminho_canc) if caminho_canc else {m: (0, 0.0) for m in range(1, 13)}
+
+    VERDE = PatternFill("solid", fgColor="1E3A2E")
+    VERDE_FONT = Font(bold=True, color="FFFFFF", size=10)
+    TITULO_FONT = Font(bold=True, size=14, color="1E3A2E")
+    SUB_FONT = Font(bold=True, size=10, color="1E3A2E")
+    BORDA = Border(*(Side(style="thin", color="808080"),) * 4)
+    CENTRO = Alignment(horizontal="center", vertical="center")
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "NFC-e"
+
+    ws.merge_cells("A1:G1")
+    ws["A1"] = f"NFC-E CF-E AUTORIZADOS - {periodo}"
+    ws["A1"].font = TITULO_FONT
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    ws.merge_cells("A3:G3")
+    ws["A3"] = f"{razao} — CNPJ: {_fmt_cnpj(cnpj)}"
+    ws["A3"].font = SUB_FONT
+
+    ws["A4"] = f"Baixado em: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws["A4"].font = Font(size=9, color="666666")
+
+    r = 5
+    headers_l1 = [("MÊS", 1, 1), ("NFC-E AUTORIZADAS", 2, 3), ("NFC-E CANCELADAS", 4, 6)]
+    for txt, c_ini, c_fim in headers_l1:
+        if c_ini != c_fim:
+            ws.merge_cells(start_row=r, start_column=c_ini, end_row=r, end_column=c_fim)
+        cel = ws.cell(row=r, column=c_ini, value=txt)
+        cel.fill = VERDE
+        cel.font = VERDE_FONT
+        cel.alignment = CENTRO
+        for c in range(c_ini, c_fim + 1):
+            ws.cell(row=r, column=c).fill = VERDE
+            ws.cell(row=r, column=c).border = BORDA
+
+    r = 6
+    sub_headers = ["MÊS", "QTD", "VALOR R$", "QTD", "QTD%", "VALOR R$"]
+    for ci, txt in enumerate(sub_headers, 1):
+        cel = ws.cell(row=r, column=ci, value=txt)
+        cel.fill = VERDE
+        cel.font = VERDE_FONT
+        cel.alignment = CENTRO
+        cel.border = BORDA
+
+    alt_fill = PatternFill("solid", fgColor="EEF4EB")
+    tot_emit_q, tot_emit_v = 0, 0.0
+    tot_canc_q, tot_canc_v = 0, 0.0
+
+    for i, mes_num in enumerate(range(1, 13), start=1):
+        row = r + i
+        eq, ev = emit_mes[mes_num]
+        cq, cv = canc_mes[mes_num]
+        tot_emit_q += eq
+        tot_emit_v += ev
+        tot_canc_q += cq
+        tot_canc_v += cv
+        pct = f"{cq / eq * 100:.0f}%" if eq > 0 and cq > 0 else "-"
+        fill = alt_fill if i % 2 == 0 else None
+        vals = [MESES[mes_num - 1], eq, ev, cq, pct, cv]
+        for ci, v in enumerate(vals, 1):
+            cel = ws.cell(row=row, column=ci, value=v)
+            cel.border = BORDA
+            cel.alignment = CENTRO
+            if fill:
+                cel.fill = fill
+            if ci in (3, 6):
+                cel.number_format = '#,##0.00'
+
+    row_total = r + 13
+    pct_total = f"{tot_canc_q / tot_emit_q * 100:.0f}%" if tot_emit_q > 0 and tot_canc_q > 0 else "-"
+    vals_total = ["Total", tot_emit_q, tot_emit_v, tot_canc_q, pct_total, tot_canc_v]
+    for ci, v in enumerate(vals_total, 1):
+        cel = ws.cell(row=row_total, column=ci, value=v)
+        cel.font = Font(bold=True)
+        cel.fill = VERDE
+        cel.font = VERDE_FONT
+        cel.border = BORDA
+        cel.alignment = CENTRO
+        if ci in (3, 6):
+            cel.number_format = '#,##0.00'
+
+    ws.column_dimensions["A"].width = 14
+    for c in ["B", "C", "D", "E", "F"]:
+        ws.column_dimensions[c].width = 14
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
 _LABELS = {
     "NF_E_emitidas":               "NF-e Emitidas",
     "NF_E_recebidas":              "NF-e Recebidas",
     "NF_E_canceladas":             "NF-e Canceladas",
     "NFC_E_emitidas":              "NFC-e Emitidas",
-    "NFC_E_canceladas":            "NFC-e Canceladas",
     "INDICADORES_MALHA_pendencias":"Índices de Malha (pendências / não escrituradas)",
 }
 
@@ -44,12 +188,16 @@ def _mes_corrente() -> str:
     return datetime.date.today().strftime("%Y-%m")
 
 
+_ABAS_OCULTAS = {"NFC_E_canceladas"}
+
 def _listar_abas() -> list[tuple[str, str, str, dict]]:
     """Retorna (nome_arquivo, tipo_ou_None, nome_aba_ou_None, filtros_ou_None)."""
     abas = []
     for tipo, itens in _ABAS_DOCUMENTOS.items():
         for nome_aba, filtros in itens:
-            abas.append((f"{tipo}_{nome_aba}", tipo, nome_aba, filtros))
+            chave = f"{tipo}_{nome_aba}"
+            if chave not in _ABAS_OCULTAS:
+                abas.append((chave, tipo, nome_aba, filtros))
     abas.append(("INDICADORES_MALHA_pendencias", None, None, None))
     return abas
 
@@ -397,10 +545,20 @@ def render():
 
             with col_baixar:
                 if caminho.exists():
+                    if nome_arquivo == "NFC_E_emitidas":
+                        cam_canc = _caminho_cache(cnpj_sel, "NFC_E_canceladas", periodo)
+                        dl_data = _planilha_nfce_combinada(
+                            cnpj_sel, razao_sel, periodo, caminho,
+                            cam_canc if cam_canc.exists() else None,
+                        )
+                        dl_name = f"NFC_E_{cnpj_sel}_{periodo}.xlsx"
+                    else:
+                        dl_data = caminho.read_bytes()
+                        dl_name = caminho.name
                     st.download_button(
                         "Baixar",
-                        data=caminho.read_bytes(),
-                        file_name=caminho.name,
+                        data=dl_data,
+                        file_name=dl_name,
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True,
                         key=f"dl_{nome_arquivo}",
@@ -444,6 +602,24 @@ def render():
                                 except Exception as e_db:
                                     st.warning(f"Salvo em cache, mas falhou ao persistir no banco (Power BI): {e_db}")
                                 st.success(f"{label} atualizado ({len(conteudo)} bytes).")
+
+                            if nome_arquivo == "NFC_E_emitidas":
+                                try:
+                                    canc = _gerar_ao_vivo(
+                                        user["username"], cnpj_sel, "NFC_E_canceladas",
+                                        "NFC_E", "canceladas",
+                                        {"papel_operacao": "EMITENTE", "resultado_processamento": "CANCELADA"},
+                                        periodo,
+                                    )
+                                    cam_canc = _caminho_cache(cnpj_sel, "NFC_E_canceladas", periodo)
+                                    if canc:
+                                        cam_canc.parent.mkdir(parents=True, exist_ok=True)
+                                        cam_canc.write_bytes(canc)
+                                    else:
+                                        cam_canc.unlink(missing_ok=True)
+                                except Exception:
+                                    pass
+
                             st.rerun()
 
     # ── Fila de XML avulso (limite de 20/hora) ───────────────────────────────
