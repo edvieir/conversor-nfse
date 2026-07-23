@@ -26,13 +26,163 @@ from core.siga_scheduler import ABAS as _ABAS_DOCUMENTOS, SAIDA_DIR
 XML_DIR = Path(__file__).parent.parent / "data" / "siga_xml"
 
 
+def _estilos_padrao():
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    return {
+        "VERDE":      PatternFill("solid", fgColor="1E3A2E"),
+        "VERDE_FONT": Font(bold=True, color="FFFFFF", size=10),
+        "TITULO":     Font(bold=True, size=14, color="1E3A2E"),
+        "SUBTITULO":  Font(bold=True, size=10, color="1E3A2E"),
+        "CAPTION":    Font(size=9, italic=True, color="666666"),
+        "ALT_FILL":   PatternFill("solid", fgColor="EEF4EB"),
+        "BORDA":      Border(*(Side(style="thin", color="AAAAAA"),) * 4),
+        "CENTRO":     Alignment(horizontal="center", vertical="center"),
+    }
+
+
+def _cabecalho_padrao(ws, titulo: str, razao: str, cnpj: str, ultima_col: int):
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    s = _estilos_padrao()
+    col_letra = get_column_letter(ultima_col)
+
+    ws.merge_cells(f"A1:{col_letra}1")
+    ws["A1"] = titulo
+    ws["A1"].font = s["TITULO"]
+    ws["A1"].alignment = Alignment(horizontal="center")
+    ws.row_dimensions[1].height = 28
+
+    ws.merge_cells(f"A3:{col_letra}3")
+    ws["A3"] = f"{razao} — CNPJ: {_fmt_cnpj(cnpj)}"
+    ws["A3"].font = s["SUBTITULO"]
+
+    ws["A4"] = f"Baixado em: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws["A4"].font = s["CAPTION"]
+
+
+def _formatar_relatorio_siga(
+    conteudo: bytes, cnpj: str, razao: str, periodo: str, label: str,
+) -> bytes:
+    """Reformata um relatório bruto do SIGA (NF-e/NFC-e) no padrão verde."""
+    import openpyxl
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    src = openpyxl.load_workbook(io.BytesIO(conteudo), data_only=True)
+    ws_src = src.worksheets[0]
+    rows = list(ws_src.iter_rows(values_only=True))
+    if not rows:
+        return conteudo
+
+    cab_orig = [str(c or "") for c in rows[0]]
+    dados = rows[1:]
+
+    col_map = []
+    larguras = []
+    for i, nome in enumerate(cab_orig):
+        nl = nome.lower()
+        if "cnpj" in nl:
+            col_map.append(("CNPJ", i))
+            larguras.append(20)
+        elif "raz" in nl or "social" in nl:
+            col_map.append(("Razão Social", i))
+            larguras.append(36)
+        elif "uf" == nl.strip():
+            col_map.append(("UF", i))
+            larguras.append(6)
+        elif "número" in nl or "numero" in nl:
+            col_map.append(("Número", i))
+            larguras.append(12)
+        elif "data" in nl:
+            col_map.append(("Data Emissão", i))
+            larguras.append(14)
+        elif "indicador" in nl or "situação" in nl or "situacao" in nl:
+            col_map.append(("Situação", i))
+            larguras.append(14)
+        elif "valor" in nl:
+            col_map.append(("Valor R$", i))
+            larguras.append(16)
+        elif "chave" in nl:
+            col_map.append(("Chave NF-e", i))
+            larguras.append(50)
+        else:
+            col_map.append((nome, i))
+            larguras.append(14)
+
+    s = _estilos_padrao()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = label
+
+    ultima_col = len(col_map)
+    _cabecalho_padrao(ws, f"{label.upper()} - {periodo}", razao, cnpj, ultima_col)
+
+    r_header = 6
+    for ci, (nome, _) in enumerate(col_map, 1):
+        cel = ws.cell(row=r_header, column=ci, value=nome)
+        cel.fill = s["VERDE"]
+        cel.font = s["VERDE_FONT"]
+        cel.alignment = s["CENTRO"]
+        cel.border = s["BORDA"]
+    ws.row_dimensions[r_header].height = 22
+
+    idx_valor_col = None
+    for ci, (nome, _) in enumerate(col_map, 1):
+        if "valor" in nome.lower():
+            idx_valor_col = ci
+
+    total_valor = 0.0
+    for ri, row in enumerate(dados, r_header + 1):
+        fill = s["ALT_FILL"] if ri % 2 == 0 else None
+        for ci, (_, src_idx) in enumerate(col_map, 1):
+            v = row[src_idx] if src_idx < len(row) else ""
+            if v is None:
+                v = ""
+            if ci == idx_valor_col:
+                try:
+                    v = float(v)
+                    total_valor += v
+                except (ValueError, TypeError):
+                    v = 0.0
+            cel = ws.cell(row=ri, column=ci, value=v)
+            cel.border = s["BORDA"]
+            if fill:
+                cel.fill = fill
+            if ci == idx_valor_col:
+                cel.number_format = '#,##0.00'
+
+    r_total = r_header + 1 + len(dados)
+    if idx_valor_col:
+        lbl_col = idx_valor_col - 1 if idx_valor_col > 1 else 1
+        cel_lbl = ws.cell(row=r_total, column=lbl_col, value="TOTAL")
+        cel_lbl.font = Font(bold=True)
+        cel_lbl.fill = s["VERDE"]
+        cel_lbl.font = s["VERDE_FONT"]
+        cel_lbl.border = s["BORDA"]
+        cel_lbl.alignment = s["CENTRO"]
+        cel_val = ws.cell(row=r_total, column=idx_valor_col, value=total_valor)
+        cel_val.font = s["VERDE_FONT"]
+        cel_val.fill = s["VERDE"]
+        cel_val.border = s["BORDA"]
+        cel_val.number_format = '#,##0.00'
+        cel_val.alignment = s["CENTRO"]
+
+    for ci, w in enumerate(larguras, 1):
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
 def _planilha_nfce_combinada(
     cnpj: str, razao: str, periodo: str,
     caminho_emit: Path, caminho_canc: Path | None,
 ) -> bytes:
     """Gera planilha NFC-e no padrão verde com autorizadas e canceladas lado a lado."""
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
 
     MESES = [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -79,28 +229,12 @@ def _planilha_nfce_combinada(
     emit_mes = _extrair_por_mes(caminho_emit)
     canc_mes = _extrair_por_mes(caminho_canc) if caminho_canc else {m: (0, 0.0) for m in range(1, 13)}
 
-    VERDE = PatternFill("solid", fgColor="1E3A2E")
-    VERDE_FONT = Font(bold=True, color="FFFFFF", size=10)
-    TITULO_FONT = Font(bold=True, size=14, color="1E3A2E")
-    SUB_FONT = Font(bold=True, size=10, color="1E3A2E")
-    BORDA = Border(*(Side(style="thin", color="808080"),) * 4)
-    CENTRO = Alignment(horizontal="center", vertical="center")
-
+    s = _estilos_padrao()
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "NFC-e"
+    ws.title = "Resumo"
 
-    ws.merge_cells("A1:G1")
-    ws["A1"] = f"NFC-E CF-E AUTORIZADOS - {periodo}"
-    ws["A1"].font = TITULO_FONT
-    ws["A1"].alignment = Alignment(horizontal="center")
-
-    ws.merge_cells("A3:G3")
-    ws["A3"] = f"{razao} — CNPJ: {_fmt_cnpj(cnpj)}"
-    ws["A3"].font = SUB_FONT
-
-    ws["A4"] = f"Baixado em: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-    ws["A4"].font = Font(size=9, color="666666")
+    _cabecalho_padrao(ws, f"NFC-E CF-E AUTORIZADOS - {periodo}", razao, cnpj, 6)
 
     r = 5
     headers_l1 = [("MÊS", 1, 1), ("NFC-E AUTORIZADAS", 2, 3), ("NFC-E CANCELADAS", 4, 6)]
@@ -108,23 +242,24 @@ def _planilha_nfce_combinada(
         if c_ini != c_fim:
             ws.merge_cells(start_row=r, start_column=c_ini, end_row=r, end_column=c_fim)
         cel = ws.cell(row=r, column=c_ini, value=txt)
-        cel.fill = VERDE
-        cel.font = VERDE_FONT
-        cel.alignment = CENTRO
+        cel.fill = s["VERDE"]
+        cel.font = s["VERDE_FONT"]
+        cel.alignment = s["CENTRO"]
         for c in range(c_ini, c_fim + 1):
-            ws.cell(row=r, column=c).fill = VERDE
-            ws.cell(row=r, column=c).border = BORDA
+            ws.cell(row=r, column=c).fill = s["VERDE"]
+            ws.cell(row=r, column=c).border = s["BORDA"]
+    ws.row_dimensions[r].height = 22
 
     r = 6
     sub_headers = ["MÊS", "QTD", "VALOR R$", "QTD", "QTD%", "VALOR R$"]
     for ci, txt in enumerate(sub_headers, 1):
         cel = ws.cell(row=r, column=ci, value=txt)
-        cel.fill = VERDE
-        cel.font = VERDE_FONT
-        cel.alignment = CENTRO
-        cel.border = BORDA
+        cel.fill = s["VERDE"]
+        cel.font = s["VERDE_FONT"]
+        cel.alignment = s["CENTRO"]
+        cel.border = s["BORDA"]
+    ws.row_dimensions[r].height = 20
 
-    alt_fill = PatternFill("solid", fgColor="EEF4EB")
     tot_emit_q, tot_emit_v = 0, 0.0
     tot_canc_q, tot_canc_v = 0, 0.0
 
@@ -137,12 +272,12 @@ def _planilha_nfce_combinada(
         tot_canc_q += cq
         tot_canc_v += cv
         pct = f"{cq / eq * 100:.0f}%" if eq > 0 and cq > 0 else "-"
-        fill = alt_fill if i % 2 == 0 else None
+        fill = s["ALT_FILL"] if i % 2 == 0 else None
         vals = [MESES[mes_num - 1], eq, ev, cq, pct, cv]
         for ci, v in enumerate(vals, 1):
             cel = ws.cell(row=row, column=ci, value=v)
-            cel.border = BORDA
-            cel.alignment = CENTRO
+            cel.border = s["BORDA"]
+            cel.alignment = s["CENTRO"]
             if fill:
                 cel.fill = fill
             if ci in (3, 6):
@@ -153,17 +288,29 @@ def _planilha_nfce_combinada(
     vals_total = ["Total", tot_emit_q, tot_emit_v, tot_canc_q, pct_total, tot_canc_v]
     for ci, v in enumerate(vals_total, 1):
         cel = ws.cell(row=row_total, column=ci, value=v)
-        cel.font = Font(bold=True)
-        cel.fill = VERDE
-        cel.font = VERDE_FONT
-        cel.border = BORDA
-        cel.alignment = CENTRO
+        cel.fill = s["VERDE"]
+        cel.font = s["VERDE_FONT"]
+        cel.border = s["BORDA"]
+        cel.alignment = s["CENTRO"]
         if ci in (3, 6):
             cel.number_format = '#,##0.00'
 
-    ws.column_dimensions["A"].width = 14
-    for c in ["B", "C", "D", "E", "F"]:
-        ws.column_dimensions[c].width = 14
+    col_widths = [14, 12, 16, 12, 10, 16]
+    for ci, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    if caminho_emit.exists():
+        src = openpyxl.load_workbook(caminho_emit, data_only=True)
+        ws_det = wb.create_sheet("Detalhamento")
+        ws_src = src.worksheets[0]
+        for ri, row in enumerate(ws_src.iter_rows(values_only=True), 1):
+            for ci, v in enumerate(row, 1):
+                cel = ws_det.cell(row=ri, column=ci, value=v)
+                if ri == 1:
+                    cel.fill = s["VERDE"]
+                    cel.font = s["VERDE_FONT"]
+                    cel.alignment = s["CENTRO"]
+                cel.border = s["BORDA"]
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -552,6 +699,11 @@ def render():
                             cam_canc if cam_canc.exists() else None,
                         )
                         dl_name = f"NFC_E_{cnpj_sel}_{periodo}.xlsx"
+                    elif nome_arquivo.startswith(("NF_E_", "NFC_E_")):
+                        dl_data = _formatar_relatorio_siga(
+                            caminho.read_bytes(), cnpj_sel, razao_sel, periodo, label,
+                        )
+                        dl_name = f"{nome_arquivo}_{cnpj_sel}_{periodo}.xlsx"
                     else:
                         dl_data = caminho.read_bytes()
                         dl_name = caminho.name
