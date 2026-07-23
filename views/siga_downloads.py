@@ -10,6 +10,9 @@ import datetime
 import io
 import zipfile
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+_TZ_BR = ZoneInfo("America/Fortaleza")
 
 import streamlit as st
 
@@ -56,7 +59,7 @@ def _cabecalho_padrao(ws, titulo: str, razao: str, cnpj: str, ultima_col: int):
     ws["A3"] = f"{razao} — CNPJ: {_fmt_cnpj(cnpj)}"
     ws["A3"].font = s["SUBTITULO"]
 
-    ws["A4"] = f"Baixado em: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws["A4"] = f"Baixado em: {datetime.datetime.now(_TZ_BR).strftime('%d/%m/%Y %H:%M:%S')}"
     ws["A4"].font = s["CAPTION"]
 
 
