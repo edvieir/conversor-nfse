@@ -85,9 +85,6 @@ def _ano_de(data_str: str) -> str:
 def gerar_relatorio_deconf(
     cnpj: str,
     razao_social: str,
-    analista: str,
-    supervisao: str,
-    coordenacao: str,
     resumo: list[dict],
     detalhes: dict[str, list[dict]],
     inventarios: list[dict],
@@ -150,14 +147,11 @@ def gerar_relatorio_deconf(
         cel.alignment = Alignment(horizontal="center")
 
     _titulo(1, "PESQUISA SIGET - DECONF VS", tamanho=13)
-    _titulo(2, f"ANALISTA: {analista}")
-    _titulo(3, f"SUPERVISÃO: {supervisao}")
-    _titulo(4, f"COORDENAÇÃO: {coordenacao}")
 
-    ws.cell(row=6, column=1, value=f"RAZÃO SOCIAL: {razao_social}").font = Font(bold=True)
-    ws.cell(row=7, column=1, value=f"CNPJ: {_fmt_cnpj(cnpj)}").font = Font(bold=True)
+    ws.cell(row=3, column=1, value=f"RAZÃO SOCIAL: {razao_social}").font = Font(bold=True)
+    ws.cell(row=4, column=1, value=f"CNPJ: {_fmt_cnpj(cnpj)}").font = Font(bold=True)
 
-    linha_matriz = 9
+    linha_matriz = 6
     ws.merge_cells(start_row=linha_matriz, start_column=1, end_row=linha_matriz, end_column=ultima_col)
     cel_matriz = ws.cell(row=linha_matriz, column=1, value=tipo_estabelecimento)
     cel_matriz.fill = VERDE

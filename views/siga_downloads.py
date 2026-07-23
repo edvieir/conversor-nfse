@@ -251,7 +251,7 @@ def _secao_relatorio_deconf(cnpj: str, razao_social: str, periodo: str):
     """Relatório 'PESQUISA SIGET - DECONF' -- usa o cache dos índices de
     malha (ou busca ao vivo se não existir ainda)."""
     st.markdown("---")
-    st.markdown("### Relatório DECONF (SIGET)")
+    st.markdown("### Relatório de malhas SIGA")
     st.caption(
         "Entradas não escrituradas, não seladas, inventários e declarações "
         "omissas, no padrão usado pela equipe. Multa dos dois primeiros "
@@ -259,22 +259,11 @@ def _secao_relatorio_deconf(cnpj: str, razao_social: str, periodo: str):
         "declarações ficam em branco pra preenchimento manual."
     )
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        analista = st.text_input("Analista", key="deconf_analista")
-    with col2:
-        supervisao = st.text_input("Supervisão", key="deconf_supervisao")
-    with col3:
-        coordenacao = st.text_input("Coordenação", key="deconf_coordenacao")
-
     tipo_estabelecimento = st.selectbox("Estabelecimento", ["MATRIZ", "FILIAL"], key="deconf_tipo_estab")
 
     caminho_malha = _caminho_cache(cnpj, "INDICADORES_MALHA_pendencias", periodo)
 
-    if st.button("Gerar relatório DECONF", type="primary", use_container_width=True, key="deconf_gerar"):
-        if not (analista and supervisao and coordenacao):
-            st.error("Preencha Analista, Supervisão e Coordenação antes de gerar.")
-            return
+    if st.button("Gerar relatório de malhas", type="primary", use_container_width=True, key="deconf_gerar"):
 
         with st.spinner("Buscando índices de malha..."):
             try:
@@ -307,7 +296,6 @@ def _secao_relatorio_deconf(cnpj: str, razao_social: str, periodo: str):
 
                 xlsx_bytes = gerar_relatorio_deconf(
                     cnpj=cnpj, razao_social=razao_social,
-                    analista=analista, supervisao=supervisao, coordenacao=coordenacao,
                     resumo=resumo, detalhes=detalhes,
                     inventarios=inventarios, declaracoes=declaracoes,
                     tipo_estabelecimento=tipo_estabelecimento,
@@ -320,7 +308,7 @@ def _secao_relatorio_deconf(cnpj: str, razao_social: str, periodo: str):
 
     if st.session_state.get("deconf_bytes"):
         st.download_button(
-            "Baixar relatório DECONF (.xlsx)",
+            "Baixar relatório de malhas SIGA (.xlsx)",
             data=st.session_state["deconf_bytes"],
             file_name=st.session_state["deconf_nome"],
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
