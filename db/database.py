@@ -635,6 +635,10 @@ def marcar_fila_erro(item_id: int, erro: str):
     _exec(f"UPDATE siga_xml_fila SET status='ERRO', erro={ph}, processado_em={agora} WHERE id={ph}", (erro, item_id))
 
 
+def resetar_erros_rate_limit():
+    _exec("UPDATE siga_xml_fila SET status='PENDENTE', erro=NULL, processado_em=NULL WHERE status='ERRO' AND erro LIKE '%656%'")
+
+
 def status_fila_xml(cnpj: str) -> dict:
     ph = "%s" if _PG else "?"
     rows = _exec(

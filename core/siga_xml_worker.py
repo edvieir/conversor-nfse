@@ -65,10 +65,16 @@ def _processar_cnpj(cnpj: str):
                 (destino / f"{chave}.xml").write_text(dados["xml"], encoding="utf-8")
                 marcar_fila_concluido(item["id"])
                 _log(f"    [{chave}] OK")
+            elif erro and "656" in str(erro):
+                _log(f"    [{chave}] RATE LIMIT (cStat=656) — parando; restantes ficam PENDENTE para próxima hora.")
+                return
             else:
                 marcar_fila_erro(item["id"], erro or "sem XML retornado")
                 _log(f"    [{chave}] ERRO: {erro}")
         except Exception as e:
+            if "656" in str(e):
+                _log(f"    [{chave}] RATE LIMIT (656) — parando.")
+                return
             marcar_fila_erro(item["id"], str(e))
             _log(f"    [{chave}] EXCEÇÃO: {e}")
 
@@ -76,7 +82,8 @@ def _processar_cnpj(cnpj: str):
 def main():
     _log("=== SIGA XML Worker iniciado ===")
 
-    from db.database import cnpjs_com_fila_pendente
+    from db.database import cnpjs_com_fila_pendente, resetar_erros_rate_limit
+    resetar_erros_rate_limit()
 
     cnpjs = cnpjs_com_fila_pendente()
     if not cnpjs:
