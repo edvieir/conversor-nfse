@@ -38,7 +38,8 @@ ABAS = {
         ("canceladas", {"papel_operacao": "EMITENTE", "resultado_processamento": "CANCELADA"}),
     ],
     "NFC_E": [
-        ("emitidas", {"papel_operacao": "EMITENTE"}),
+        ("emitidas",   {"papel_operacao": "EMITENTE"}),
+        ("canceladas", {"papel_operacao": "EMITENTE", "resultado_processamento": "CANCELADA"}),
     ],
 }
 SAIDA_DIR = Path(__file__).parent.parent / "data" / "siga_downloads"

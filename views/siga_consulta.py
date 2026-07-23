@@ -38,10 +38,10 @@ def _gerar_excel(dados_rec, dados_emit, dados_nfce, cnpj, razao, periodo):
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
-    hdr_fill = PatternFill("solid", fgColor="1E3A5F")
+    hdr_fill = PatternFill("solid", fgColor="1E3A2E")
     hdr_font = Font(bold=True, color="FFFFFF", size=10)
-    alt_fill = PatternFill("solid", fgColor="EEF4FB")
-    tot_fill = PatternFill("solid", fgColor="DBEAFE")
+    alt_fill = PatternFill("solid", fgColor="EEF4EB")
+    tot_fill = PatternFill("solid", fgColor="1E3A2E")
     bdr = Border(bottom=Side(style="thin", color="CBD5E1"))
 
     sheets = [
@@ -55,7 +55,7 @@ def _gerar_excel(dados_rec, dados_emit, dados_nfce, cnpj, razao, periodo):
 
         ws.merge_cells("A1:H1")
         ws["A1"] = f"FISCAL HUB — {sheet_name} | {razao} ({_fmt_cnpj(cnpj)}) | {periodo}"
-        ws["A1"].font = Font(bold=True, size=12, color="1E3A5F")
+        ws["A1"].font = Font(bold=True, size=12, color="1E3A2E")
         ws["A1"].alignment = Alignment(horizontal="center")
         ws.row_dimensions[1].height = 22
 
@@ -101,7 +101,7 @@ def _gerar_excel(dados_rec, dados_emit, dados_nfce, cnpj, razao, periodo):
         lbl.font = Font(bold=True)
         lbl.fill = tot_fill
         tcell = ws.cell(row=last, column=8, value=total)
-        tcell.font = Font(bold=True, color="1E3A5F")
+        tcell.font = Font(bold=True, color="FFFFFF")
         tcell.fill = tot_fill
         tcell.number_format = '"R$" #,##0.00'
 
@@ -126,8 +126,8 @@ def _gerar_pdf(dados_rec, dados_emit, dados_nfce, cnpj, razao, periodo):
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
-    BLUE  = colors.HexColor("#1E3A5F")
-    BLUE2 = colors.HexColor("#2563EB")
+    BLUE  = colors.HexColor("#1E3A2E")
+    BLUE2 = colors.HexColor("#2D5A3E")
     GRAY  = colors.HexColor("#F0F4F8")
     LGRAY = colors.HexColor("#F8FAFC")
 

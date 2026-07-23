@@ -30,6 +30,7 @@ _LABELS = {
     "NF_E_recebidas":              "NF-e Recebidas",
     "NF_E_canceladas":             "NF-e Canceladas",
     "NFC_E_emitidas":              "NFC-e Emitidas",
+    "NFC_E_canceladas":            "NFC-e Canceladas",
     "INDICADORES_MALHA_pendencias":"Índices de Malha (pendências / não escrituradas)",
 }
 
