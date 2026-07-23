@@ -247,6 +247,88 @@ def _secao_acervo_local(cnpj: str, razao_social: str, periodo: str):
                 )
 
 
+def _secao_relatorio_deconf(cnpj: str, razao_social: str, periodo: str):
+    """Relatório 'PESQUISA SIGET - DECONF' -- usa o cache dos índices de
+    malha (ou busca ao vivo se não existir ainda)."""
+    st.markdown("---")
+    st.markdown("### Relatório DECONF (SIGET)")
+    st.caption(
+        "Entradas não escrituradas, não seladas, inventários e declarações "
+        "omissas, no padrão usado pela equipe. Multa dos dois primeiros "
+        "grupos calculada automaticamente (10% / 20%); inventário e "
+        "declarações ficam em branco pra preenchimento manual."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        analista = st.text_input("Analista", key="deconf_analista")
+    with col2:
+        supervisao = st.text_input("Supervisão", key="deconf_supervisao")
+    with col3:
+        coordenacao = st.text_input("Coordenação", key="deconf_coordenacao")
+
+    tipo_estabelecimento = st.selectbox("Estabelecimento", ["MATRIZ", "FILIAL"], key="deconf_tipo_estab")
+
+    caminho_malha = _caminho_cache(cnpj, "INDICADORES_MALHA_pendencias", periodo)
+
+    if st.button("Gerar relatório DECONF", type="primary", use_container_width=True, key="deconf_gerar"):
+        if not (analista and supervisao and coordenacao):
+            st.error("Preencha Analista, Supervisão e Coordenação antes de gerar.")
+            return
+
+        with st.spinner("Buscando índices de malha..."):
+            try:
+                if caminho_malha.exists():
+                    conteudo = caminho_malha.read_bytes()
+                else:
+                    from core import siga_sefaz
+
+                    cert = carregar_certificado(current_user()["username"], cnpj)
+                    if not cert:
+                        st.error("Certificado não encontrado para esta empresa.")
+                        return
+                    pfx_bytes, senha = cert
+                    sessao = siga_sefaz._sessao(pfx_bytes, senha)
+                    token = siga_sefaz.login(sessao)["access_token"]
+                    indicadores = siga_sefaz.listar_indicadores_malha(sessao, token, cnpj)
+                    if not indicadores:
+                        st.info("Sem pendências de malha para esta empresa — nada a gerar.")
+                        return
+                    sid = siga_sefaz.solicitar_download_indicadores(sessao, token, cnpj)
+                    conteudo = siga_sefaz.aguardar_e_baixar(sessao, token, sid)
+                    caminho_malha.parent.mkdir(parents=True, exist_ok=True)
+                    caminho_malha.write_bytes(conteudo)
+
+                from core.siga_sefaz import parse_indicadores_malha
+                from core.relatorio_deconf import gerar_relatorio_deconf, parse_indicadores_17_18
+
+                resumo, detalhes = parse_indicadores_malha(conteudo)
+                inventarios, declaracoes = parse_indicadores_17_18(conteudo)
+
+                xlsx_bytes = gerar_relatorio_deconf(
+                    cnpj=cnpj, razao_social=razao_social,
+                    analista=analista, supervisao=supervisao, coordenacao=coordenacao,
+                    resumo=resumo, detalhes=detalhes,
+                    inventarios=inventarios, declaracoes=declaracoes,
+                    tipo_estabelecimento=tipo_estabelecimento,
+                )
+                st.session_state["deconf_bytes"] = xlsx_bytes
+                st.session_state["deconf_nome"] = f"DECONF_{cnpj}_{periodo}.xlsx"
+                st.success("Relatório gerado.")
+            except Exception as e:
+                st.error(f"Erro: {e}")
+
+    if st.session_state.get("deconf_bytes"):
+        st.download_button(
+            "Baixar relatório DECONF (.xlsx)",
+            data=st.session_state["deconf_bytes"],
+            file_name=st.session_state["deconf_nome"],
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="deconf_dl",
+        )
+
+
 def render():
     user = current_user()
     nav.render("siga_downloads")
@@ -413,3 +495,5 @@ def render():
             mime="application/zip",
             use_container_width=True,
         )
+
+    _secao_relatorio_deconf(cnpj_sel, razao_sel, periodo)
