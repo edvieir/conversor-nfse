@@ -155,10 +155,40 @@ def _headers(token: str) -> dict:
 
 # ── Contribuinte ─────────────────────────────────────────────────────────────
 
+class SitramApiError(Exception):
+    """Erro tratado da API SITRAM com mensagem amigável."""
+    pass
+
+
+def _check_sitram_response(r: requests.Response, operacao: str):
+    """Verifica resposta HTTP do SITRAM e lança erro amigável."""
+    if r.status_code == 200:
+        return
+    if r.status_code == 404:
+        raise SitramApiError(
+            f"{operacao}: registro não encontrado no SITRAM. "
+            "Verifique se a nota possui trânsito registrado no Ceará."
+        )
+    if r.status_code == 401:
+        raise SitramApiError(
+            f"{operacao}: sessão expirada. Recarregue a página para reautenticar."
+        )
+    if r.status_code == 403:
+        raise SitramApiError(
+            f"{operacao}: acesso negado. O certificado pode não ter permissão para este recurso."
+        )
+    if r.status_code >= 500:
+        raise SitramApiError(
+            f"{operacao}: o servidor SITRAM retornou erro interno (HTTP {r.status_code}). "
+            "O portal pode estar instável — tente novamente em alguns minutos."
+        )
+    r.raise_for_status()
+
+
 def get_contribuinte(sessao: requests.Session, token: str) -> dict:
     """Retorna dados cadastrais do contribuinte logado."""
     r = sessao.get(f"{API_CADASTRO}/contribuinte", headers=_headers(token), timeout=30)
-    r.raise_for_status()
+    _check_sitram_response(r, "Consulta contribuinte")
     return r.json()
 
 
@@ -180,7 +210,7 @@ def consultar_nota_fiscal(
         params={"chaveAcesso": chave},
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Consulta nota fiscal")
     return r.json()
 
 
@@ -198,7 +228,7 @@ def consultar_nota_fiscal_publica(
         params={"chaveAcesso": chave},
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Consulta nota fiscal pública")
     return r.json()
 
 
@@ -218,7 +248,7 @@ def detalhar_nota_fiscal(
         headers=_headers(token),
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Detalhe nota fiscal")
     return r.json()
 
 
@@ -240,7 +270,7 @@ def simular_dae(
         params={"idsLancamento": ",".join(ids_lancamento), "info": info},
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Simular DAE")
     return r.json()
 
 
@@ -259,7 +289,7 @@ def simular_dae_difal(
         params={"idsLancamento": ",".join(ids_lancamento)},
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Simular DAE DIFAL")
     return r.json()
 
 
@@ -278,7 +308,7 @@ def simular_dae_nf_difal(
         params={"idsLancamento": ",".join(ids_lancamento)},
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Simular DAE NF DIFAL")
     return r.json()
 
 
@@ -297,7 +327,7 @@ def simular_dae_convenio(
         params={"idsLancamento": ",".join(ids_lancamento)},
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Simular DAE Convênio")
     return r.json()
 
 
@@ -316,7 +346,7 @@ def emitir_difal(
         json=payload,
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Emitir DIFAL")
     return r.json()
 
 
@@ -345,7 +375,7 @@ def emitir_dae(
         params=params,
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Emitir DAE")
     return r.json()
 
 
@@ -362,7 +392,7 @@ def emitir_dae_convenio(
         headers=_headers(token),
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Emitir DAE Convênio")
     return r.json()
 
 
@@ -381,7 +411,7 @@ def simular_dae_sanfit(
         json=payload,
         timeout=30,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Simular DAE SANFIT")
     return r.json()
 
 
@@ -403,7 +433,7 @@ def gerar_csv(
         json=payload,
         timeout=60,
     )
-    r.raise_for_status()
+    _check_sitram_response(r, "Gerar CSV")
     return r.content
 
 
