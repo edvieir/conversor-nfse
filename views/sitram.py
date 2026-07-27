@@ -62,31 +62,66 @@ def _tab_consulta_nf(user: dict, cnpj: str):
             st.warning("Informe uma chave de acesso válida com 44 dígitos.")
             return
 
+        resultado_cert = carregar_certificado(user["username"], cnpj)
+        if not resultado_cert:
+            st.error("Certificado digital não encontrado.")
+            return
+
+        from core.sitram_sefaz import _sessao, consultar_itens_por_chave
+
+        sessao = _sessao(resultado_cert[0], resultado_cert[1])
+
+        try:
+            with st.spinner("Consultando itens da nota no SITRAM..."):
+                resultado = consultar_itens_por_chave(sessao, chave_limpa)
+        except Exception as e:
+            st.error(f"Erro na consulta de itens: {e}")
+            return
+
+        itens = resultado.get("content", [])
+        if not itens:
+            st.warning("Nenhum item encontrado para esta chave de acesso.")
+            return
+
+        total_icms = sum(item.get("icms", 0) for item in itens)
+        total_fecop = sum(item.get("valorFecop", 0) for item in itens)
+        total_valor = sum(item.get("valorTotal", 0) for item in itens)
+
+        st.success(f"**{len(itens)} item(ns)** encontrado(s)")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total ICMS", f"R$ {total_icms:,.2f}")
+        m2.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
+        m3.metric("Valor Total NF", f"R$ {total_valor:,.2f}")
+
+        for i, item in enumerate(itens, 1):
+            regime = item.get("nomeConfiguracao", "—")
+            with st.expander(f"Item {i} — {item.get('descricaoProduto', '?')} | ICMS R$ {item.get('icms', 0):,.2f}", expanded=i == 1):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown(f"**Produto:** {item.get('descricaoProduto', '—')}")
+                    st.markdown(f"**NCM:** {item.get('ncm', '—')} | **CFOP:** {item.get('cfop', '—')}")
+                    st.markdown(f"**Qtd:** {item.get('quantidade', '—')} {item.get('unidade', '')} × R$ {item.get('valorUnitario', 0):,.2f}")
+                    st.markdown(f"**Valor Total:** R$ {item.get('valorTotal', 0):,.2f}")
+                with c2:
+                    st.markdown(f"**ICMS:** R$ {item.get('icms', 0):,.2f}")
+                    st.markdown(f"**Base ICMS:** R$ {item.get('valorBc', 0):,.2f}")
+                    st.markdown(f"**Alíquota:** {item.get('valorAliquota', 0)}%")
+                    st.markdown(f"**ICMS Destacado:** R$ {item.get('valorIcmsDestacado', 0):,.2f}")
+                    st.markdown(f"**FECOP:** R$ {item.get('valorFecop', 0):,.2f}")
+                st.markdown(f"**Regime:** {regime}")
+                st.markdown(f"**CST:** {item.get('codigoCSTA', '—')}/{item.get('codigoCSTB', '—')} | **Cód. Produto:** {item.get('codigoProduto', '—')}")
+
         if modo_logado:
             client = _get_client(user, cnpj)
-            if not client:
-                return
-            try:
-                with st.spinner("Consultando nota fiscal no SITRAM..."):
-                    resultado = client.consultar_nota(chave_limpa)
-                st.success("Nota encontrada!")
-                st.json(resultado)
-            except Exception as e:
-                st.error(f"Erro na consulta: {e}")
-        else:
-            try:
-                from core.sitram_sefaz import _sessao, consultar_nota_fiscal_publica
-                resultado_cert = carregar_certificado(user["username"], cnpj)
-                if not resultado_cert:
-                    st.error("Certificado não encontrado.")
-                    return
-                sessao = _sessao(resultado_cert[0], resultado_cert[1])
-                with st.spinner("Consultando nota fiscal (público)..."):
-                    resultado = consultar_nota_fiscal_publica(sessao, chave_limpa)
-                st.success("Nota encontrada!")
-                st.json(resultado)
-            except Exception as e:
-                st.error(f"Erro na consulta pública: {e}")
+            if client:
+                try:
+                    with st.spinner("Buscando dados completos da nota (autenticado)..."):
+                        nota_completa = client.consultar_nota(chave_limpa)
+                    with st.expander("Dados completos da nota (JSON)", expanded=False):
+                        st.json(nota_completa)
+                except Exception:
+                    pass
 
 
 def _tab_consulta_protocolo(user: dict, cnpj: str):
@@ -221,26 +256,49 @@ def _tab_difal_calculadora(user: dict, cnpj: str):
             st.warning("Informe uma chave válida com 44 dígitos.")
             return
 
-        client = _get_client(user, cnpj)
-        if not client:
+        resultado_cert = carregar_certificado(user["username"], cnpj)
+        if not resultado_cert:
+            st.error("Certificado digital não encontrado.")
             return
 
+        from core.sitram_sefaz import _sessao, consultar_itens_por_chave
+
+        sessao = _sessao(resultado_cert[0], resultado_cert[1])
+
         try:
-            with st.spinner("Consultando nota no SITRAM..."):
-                nota = client.consultar_nota(chave_limpa)
-
-            st.success("Nota localizada no SITRAM!")
-
-            if isinstance(nota, dict):
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Emitente", nota.get("nomeEmitente", nota.get("cnpjEmitente", "—")))
-                col2.metric("UF Origem", nota.get("ufEmitente", "—"))
-                col3.metric("Valor NF", f"R$ {nota.get('valorTotal', 0):.2f}")
-
-            st.json(nota)
-
+            with st.spinner("Consultando itens da nota no SITRAM..."):
+                resultado = consultar_itens_por_chave(sessao, chave_limpa)
         except Exception as e:
             st.error(f"Erro ao consultar: {e}")
+            return
+
+        itens = resultado.get("content", [])
+        if not itens:
+            st.warning("Nenhum item encontrado para esta chave.")
+            return
+
+        total_icms = sum(item.get("icms", 0) for item in itens)
+        total_fecop = sum(item.get("valorFecop", 0) for item in itens)
+        total_valor = sum(item.get("valorTotal", 0) for item in itens)
+
+        st.success(f"**{len(itens)} item(ns)** — ICMS total: R$ {total_icms:,.2f}")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total ICMS", f"R$ {total_icms:,.2f}")
+        m2.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
+        m3.metric("Valor Total NF", f"R$ {total_valor:,.2f}")
+
+        for i, item in enumerate(itens, 1):
+            with st.expander(f"Item {i} — {item.get('descricaoProduto', '?')} | ICMS R$ {item.get('icms', 0):,.2f}"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown(f"**Produto:** {item.get('descricaoProduto', '—')}")
+                    st.markdown(f"**NCM:** {item.get('ncm', '—')} | **CFOP:** {item.get('cfop', '—')}")
+                    st.markdown(f"**Qtd:** {item.get('quantidade', '—')} {item.get('unidade', '')} × R$ {item.get('valorUnitario', 0):,.2f}")
+                with c2:
+                    st.markdown(f"**ICMS:** R$ {item.get('icms', 0):,.2f}")
+                    st.markdown(f"**Alíquota:** {item.get('valorAliquota', 0)}%")
+                    st.markdown(f"**Regime:** {item.get('nomeConfiguracao', '—')}")
 
 
 def _tab_pagamentos(user: dict, cnpj: str):

@@ -198,57 +198,40 @@ def consultar_nota_fiscal(
     sessao: requests.Session,
     token: str,
     chave_acesso: str,
+    page: int = 0,
+    size: int = 20,
 ) -> dict:
     """
     Consulta nota fiscal por chave de acesso (ambiente logado).
-    Endpoint: GET /api-nota/nota-fiscal-ambiente-logado/consultar
+    Endpoint: POST /api-nota/notafiscal/consulta-nota-fiscal
     """
     chave = "".join(c for c in chave_acesso if c.isdigit())
-    r = sessao.get(
-        f"{API_NOTA}/nota-fiscal-ambiente-logado/consultar",
+    r = sessao.post(
+        f"{API_NOTA}/notafiscal/consulta-nota-fiscal",
         headers=_headers(token),
-        params={"chaveAcesso": chave},
+        json={"chaveAcesso": chave},
+        params={"page": page, "size": size},
         timeout=30,
     )
     _check_sitram_response(r, "Consulta nota fiscal")
     return r.json()
 
 
-def consultar_nota_fiscal_publica(
+def consultar_itens_por_chave(
     sessao: requests.Session,
     chave_acesso: str,
 ) -> dict:
     """
-    Consulta nota fiscal por chave (sem login, dados limitados).
-    Endpoint: GET /api-nota/nota-fiscal/consulta
+    Retorna os itens de uma nota fiscal por chave de acesso.
+    Não requer autenticação.
+    Endpoint: GET /api-nota/notafiscal/itens-nota-fiscal-por-chave-acesso/{chave}
     """
     chave = "".join(c for c in chave_acesso if c.isdigit())
     r = sessao.get(
-        f"{API_NOTA}/nota-fiscal/consulta",
-        params={"chaveAcesso": chave},
+        f"{API_NOTA}/notafiscal/itens-nota-fiscal-por-chave-acesso/{chave}",
         timeout=30,
     )
-    _check_sitram_response(r, "Consulta nota fiscal pública")
-    return r.json()
-
-
-def detalhar_nota_fiscal(
-    sessao: requests.Session,
-    token: str,
-    id_nota: str,
-    chave_acesso: str,
-    sistema_origem: str = "SITRAM",
-) -> dict:
-    """
-    Detalha uma nota fiscal específica.
-    Endpoint: GET /api-nota/nota-fiscal-ambiente-logado/detalhe/{id}/{chave}/{sistema}
-    """
-    r = sessao.get(
-        f"{API_NOTA}/nota-fiscal-ambiente-logado/detalhe/{id_nota}/{chave_acesso}/{sistema_origem}",
-        headers=_headers(token),
-        timeout=30,
-    )
-    _check_sitram_response(r, "Detalhe nota fiscal")
+    _check_sitram_response(r, "Consulta itens nota fiscal")
     return r.json()
 
 
@@ -473,12 +456,8 @@ class SitramClient:
         self._check_token()
         return consultar_nota_fiscal(self.sessao, self.token, chave_acesso)
 
-    def consultar_nota_publica(self, chave_acesso: str) -> dict:
-        return consultar_nota_fiscal_publica(self.sessao, chave_acesso)
-
-    def detalhar_nota(self, id_nota: str, chave: str, sistema: str = "SITRAM") -> dict:
-        self._check_token()
-        return detalhar_nota_fiscal(self.sessao, self.token, id_nota, chave, sistema)
+    def consultar_itens(self, chave_acesso: str) -> dict:
+        return consultar_itens_por_chave(self.sessao, chave_acesso)
 
     def simular_dae(self, ids: list[str], info: str = "") -> dict:
         self._check_token()
