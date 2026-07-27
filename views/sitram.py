@@ -305,6 +305,115 @@ def _tab_pagamentos(user: dict, cnpj: str):
                 st.error(f"Erro ao gerar relatório: {e}")
 
 
+def _tab_manifestacao(user: dict, cnpj: str):
+    """Manifestação do Destinatário — Ciência da Operação."""
+    st.markdown("### Manifestação do Destinatário")
+    st.caption(
+        "Registre Ciência da Operação (evento 210210) para NF-e recebidas. "
+        "Após manifestar, o XML completo fica disponível para download via consChNFe. "
+        "**Só funciona para NF-e (mod 55)** — NFC-e não aceita manifestação."
+    )
+
+    tp_evento = st.selectbox(
+        "Tipo de evento",
+        ["210210", "210200", "210220", "210240"],
+        format_func=lambda t: {
+            "210210": "210210 — Ciência da Operação (recomendado)",
+            "210200": "210200 — Confirmação da Operação",
+            "210220": "210220 — Desconhecimento da Operação",
+            "210240": "210240 — Operação não Realizada",
+        }.get(t, t),
+        key="sitram_manif_tipo",
+    )
+
+    modo = st.radio(
+        "Modo",
+        ["Chave única", "Lote (múltiplas chaves)"],
+        horizontal=True,
+        key="sitram_manif_modo",
+    )
+
+    if modo == "Chave única":
+        chave = st.text_input(
+            "Chave de acesso (44 dígitos)",
+            max_chars=44,
+            placeholder="Chave de acesso da NF-e...",
+            key="sitram_manif_chave",
+        )
+        if st.button("Manifestar", type="primary", key="sitram_btn_manif"):
+            chave_limpa = "".join(c for c in chave if c.isdigit())
+            if len(chave_limpa) != 44:
+                st.warning("Informe uma chave válida com 44 dígitos.")
+                return
+
+            resultado_cert = carregar_certificado(user["username"], cnpj)
+            if not resultado_cert:
+                st.error("Certificado digital não encontrado.")
+                return
+
+            from core.nfe_sefaz import manifestar_ciencia
+            with st.spinner("Enviando manifestação à SEFAZ..."):
+                res = manifestar_ciencia(
+                    resultado_cert[0], resultado_cert[1], cnpj,
+                    chave_limpa, tp_evento=tp_evento,
+                )
+
+            if res.get("ok"):
+                st.success(
+                    f"**{res.get('desc_evento', '')}** registrada com sucesso! "
+                    f"(cStat={res['cStat']}, protocolo={res.get('nProt', '—')})"
+                )
+            else:
+                st.error(res.get("erro", "Erro desconhecido"))
+    else:
+        chaves_txt = st.text_area(
+            "Cole as chaves de acesso (uma por linha)",
+            height=200,
+            placeholder="23240100000000000000550010000000011000000001\n23240100000000000000550010000000021000000002",
+            key="sitram_manif_lote",
+        )
+        if st.button("Manifestar Lote", type="primary", key="sitram_btn_manif_lote"):
+            linhas = [l.strip() for l in chaves_txt.strip().splitlines() if l.strip()]
+            chaves = ["".join(c for c in l if c.isdigit()) for l in linhas]
+            chaves = [c for c in chaves if len(c) == 44]
+
+            if not chaves:
+                st.warning("Nenhuma chave válida (44 dígitos) encontrada.")
+                return
+
+            resultado_cert = carregar_certificado(user["username"], cnpj)
+            if not resultado_cert:
+                st.error("Certificado digital não encontrado.")
+                return
+
+            from core.nfe_sefaz import manifestar_lote
+            log_area = st.empty()
+
+            def _log(msg):
+                log_area.caption(msg)
+
+            with st.spinner(f"Manifestando {len(chaves)} chave(s)..."):
+                resultados = manifestar_lote(
+                    resultado_cert[0], resultado_cert[1], cnpj,
+                    chaves, tp_evento=tp_evento, log_cb=_log,
+                )
+
+            import pandas as pd
+            rows = []
+            for r in resultados:
+                rows.append({
+                    "Chave": r.get("chave", ""),
+                    "cStat": r.get("cStat", ""),
+                    "Resultado": r.get("xMotivo", r.get("erro", "")),
+                    "Protocolo": r.get("nProt", ""),
+                })
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            ok = sum(1 for r in resultados if r.get("ok"))
+            st.caption(f"**{ok}/{len(resultados)}** manifestações aceitas")
+
+
 def render():
     user = current_user()
     nav.render("sitram")
@@ -327,9 +436,10 @@ def render():
     selecionado = st.selectbox("Empresa", list(opcoes.keys()), key="sitram_empresa")
     cnpj = opcoes[selecionado]
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Consulta NF",
         "Protocolo SVRS",
+        "Manifestação",
         "DIFAL / Calculadora",
         "Pagamentos / DAE",
     ])
@@ -339,6 +449,8 @@ def render():
     with tab2:
         _tab_consulta_protocolo(user, cnpj)
     with tab3:
-        _tab_difal_calculadora(user, cnpj)
+        _tab_manifestacao(user, cnpj)
     with tab4:
+        _tab_difal_calculadora(user, cnpj)
+    with tab5:
         _tab_pagamentos(user, cnpj)

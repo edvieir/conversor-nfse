@@ -495,10 +495,74 @@ def executar_consulta_sefaz(
             set_proxima_consulta(cnpj, proxima_dt.strftime("%Y-%m-%dT%H:%M:%S"))
             _log(f"  Próxima consulta liberada em: {proxima_dt.strftime('%d/%m/%Y às %H:%M:%S')}")
 
+        # ── Manifestação automática + retry consChNFe ────────────────────
+        chaves_pendentes = chaves_retry.get(cnpj, [])
+        nfe_pendentes = [c for c in chaves_pendentes if c[20:22] != "65"]
+        if nfe_pendentes and not chave_rate_limited:
+            _log(f"  Manifestando Ciência da Operação para {len(nfe_pendentes)} NF-e sem XML...")
+            manifestadas = 0
+            for ch in nfe_pendentes:
+                try:
+                    res_m = manifestar_ciencia(pfx_bytes, pfx_senha, cnpj, ch, ambiente)
+                    if res_m.get("ok"):
+                        manifestadas += 1
+                    elif "573" in res_m.get("erro", "") or "135" in res_m.get("cStat", ""):
+                        manifestadas += 1
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            _log(f"  {manifestadas}/{len(nfe_pendentes)} manifestação(ões) aceita(s)")
+
+            if manifestadas:
+                _log(f"  Aguardando 5s para propagação antes do retry consChNFe...")
+                time.sleep(5)
+                recuperadas = 0
+                for ch in nfe_pendentes:
+                    try:
+                        xml_ret = _baixar_por_chave(sessao, cnpj, ch, ambiente, cuf)
+                    except _RateLimitError:
+                        _log(f"  RATE LIMIT (656) no retry — interrompendo")
+                        break
+                    except Exception:
+                        xml_ret = None
+                    if xml_ret:
+                        recuperadas += 1
+                        dados = _extrair_dados(xml_ret, cnpj)
+                        modelo_final = dados.get("modelo") or "NF-e"
+                        dados.update({
+                            "xml": xml_ret, "cnpj_empresa": cnpj,
+                            "nome_empresa": nome, "nsu": "", "modelo": modelo_final,
+                        })
+                        if salvar_db:
+                            docs_para_db.append({
+                                "cnpj_empresa":  cnpj,
+                                "chave":         dados.get("chave", ""),
+                                "modelo":        modelo_final,
+                                "papel":         dados.get("papel", "Recebida"),
+                                "numero":        dados.get("numero", ""),
+                                "serie":         dados.get("serie", ""),
+                                "data_emissao":  dados.get("data_emissao", ""),
+                                "cnpj_emitente": dados.get("cnpj_emitente", ""),
+                                "nome_emitente": dados.get("nome_emitente", ""),
+                                "cnpj_dest_doc": dados.get("cnpj_dest_doc", ""),
+                                "nome_dest_doc": dados.get("nome_dest_doc", ""),
+                                "valor_total":   float(dados.get("valor_total", 0) or 0),
+                                "nat_operacao":  dados.get("nat_operacao", ""),
+                                "xml":           xml_ret,
+                            })
+                        if _passa_filtros(dados):
+                            todos_docs.append(dados)
+                            docs_empresa += 1
+                        chaves_pendentes.remove(ch)
+                        resumos_sem_xml -= 1
+                    time.sleep(0.5)
+                if recuperadas:
+                    _log(f"  {recuperadas} XML(s) recuperado(s) após manifestação!")
+
         emitidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Emitida")
         recebidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Recebida")
         _log(f"  Subtotal {nome}: {docs_empresa} docs (emitidas={emitidas} recebidas={recebidas})")
-        if resumos_sem_xml:
+        if resumos_sem_xml > 0:
             _log(f"  {resumos_sem_xml} resumo(s) sem XML completo (salvos com dados parciais no acervo)")
         _log(f"  Páginas processadas: {paginas}")
 
@@ -1033,6 +1097,217 @@ def consultar_protocolo_lote(
         res = consultar_protocolo_svrs(pfx_bytes, pfx_senha, chave, ambiente)
         resultados.append(res)
         if i < len(chaves) - 1:
+            time.sleep(1)
+    return resultados
+
+
+# ── Manifestação do Destinatário (RecepcaoEvento4) ──────────────────────────
+# Envia evento 210210 (Ciência da Operação) ao Ambiente Nacional para
+# permitir o download do XML completo via consChNFe.
+
+_URL_RECEPCAO_EVENTO = "https://www1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx"
+_NS_RECEPCAO_EVENTO  = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4"
+_SOAP_ACTION_EVENTO  = f"{_NS_RECEPCAO_EVENTO}/nfeRecepcaoEvento"
+
+_EVENTO_TIPOS = {
+    "210200": "Confirmacao da Operacao",
+    "210210": "Ciencia da Operacao",
+    "210220": "Desconhecimento da Operacao",
+    "210240": "Operacao nao Realizada",
+}
+
+
+def _assinar_evento_xml(evento_xml: bytes, pfx_bytes: bytes, pfx_senha: str) -> str:
+    """Assina o elemento <evento> contendo <infEvento> com XMLDSig (enveloped)."""
+    from lxml import etree
+    from signxml import XMLSigner, SignatureMethod, DigestAlgorithm, CanonicalizationMethod
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    senha = pfx_senha.encode() if isinstance(pfx_senha, str) else pfx_senha
+    private_key, cert, chain = pkcs12.load_key_and_certificates(pfx_bytes, senha)
+
+    doc = etree.fromstring(evento_xml)
+    inf = doc.find("{http://www.portalfiscal.inf.br/nfe}infEvento")
+    ref_uri = f"#{inf.attrib['Id']}" if inf is not None else ""
+
+    signer = XMLSigner(
+        signature_algorithm=SignatureMethod.RSA_SHA256,
+        digest_algorithm=DigestAlgorithm.SHA256,
+        c14n_algorithm=CanonicalizationMethod.EXCLUSIVE_XML_CANONICALIZATION_1_0,
+    )
+    signed = signer.sign(
+        doc,
+        key=private_key,
+        cert=[cert] + (list(chain) if chain else []),
+        reference_uri=ref_uri,
+    )
+    return etree.tostring(signed, encoding="unicode")
+
+
+def _montar_evento(
+    cnpj: str,
+    chave: str,
+    tp_evento: str,
+    n_seq: int,
+    ambiente: str,
+) -> str:
+    """Monta o XML <evento> (sem assinatura) para Manifestação do Destinatário."""
+    from datetime import datetime, timezone, timedelta
+
+    desc = _EVENTO_TIPOS.get(tp_evento, "Ciencia da Operacao")
+    fuso = timezone(timedelta(hours=-3))
+    dh = datetime.now(fuso).strftime("%Y-%m-%dT%H:%M:%S%z")
+    dh = dh[:-2] + ":" + dh[-2:]
+
+    id_evento = f"ID{tp_evento}{chave}{n_seq:02d}"
+
+    det_extra = ""
+    if tp_evento == "210240":
+        det_extra = "<xJust>Operacao nao realizada conforme conferencia interna</xJust>"
+
+    return (
+        f'<evento versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe">'
+        f'<infEvento Id="{id_evento}">'
+        f"<cOrgao>91</cOrgao>"
+        f"<tpAmb>{ambiente}</tpAmb>"
+        f"<CNPJ>{cnpj}</CNPJ>"
+        f"<chNFe>{chave}</chNFe>"
+        f"<dhEvento>{dh}</dhEvento>"
+        f"<tpEvento>{tp_evento}</tpEvento>"
+        f"<nSeqEvento>{n_seq}</nSeqEvento>"
+        f"<verEvento>1.00</verEvento>"
+        f'<detEvento versao="1.00">'
+        f"<descEvento>{desc}</descEvento>"
+        f"{det_extra}"
+        f"</detEvento>"
+        f"</infEvento>"
+        f"</evento>"
+    )
+
+
+def manifestar_ciencia(
+    pfx_bytes: bytes,
+    pfx_senha: str,
+    cnpj: str,
+    chave: str,
+    ambiente: str = "1",
+    tp_evento: str = "210210",
+    n_seq: int = 1,
+) -> dict:
+    """
+    Envia Manifestação do Destinatário (padrão: 210210 = Ciência da Operação).
+
+    Retorna dict com:
+      ok: bool, cStat: str, xMotivo: str, nProt: str, erro: str
+    """
+    chave = "".join(c for c in chave if c.isdigit())
+    if len(chave) != 44:
+        return {"ok": False, "erro": f"Chave inválida: {len(chave)} dígitos."}
+
+    if chave[20:22] == "65":
+        return {"ok": False, "erro": "NFC-e (mod 65) não aceita Manifestação do Destinatário."}
+
+    evento_xml = _montar_evento(cnpj, chave, tp_evento, n_seq, ambiente)
+
+    try:
+        evento_assinado = _assinar_evento_xml(evento_xml.encode("utf-8"), pfx_bytes, pfx_senha)
+    except Exception as e:
+        return {"ok": False, "erro": f"Erro ao assinar evento: {e}"}
+
+    envelope = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+        ' xmlns:xsd="http://www.w3.org/2001/XMLSchema"'
+        ' xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">'
+        "<soap12:Body>"
+        f'<nfeRecepcaoEvento xmlns="{_NS_RECEPCAO_EVENTO}">'
+        "<nfeDadosMsg>"
+        f'<envEvento versao="1.00" xmlns="{NS}">'
+        "<idLote>1</idLote>"
+        f"{evento_assinado}"
+        "</envEvento>"
+        "</nfeDadosMsg>"
+        "</nfeRecepcaoEvento>"
+        "</soap12:Body>"
+        "</soap12:Envelope>"
+    )
+
+    sessao = _sessao(pfx_bytes, pfx_senha)
+    headers = {
+        "Content-Type": "application/soap+xml; charset=utf-8",
+        "SOAPAction": _SOAP_ACTION_EVENTO,
+    }
+
+    try:
+        r = sessao.post(_URL_RECEPCAO_EVENTO, data=envelope.encode("utf-8"),
+                        headers=headers, timeout=60)
+        r.raise_for_status()
+    except Exception as e:
+        return {"ok": False, "erro": f"Erro de comunicação: {e}"}
+
+    try:
+        root = ET.fromstring(r.text)
+    except Exception as e:
+        return {"ok": False, "erro": f"Resposta inválida: {e}"}
+
+    cstat_lote = root.find(f".//{{{NS}}}cStat")
+    cstat_lote_v = cstat_lote.text.strip() if cstat_lote is not None and cstat_lote.text else "999"
+
+    if cstat_lote_v not in ("128", "135", "136"):
+        motivo_lote = root.find(f".//{{{NS}}}xMotivo")
+        motivo_txt = motivo_lote.text.strip() if motivo_lote is not None and motivo_lote.text else ""
+        return {"ok": False, "cStat": cstat_lote_v, "xMotivo": motivo_txt,
+                "erro": f"Lote rejeitado: cStat={cstat_lote_v} — {motivo_txt}"}
+
+    ret = root.find(f".//{{{NS}}}infEvento")
+    if ret is None:
+        return {"ok": False, "erro": "Resposta sem infEvento."}
+
+    cstat_ev = ret.find(f"{{{NS}}}cStat")
+    motivo_ev = ret.find(f"{{{NS}}}xMotivo")
+    nprot_ev = ret.find(f"{{{NS}}}nProt")
+
+    cstat_v = cstat_ev.text.strip() if cstat_ev is not None and cstat_ev.text else "999"
+    motivo_v = motivo_ev.text.strip() if motivo_ev is not None and motivo_ev.text else ""
+    nprot_v = nprot_ev.text.strip() if nprot_ev is not None and nprot_ev.text else ""
+
+    ok = cstat_v in ("135", "136")
+    return {
+        "ok": ok,
+        "cStat": cstat_v,
+        "xMotivo": motivo_v,
+        "nProt": nprot_v,
+        "chave": chave,
+        "tp_evento": tp_evento,
+        "desc_evento": _EVENTO_TIPOS.get(tp_evento, ""),
+        "erro": "" if ok else f"cStat={cstat_v}: {motivo_v}",
+    }
+
+
+def manifestar_lote(
+    pfx_bytes: bytes,
+    pfx_senha: str,
+    cnpj: str,
+    chaves: list[str],
+    ambiente: str = "1",
+    tp_evento: str = "210210",
+    log_cb: Callable[[str], None] | None = None,
+) -> list[dict]:
+    """Manifesta Ciência da Operação em lote (uma por uma com delay)."""
+    resultados = []
+    nfe_chaves = [c for c in chaves if c[20:22] != "65"]
+    if log_cb and len(nfe_chaves) < len(chaves):
+        log_cb(f"  {len(chaves) - len(nfe_chaves)} NFC-e ignorada(s) (não aceita manifestação)")
+
+    for i, chave in enumerate(nfe_chaves):
+        if log_cb:
+            log_cb(f"[{i+1}/{len(nfe_chaves)}] Manifestando {chave[:20]}...")
+        res = manifestar_ciencia(pfx_bytes, pfx_senha, cnpj, chave, ambiente, tp_evento)
+        resultados.append(res)
+        if log_cb:
+            status = "OK" if res["ok"] else res.get("erro", "?")
+            log_cb(f"  → {status}")
+        if i < len(nfe_chaves) - 1:
             time.sleep(1)
     return resultados
 
