@@ -398,6 +398,26 @@ def simular_dae_sanfit(
     return r.json()
 
 
+# ── Lançamentos ─────────────────────────────────────────────────────────────
+
+def consultar_somatorio_lancamento(
+    sessao: requests.Session,
+    token: str,
+    id_lancamento: str,
+) -> dict:
+    """
+    Retorna somatório de um lançamento específico.
+    Endpoint: GET /api-pagamento/lancamento/somatorio-lancamento/{id}
+    """
+    r = sessao.get(
+        f"{API_PAGAMENTO}/lancamento/somatorio-lancamento/{id_lancamento}",
+        headers=_headers(token),
+        timeout=30,
+    )
+    _check_sitram_response(r, "Somatório lançamento")
+    return r.json()
+
+
 # ── Relatórios / CSV ─────────────────────────────────────────────────────────
 
 def gerar_csv(
@@ -490,6 +510,10 @@ class SitramClient:
     def simular_dae_sanfit(self, payload: dict) -> dict:
         self._check_token()
         return simular_dae_sanfit(self.sessao, self.token, payload)
+
+    def somatorio_lancamento(self, id_lancamento: str) -> dict:
+        self._check_token()
+        return consultar_somatorio_lancamento(self.sessao, self.token, id_lancamento)
 
     def gerar_csv(self, payload: dict) -> bytes:
         self._check_token()
