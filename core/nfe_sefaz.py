@@ -18,6 +18,11 @@ from requests_pkcs12 import Pkcs12Adapter
 
 NS = "http://www.portalfiscal.inf.br/nfe"
 
+
+class _RateLimitError(Exception):
+    """cStat=656 — consumo indevido, aguardar 1 hora."""
+    pass
+
 UF_CODIGOS = {
     "AC": 12, "AL": 27, "AP": 16, "AM": 13, "BA": 29,
     "CE": 23, "DF": 53, "ES": 32, "GO": 52, "MA": 21,
@@ -249,12 +254,20 @@ def _consultar_nsu(sessao, cnpj: str, nsu: str, amb: str, cuf: int) -> tuple[str
 
 
 def _baixar_por_chave(sessao, cnpj: str, chave: str, amb: str, cuf: int) -> str | None:
+    """Baixa XML completo por chave. Levanta _RateLimitError se cStat=656."""
     env = _ENVELOPE_CHAVE.format(amb=amb, cuf=cuf, cnpj=cnpj, chave=chave)
     try:
         r = sessao.post(URL_SEFAZ, data=env.encode("utf-8"), headers=_HEADERS, timeout=60)
         r.raise_for_status()
+        root = ET.fromstring(r.text)
+        cstat_el = root.find(f".//{{{NS}}}cStat")
+        cstat = cstat_el.text.strip() if cstat_el is not None else "?"
+        if cstat == "656":
+            raise _RateLimitError()
         docs = _descompactar_docs(r.text)
         return docs[0]["xml"] if docs else None
+    except _RateLimitError:
+        raise
     except Exception:
         return None
 
@@ -275,6 +288,7 @@ def executar_consulta_sefaz(
     log_cb: Callable[[str], None] | None = None,
     progress_cb: Callable[[float], None] | None = None,
     salvar_db: bool = False,
+    username: str = "",
 ) -> tuple[bytes | None, list[str]]:
     """
     Consulta a SEFAZ para cada empresa e retorna um ZIP com XMLs, PDFs e/ou Excel.
@@ -285,7 +299,8 @@ def executar_consulta_sefaz(
     from datetime import date as _date
     log: list[str] = []
     todos_docs: list[dict] = []
-    docs_para_db: list[dict] = []  # todos os docs (sem filtro de período/tipo) para salvar no acervo
+    docs_para_db: list[dict] = []
+    chaves_retry: dict[str, list[str]] = {}  # cnpj -> [chaves sem XML completo]
 
     # Deduplica CNPJs
     cnpjs_vistos: set[str] = set()
@@ -355,27 +370,33 @@ def executar_consulta_sefaz(
         paginas = 0
         docs_empresa = 0
         proxima_dt: datetime | None = None
+        chave_rate_limited = False
+        resumos_sem_xml = 0
 
-        while paginas < 50:
+        while paginas < 200:
             novo_nsu, docs = _consultar_nsu(sessao, cnpj, nsu, ambiente, cuf)
             paginas += 1
 
             if not docs:
-                # Avança NSU para maxNSU mesmo sem documentos (cStat=137)
                 if novo_nsu != nsu:
                     set_nsu_cnpj(cnpj, novo_nsu)
                     _log(f"  Sem novos documentos. NSU avançado para {novo_nsu}.")
                 else:
                     _log(f"  Sem novos documentos.")
-                proxima_dt = datetime.now() + timedelta(minutes=61)
+                proxima_dt = datetime.now() + timedelta(minutes=55)
                 break
 
             if "_erro" in docs[0]:
+                erro_msg = docs[0]["_erro"]
                 if novo_nsu != nsu:
                     set_nsu_cnpj(cnpj, novo_nsu)
                     _log(f"  NSU salvo da resposta de erro: {novo_nsu}")
-                proxima_dt = datetime.now() + timedelta(minutes=61)
-                _log(f"  AVISO SEFAZ: {docs[0]['_erro']}")
+                if "656" in erro_msg:
+                    proxima_dt = datetime.now() + timedelta(minutes=61)
+                    _log(f"  RATE LIMIT (656) no distNSU — cooldown de 61 min.")
+                else:
+                    proxima_dt = datetime.now() + timedelta(minutes=55)
+                    _log(f"  AVISO SEFAZ: {erro_msg}")
                 break
 
             for doc in docs:
@@ -385,32 +406,38 @@ def executar_consulta_sefaz(
 
                 if doc.get("resumo"):
                     chave = _extrair_chave_resumo(doc["xml"])
-                    if chave:
-                        xml_conteudo = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
+                    if chave and not chave_rate_limited:
+                        try:
+                            xml_conteudo = _baixar_por_chave(sessao, cnpj, chave, ambiente, cuf)
+                        except _RateLimitError:
+                            _log(f"  RATE LIMIT (656) na consulta por chave — salvando resumos restantes sem XML completo")
+                            chave_rate_limited = True
+                            xml_conteudo = None
                         time.sleep(0.5)
-                        if not xml_conteudo:
-                            # XML completo indisponível — salva dados do resumo no acervo
-                            _log(f"  Resumo NSU={doc['nsu']} — XML indisponível, salvando resumo")
-                            if salvar_db:
-                                d_res = _extrair_dados_resumo(doc["xml"], cnpj)
-                                if d_res.get("chave"):
-                                    docs_para_db.append({
-                                        "cnpj_empresa":  cnpj,
-                                        "chave":         d_res["chave"],
-                                        "modelo":        d_res.get("modelo", "NF-e"),
-                                        "papel":         d_res.get("papel", "Recebida"),
-                                        "numero":        "",
-                                        "serie":         "",
-                                        "data_emissao":  d_res.get("data_emissao", ""),
-                                        "cnpj_emitente": d_res.get("cnpj_emitente", ""),
-                                        "nome_emitente": d_res.get("nome_emitente", ""),
-                                        "cnpj_dest_doc": d_res.get("cnpj_dest_doc", ""),
-                                        "nome_dest_doc": d_res.get("nome_dest_doc", ""),
-                                        "valor_total":   float(d_res.get("valor_total", 0) or 0),
-                                        "nat_operacao":  "",
-                                        "xml":           doc["xml"],  # resumo XML
-                                    })
-                            continue
+                    if not xml_conteudo:
+                        resumos_sem_xml += 1
+                        d_res = _extrair_dados_resumo(doc["xml"], cnpj)
+                        chave_resumo = d_res.get("chave", "")
+                        if salvar_db and chave_resumo:
+                            docs_para_db.append({
+                                "cnpj_empresa":  cnpj,
+                                "chave":         chave_resumo,
+                                "modelo":        d_res.get("modelo", "NF-e"),
+                                "papel":         d_res.get("papel", "Recebida"),
+                                "numero":        "",
+                                "serie":         "",
+                                "data_emissao":  d_res.get("data_emissao", ""),
+                                "cnpj_emitente": d_res.get("cnpj_emitente", ""),
+                                "nome_emitente": d_res.get("nome_emitente", ""),
+                                "cnpj_dest_doc": d_res.get("cnpj_dest_doc", ""),
+                                "nome_dest_doc": d_res.get("nome_dest_doc", ""),
+                                "valor_total":   float(d_res.get("valor_total", 0) or 0),
+                                "nat_operacao":  "",
+                                "xml":           doc["xml"],
+                            })
+                        if chave_resumo:
+                            chaves_retry.setdefault(cnpj, []).append(chave_resumo)
+                        continue
                 else:
                     xml_conteudo = doc["xml"]
 
@@ -459,7 +486,7 @@ def executar_consulta_sefaz(
             nsu = novo_nsu
             set_nsu_cnpj(cnpj, novo_nsu)
             if len(docs) < 50:
-                proxima_dt = datetime.now() + timedelta(minutes=61)
+                proxima_dt = datetime.now() + timedelta(minutes=55)
                 break
             time.sleep(2)
 
@@ -471,12 +498,26 @@ def executar_consulta_sefaz(
         emitidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Emitida")
         recebidas = sum(1 for d in todos_docs if d.get("cnpj_empresa") == cnpj and d.get("papel") == "Recebida")
         _log(f"  Subtotal {nome}: {docs_empresa} docs (emitidas={emitidas} recebidas={recebidas})")
+        if resumos_sem_xml:
+            _log(f"  {resumos_sem_xml} resumo(s) sem XML completo (salvos com dados parciais no acervo)")
+        _log(f"  Páginas processadas: {paginas}")
 
     # Persiste no acervo local (independente dos filtros de período/tipo do ZIP)
     if salvar_db and docs_para_db:
         from db.database import salvar_resultados_nfe
         salvar_resultados_nfe(docs_para_db, baixado_por="auto")
         _log(f"Acervo: {len(docs_para_db)} documento(s) persistido(s) no banco.")
+
+    if salvar_db and chaves_retry and username:
+        try:
+            from db.database import enfileirar_xml
+            for cnpj_r, chaves_r in chaves_retry.items():
+                if chaves_r:
+                    qtd = enfileirar_xml(username, cnpj_r, chaves_r)
+                    if qtd:
+                        _log(f"  {qtd} chave(s) enfileirada(s) para retry (worker horário)")
+        except Exception:
+            pass
 
     # O mesmo documento pode aparecer mais de uma vez no feed NSU da SEFAZ
     # (ex.: republicação, ou resumo + documento completo em NSUs distintos).
@@ -839,6 +880,161 @@ def sincronizar_nfce_sae(
 
     _log(f"SAE NFC-e: {len(docs)} NFC-e obtida(s).")
     return docs, None
+
+
+# ── NfeConsultaProtocolo via SVRS ─────────────────────────────────────────────
+# Consulta a situação de uma NF-e/NFC-e diretamente no autorizador (SVRS),
+# independente do Ambiente Nacional. Retorna protocolo, status e datas.
+
+_SVRS_CONSULTA_NFE  = "https://nfe.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx"
+_SVRS_CONSULTA_NFCE = "https://nfce.svrs.rs.gov.br/ws/NfeConsulta/NfeConsulta4.asmx"
+
+_NS_CONSULTA = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4"
+
+_ENVELOPE_CONSULTA_PROTOCOLO = """<?xml version="1.0" encoding="UTF-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeConsultaNF xmlns="{ns_wsdl}">
+      <nfeDadosMsg>
+        <consSitNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+          <tpAmb>{amb}</tpAmb>
+          <xServ>CONSULTAR</xServ>
+          <chNFe>{chave}</chNFe>
+        </consSitNFe>
+      </nfeDadosMsg>
+    </nfeConsultaNF>
+  </soap12:Body>
+</soap12:Envelope>"""
+
+_CSTAT_SITUACAO = {
+    "100": "Autorizada",
+    "101": "Cancelada",
+    "110": "Denegada (uso indevido)",
+    "150": "Autorizada fora de prazo",
+    "151": "Cancelada fora de prazo",
+    "155": "Cancelada por substituição",
+    "301": "Uso denegado — irregularidade fiscal emitente",
+    "302": "Uso denegado — irregularidade fiscal destinatário",
+    "303": "Uso denegado — destinatário não habilitado a operar na UF",
+}
+
+
+def consultar_protocolo_svrs(
+    pfx_bytes: bytes,
+    pfx_senha: str,
+    chave: str,
+    ambiente: str = "1",
+) -> dict:
+    """
+    Consulta situação de NF-e/NFC-e diretamente no SVRS via NfeConsultaProtocolo.
+    Identifica automaticamente se é NF-e (mod 55) ou NFC-e (mod 65) pela chave.
+
+    Retorna dict com:
+      ok: bool, cStat: str, xMotivo: str, situacao: str,
+      nProt: str, dhRecbto: str, chave: str, modelo: str,
+      erro: str (vazio se ok)
+    """
+    chave = "".join(c for c in chave if c.isdigit())
+    if len(chave) != 44:
+        return {"ok": False, "erro": f"Chave inválida: {len(chave)} dígitos (esperado 44)."}
+
+    modelo_cod = chave[20:22]
+    if modelo_cod == "65":
+        url = _SVRS_CONSULTA_NFCE
+        modelo = "NFC-e"
+    else:
+        url = _SVRS_CONSULTA_NFE
+        modelo = "NF-e"
+
+    sessao = _sessao(pfx_bytes, pfx_senha)
+    env = _ENVELOPE_CONSULTA_PROTOCOLO.format(
+        ns_wsdl=_NS_CONSULTA, amb=ambiente, chave=chave,
+    )
+    headers = {
+        "Content-Type": "application/soap+xml; charset=utf-8",
+        "SOAPAction": f"{_NS_CONSULTA}/nfeConsultaNF",
+    }
+
+    try:
+        r = sessao.post(url, data=env.encode("utf-8"), headers=headers, timeout=60)
+        r.raise_for_status()
+    except Exception as e:
+        return {"ok": False, "erro": f"Erro de comunicação com SVRS: {e}"}
+
+    try:
+        root = ET.fromstring(r.text)
+    except Exception as e:
+        return {"ok": False, "erro": f"Resposta XML inválida: {e}"}
+
+    ns_nfe = "http://www.portalfiscal.inf.br/nfe"
+
+    def _find(tag):
+        return root.find(f".//{{{ns_nfe}}}{tag}")
+
+    cstat_el  = _find("cStat")
+    motivo_el = _find("xMotivo")
+    nprot_el  = _find("nProt")
+    dhrec_el  = _find("dhRecbto")
+
+    cstat  = cstat_el.text.strip()  if cstat_el  is not None and cstat_el.text  else "999"
+    motivo = motivo_el.text.strip() if motivo_el is not None and motivo_el.text else "Sem descrição"
+    nprot  = nprot_el.text.strip()  if nprot_el  is not None and nprot_el.text  else ""
+    dhrec  = dhrec_el.text.strip()  if dhrec_el  is not None and dhrec_el.text  else ""
+
+    situacao = _CSTAT_SITUACAO.get(cstat, "")
+    ok = cstat in ("100", "150")
+
+    # Extrai eventos (cancelamento, carta de correção, etc.)
+    eventos = []
+    for ev_el in root.findall(f".//{{{ns_nfe}}}procEventoNFe"):
+        tp_ev = _find_in(ev_el, ns_nfe, "tpEvento")
+        desc_ev = _find_in(ev_el, ns_nfe, "xEvento")
+        dh_ev = _find_in(ev_el, ns_nfe, "dhRegEvento")
+        nprot_ev = _find_in(ev_el, ns_nfe, "nProt")
+        if tp_ev or desc_ev:
+            eventos.append({
+                "tipo": tp_ev, "descricao": desc_ev,
+                "data": dh_ev, "protocolo": nprot_ev,
+            })
+
+    return {
+        "ok": ok,
+        "cStat": cstat,
+        "xMotivo": motivo,
+        "situacao": situacao,
+        "nProt": nprot,
+        "dhRecbto": dhrec,
+        "chave": chave,
+        "modelo": modelo,
+        "eventos": eventos,
+        "erro": "" if ok else f"cStat={cstat}: {motivo}",
+    }
+
+
+def _find_in(parent, ns: str, tag: str) -> str:
+    el = parent.find(f".//{{{ns}}}{tag}")
+    return el.text.strip() if el is not None and el.text else ""
+
+
+def consultar_protocolo_lote(
+    pfx_bytes: bytes,
+    pfx_senha: str,
+    chaves: list[str],
+    ambiente: str = "1",
+    log_cb: Callable[[str], None] | None = None,
+) -> list[dict]:
+    """Consulta múltiplas chaves via NfeConsultaProtocolo (uma por uma com delay)."""
+    resultados = []
+    for i, chave in enumerate(chaves):
+        if log_cb:
+            log_cb(f"[{i+1}/{len(chaves)}] Consultando {chave[:20]}...")
+        res = consultar_protocolo_svrs(pfx_bytes, pfx_senha, chave, ambiente)
+        resultados.append(res)
+        if i < len(chaves) - 1:
+            time.sleep(1)
+    return resultados
 
 
 # ── Geração do Excel ──────────────────────────────────────────────────────────

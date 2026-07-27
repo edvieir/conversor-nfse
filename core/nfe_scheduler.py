@@ -108,6 +108,7 @@ def main():
                 log_cb=coletar_log,
                 progress_cb=None,
                 salvar_db=True,
+                username=username,
             )
 
         except Exception as e:

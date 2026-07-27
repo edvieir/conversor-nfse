@@ -11,6 +11,7 @@ _PAGES = [
     ("milhao",          "receipt_long",   "Notas do Milhão"),
     ("dashboard",       "monitoring",     "Dashboard"),
     ("siga_downloads", "cloud_sync",     "Relatórios SIGA"),
+    ("sitram",         "local_shipping", "SITRAM"),
 ]
 _ADMIN_PAGE = ("usuarios", "manage_accounts", "Usuários")
 

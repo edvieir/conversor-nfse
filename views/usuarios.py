@@ -329,6 +329,7 @@ def render():
         ("nfe_nfce",       "NFE / NFCE"),
         ("siga_consulta",  "Consulta DTE"),
         ("siga_downloads", "Relatórios SIGA"),
+        ("sitram",         "SITRAM"),
         ("certificados",   "Certificados"),
         ("milhao",         "Milhão"),
         ("dashboard",      "Dashboard"),

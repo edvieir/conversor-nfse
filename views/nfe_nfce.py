@@ -470,6 +470,7 @@ def _render_tab_lote(user, certs):
                         log_cb=on_log,
                         progress_cb=on_progress,
                         salvar_db=True,
+                        username=user["username"],
                     )
 
                     progress_bar.progress(1.0, text="Concluído!")
