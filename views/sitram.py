@@ -467,14 +467,9 @@ def _tab_conferencia(user: dict, cnpj: str):
         key="sitram_conf_regime",
     )
 
-    col_a, col_b = st.columns(2)
-    aliq_interna = col_a.number_input(
-        "Alíquota interna CE (%)",
-        min_value=0.0, max_value=40.0,
-        value=ALIQ_INTERNA_CE, step=0.5,
-        key="sitram_conf_aliq_interna",
-    )
-    frete_total = col_b.number_input(
+    aliq_interna = ALIQ_INTERNA_CE
+
+    frete_total = st.number_input(
         "Valor total do frete/CT-e (R$)",
         min_value=0.0,
         value=0.0,
