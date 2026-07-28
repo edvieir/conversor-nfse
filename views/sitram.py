@@ -99,6 +99,15 @@ def _alertas_item(item: dict, regime_empresa: str) -> list[str]:
     return alertas
 
 
+def _aliq_inter_uf(aliq_item: float) -> float:
+    """Alíquota interestadual padrão da UF (usada no crédito de frete).
+    Se o item usa 4% (importado), a UF de origem ainda cobra 7% ou 12%
+    sobre o frete. Retorna a aliq da UF (não a do produto)."""
+    if aliq_item == 4.0:
+        return 7.0
+    return aliq_item
+
+
 def _link_sitram_pagamento(chave: str) -> str:
     return (
         f"{SITRAM_PORTAL}/#/pagamento-icms/detalhes-lancamentos"
@@ -445,7 +454,9 @@ def _tab_conferencia(user: dict, cnpj: str):
     st.markdown("### Conferência de Cálculo SITRAM")
     st.caption(
         "Confira se o ICMS calculado pelo SITRAM está correto. "
-        "Compare com o cálculo esperado para identificar divergências."
+        "Compare com o cálculo esperado. O SITRAM inclui o frete (CT-e) "
+        "rateado na base de cálculo — informe o valor total do frete para "
+        "uma conferência precisa."
     )
 
     regime_empresa = st.radio(
@@ -463,6 +474,14 @@ def _tab_conferencia(user: dict, cnpj: str):
         value=ALIQ_INTERNA_CE, step=0.5,
         key="sitram_conf_aliq_interna",
     )
+    frete_total = col_b.number_input(
+        "Valor total do frete/CT-e (R$)",
+        min_value=0.0,
+        value=0.0,
+        step=10.0,
+        help="O SITRAM rateia o frete proporcionalmente entre os itens e soma à BC.",
+        key="sitram_conf_frete",
+    )
 
     modo = st.radio(
         "Modo",
@@ -473,60 +492,94 @@ def _tab_conferencia(user: dict, cnpj: str):
     )
 
     if modo == "unica":
-        _conferencia_unica(user, cnpj, regime_empresa, aliq_interna)
+        _conferencia_unica(user, cnpj, regime_empresa, aliq_interna, frete_total)
     else:
-        _conferencia_lote(user, cnpj, regime_empresa, aliq_interna)
+        _conferencia_lote(user, cnpj, regime_empresa, aliq_interna, frete_total)
 
 
 def _calcular_icms_esperado(item: dict, aliq_interna: float, aliq_inter_default: float,
-                            regime_empresa: str) -> float:
+                            regime_empresa: str, frete_item: float = 0.0,
+                            aliq_inter_uf: float = 0.0) -> dict:
+    """
+    Reproduz a fórmula da Calculadora de ICMS do SITRAM:
+      BC = valor_mercadoria + frete_rateado
+      crédito_origem = ICMS_destacado_NF + (frete_rateado × aliq_interestadual_UF)
+      ICMS = BC × aliq_interna - crédito_origem
+
+    Retorna dict com detalhes do cálculo para exibição.
+    """
     tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
-    bc = item.get("valorBc", 0)
+    bc_produto = item.get("valorBc", 0)
     icms_dest = item.get("valorIcmsDestacado", 0)
     aliq_item = item.get("valorAliquota", 0)
     aliq_inter = aliq_item if aliq_item > 0 else aliq_inter_default
+    aliq_uf = aliq_inter_uf if aliq_inter_uf > 0 else _aliq_inter_uf(aliq_inter)
+
+    bc_total = bc_produto + frete_item
 
     if tipo in ("ANTECIPADO", "DIFAL"):
-        if regime_empresa == "simples":
-            esperado = bc * (aliq_interna / 100) - icms_dest
-        else:
-            esperado = bc * ((aliq_interna - aliq_inter) / 100)
+        credito_origem = icms_dest + (frete_item * aliq_uf / 100)
+        esperado = bc_total * (aliq_interna / 100) - credito_origem
     elif tipo == "ST":
-        esperado = bc * (aliq_interna / 100) - icms_dest
+        credito_origem = icms_dest + (frete_item * aliq_uf / 100)
+        esperado = bc_total * (aliq_interna / 100) - credito_origem
     else:
+        credito_origem = 0
         esperado = item.get("icms", 0)
 
-    return max(esperado, 0)
+    return {
+        "esperado": max(esperado, 0),
+        "bc_total": bc_total,
+        "frete_item": frete_item,
+        "credito_origem": round(credito_origem, 2),
+    }
 
 
 def _conferencia_df(itens: list[dict], chave: str, aliq_interna: float,
-                     regime_empresa: str) -> pd.DataFrame:
+                     regime_empresa: str, frete_total: float = 0.0) -> pd.DataFrame:
     aliq_inter_default = _aliq_inter_padrao(chave)
+
+    valor_total_nf = sum(i.get("valorTotal", 0) for i in itens)
     rows = []
     for i, item in enumerate(itens, 1):
         tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
         bc = item.get("valorBc", 0)
         aliq_item = item.get("valorAliquota", 0)
         icms_sitram = item.get("icms", 0)
-        icms_esperado = _calcular_icms_esperado(item, aliq_interna, aliq_inter_default, regime_empresa)
+
+        frete_item = 0.0
+        if frete_total > 0 and valor_total_nf > 0:
+            frete_item = round(frete_total * item.get("valorTotal", 0) / valor_total_nf, 2)
+
+        calc = _calcular_icms_esperado(
+            item, aliq_interna, aliq_inter_default, regime_empresa,
+            frete_item=frete_item,
+        )
+        icms_esperado = calc["esperado"]
         diferenca = round(icms_sitram - icms_esperado, 2)
 
-        rows.append({
+        row = {
             "Chave": chave[-10:] + "...",
             "Item": i,
             "Produto": item.get("descricaoProduto", "?")[:35],
             "Tipo": tipo,
-            "BC": bc,
-            "Aliq.Inter.": f"{aliq_item or aliq_inter_default}%",
-            "ICMS SITRAM": icms_sitram,
-            "ICMS Esperado": round(icms_esperado, 2),
-            "Diferença": diferenca,
-        })
+            "BC Produto": bc,
+        }
+        if frete_total > 0:
+            row["Frete Rat."] = frete_item
+            row["BC Total"] = calc["bc_total"]
+            row["Créd.Origem"] = calc["credito_origem"]
+        row["Aliq.Inter."] = f"{aliq_item or aliq_inter_default}%"
+        row["ICMS SITRAM"] = icms_sitram
+        row["ICMS Esperado"] = round(icms_esperado, 2)
+        row["Diferença"] = diferenca
+        rows.append(row)
 
     return pd.DataFrame(rows)
 
 
-def _conferencia_unica(user: dict, cnpj: str, regime_empresa: str, aliq_interna: float):
+def _conferencia_unica(user: dict, cnpj: str, regime_empresa: str,
+                       aliq_interna: float, frete_total: float):
     chave = st.text_input(
         "Chave de acesso (44 dígitos)",
         max_chars=44,
@@ -547,13 +600,21 @@ def _conferencia_unica(user: dict, cnpj: str, regime_empresa: str, aliq_interna:
 
         uf = _uf_origem(chave_limpa)
         aliq_inter = _aliq_inter_padrao(chave_limpa)
-        st.info(f"UF Origem: **{uf}** | Aliq. interestadual presumida: **{aliq_inter}%**")
+        msg = f"UF Origem: **{uf}** | Aliq. interestadual presumida: **{aliq_inter}%**"
+        if frete_total > 0:
+            msg += f" | Frete informado: **R$ {frete_total:,.2f}**"
+        st.info(msg)
 
-        df = _conferencia_df(itens, chave_limpa, aliq_interna, regime_empresa)
-        _exibir_conferencia(df, aliq_interna)
+        df = _conferencia_df(itens, chave_limpa, aliq_interna, regime_empresa, frete_total)
+        _exibir_conferencia(df, aliq_interna, frete_total=frete_total)
 
 
-def _conferencia_lote(user: dict, cnpj: str, regime_empresa: str, aliq_interna: float):
+def _conferencia_lote(user: dict, cnpj: str, regime_empresa: str,
+                      aliq_interna: float, frete_total: float):
+    st.caption(
+        "No modo lote, o frete informado acima é aplicado a cada nota. "
+        "Se cada nota tem frete diferente, confira individualmente."
+    )
     chaves_txt = st.text_area(
         "Chaves de acesso (uma por linha)",
         height=150,
@@ -606,7 +667,9 @@ def _conferencia_lote(user: dict, cnpj: str, regime_empresa: str, aliq_interna: 
             if isinstance(resultado, str):
                 erros.append({"Chave": chave, "Erro": resultado})
             else:
-                df_chave = _conferencia_df(resultado, chave, aliq_interna, regime_empresa)
+                df_chave = _conferencia_df(
+                    resultado, chave, aliq_interna, regime_empresa, frete_total,
+                )
                 df_chave["Chave"] = chave
                 all_dfs.append(df_chave)
 
@@ -618,10 +681,11 @@ def _conferencia_lote(user: dict, cnpj: str, regime_empresa: str, aliq_interna: 
             return
 
         df = pd.concat(all_dfs, ignore_index=True)
-        _exibir_conferencia(df, aliq_interna, is_lote=True)
+        _exibir_conferencia(df, aliq_interna, is_lote=True, frete_total=frete_total)
 
 
-def _exibir_conferencia(df: pd.DataFrame, aliq_interna: float, is_lote: bool = False):
+def _exibir_conferencia(df: pd.DataFrame, aliq_interna: float,
+                        is_lote: bool = False, frete_total: float = 0.0):
     st.markdown("---")
     st.markdown("#### Comparativo")
 
@@ -649,10 +713,19 @@ def _exibir_conferencia(df: pd.DataFrame, aliq_interna: float, is_lote: bool = F
               delta=f"R$ {total_dif:,.2f}" if abs(total_dif) > 0.50 else None)
 
     if divergencias:
-        st.warning(
-            f"**{divergencias} item(ns)** com diferença > R$ 0,50. "
-            "Ajuste a alíquota interna ou verifique o regime de cada item."
-        )
+        if frete_total == 0:
+            st.warning(
+                f"**{divergencias} item(ns)** com diferença > R$ 0,50. "
+                "**Causa provável: frete (CT-e) não informado.** "
+                "O SITRAM inclui o frete rateado na base de cálculo. "
+                "Informe o valor total do frete acima para uma conferência precisa."
+            )
+        else:
+            st.warning(
+                f"**{divergencias} item(ns)** com diferença > R$ 0,50. "
+                "Verifique se o frete informado confere com o CT-e vinculado no SITRAM, "
+                "ou ajuste a alíquota interna conforme o produto."
+            )
 
         resumo_tipo = df[df["Diferença"].abs() > 0.50].groupby("Tipo").agg(
             Itens=("Item", "count"),
@@ -663,12 +736,20 @@ def _exibir_conferencia(df: pd.DataFrame, aliq_interna: float, is_lote: bool = F
     else:
         st.success("Nenhuma divergência significativa encontrada.")
 
-    st.caption(
-        f"Cálculo esperado: BC x ({aliq_interna}% - aliq.interestadual) para Antecipado/DIFAL; "
-        f"BC x {aliq_interna}% - ICMS destacado para ST. "
-        "O SITRAM pode usar fatores adicionais (MVA, FECOP, regras específicas por NCM). "
-        "Ajuste a alíquota interna conforme o produto (20%, 25%, 28%)."
-    )
+    with st.expander("Como o SITRAM calcula o ICMS"):
+        st.markdown(
+            "**Fórmula do SITRAM (Antecipado/DIFAL):**\n\n"
+            "```\n"
+            "BC = Valor Mercadoria + Frete Rateado (CT-e)\n"
+            "Crédito Origem = ICMS Destacado NF + (Frete × Aliq. Interestadual UF)\n"
+            "ICMS = BC × Alíq. Interna − Crédito Origem\n"
+            "```\n\n"
+            "**Onde encontrar o frete:** Na tela de detalhes da NF no SITRAM, "
+            "clique no ícone da calculadora de um item. O campo "
+            "'Valor do frete da nota fiscal (conhecimento rateado)' mostra o total.\n\n"
+            f"**Configuração atual:** Alíq. interna = {aliq_interna}%"
+            f"{f', Frete = R$ {frete_total:,.2f}' if frete_total > 0 else ', Frete = não informado'}"
+        )
 
     csv = df.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
