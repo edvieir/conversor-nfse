@@ -1,4 +1,8 @@
 """views/sitram.py — Integração SITRAM (Sistema de Trânsito de Mercadorias)"""
+import io
+import time
+
+import pandas as pd
 import streamlit as st
 
 from auth.security import current_user
@@ -20,6 +24,8 @@ UF_SIGLAS = {
 UFS_SUL_SUDESTE = {"31", "32", "33", "35", "41", "42", "43"}
 
 ALIQ_INTERNA_CE = 20.0
+
+SITRAM_PORTAL = "https://portal-sitram.sefaz.ce.gov.br/sitram-internet"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,8 +99,25 @@ def _alertas_item(item: dict, regime_empresa: str) -> list[str]:
     return alertas
 
 
-def _consultar_itens(user: dict, cnpj: str, chave: str):
-    """Consulta itens SITRAM. Retorna (itens, erro)."""
+def _link_sitram_pagamento(chave: str) -> str:
+    return (
+        f"{SITRAM_PORTAL}/#/pagamento-icms/detalhes-lancamentos"
+        f"?sistema=10&filtradoPor=1&numeroDanfe={chave}"
+    )
+
+
+def _extrair_chaves(texto: str) -> list[str]:
+    """Extrai chaves de 44 dígitos de um texto (uma por linha)."""
+    chaves = []
+    for linha in texto.strip().splitlines():
+        digitos = "".join(c for c in linha if c.isdigit())
+        if len(digitos) == 44:
+            chaves.append(digitos)
+    return chaves
+
+
+def _consultar_itens_single(user: dict, cnpj: str, chave: str):
+    """Consulta itens para uma única chave. Retorna (itens, erro)."""
     resultado_cert = carregar_certificado(user["username"], cnpj)
     if not resultado_cert:
         return None, "Certificado digital não encontrado."
@@ -108,7 +131,59 @@ def _consultar_itens(user: dict, cnpj: str, chave: str):
         return None, str(e)
 
     itens = resultado.get("content", [])
-    return (itens, None) if itens else (None, "Nenhum item encontrado para esta chave de acesso.")
+    return (itens, None) if itens else (None, "Nenhum item encontrado.")
+
+
+def _consultar_itens_lote(user: dict, cnpj: str, chaves: list[str], progress_cb=None):
+    """Consulta itens para múltiplas chaves. Retorna dict {chave: itens_ou_erro}."""
+    resultado_cert = carregar_certificado(user["username"], cnpj)
+    if not resultado_cert:
+        return {}
+
+    from core.sitram_sefaz import _sessao, consultar_itens_por_chave
+    sessao = _sessao(resultado_cert[0], resultado_cert[1])
+
+    resultados = {}
+    for i, chave in enumerate(chaves):
+        try:
+            resultado = consultar_itens_por_chave(sessao, chave)
+            itens = resultado.get("content", [])
+            resultados[chave] = itens if itens else "Nenhum item encontrado"
+        except Exception as e:
+            resultados[chave] = str(e)
+
+        if progress_cb:
+            progress_cb((i + 1) / len(chaves))
+
+        if i < len(chaves) - 1:
+            time.sleep(0.3)
+
+    return resultados
+
+
+def _itens_to_dataframe(itens: list[dict], chave: str = "") -> pd.DataFrame:
+    """Converte lista de itens SITRAM em DataFrame."""
+    rows = []
+    for item in itens:
+        tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
+        rows.append({
+            "Chave": chave[-10:] + "..." if chave else "",
+            "Produto": item.get("descricaoProduto", "?"),
+            "NCM": item.get("ncm", ""),
+            "CFOP": item.get("cfop", ""),
+            "Tipo": tipo,
+            "Qtd": item.get("quantidade", 0),
+            "Valor Unit.": item.get("valorUnitario", 0),
+            "Valor Total": item.get("valorTotal", 0),
+            "BC ICMS": item.get("valorBc", 0),
+            "Aliq. Inter.": item.get("valorAliquota", 0),
+            "ICMS Dest.": item.get("valorIcmsDestacado", 0),
+            "ICMS SITRAM": item.get("icms", 0),
+            "FECOP": item.get("valorFecop", 0),
+            "Regime": item.get("nomeConfiguracao", ""),
+            "CST": f"{item.get('codigoCSTA', '')}/{item.get('codigoCSTB', '')}",
+        })
+    return pd.DataFrame(rows)
 
 
 def _get_client(user: dict, cnpj: str):
@@ -137,49 +212,13 @@ def _get_client(user: dict, cnpj: str):
     return client
 
 
-def _exibir_item_detalhado(item: dict, idx: int, regime_empresa: str, expanded: bool = False):
-    tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
-    icms = item.get("icms", 0)
-    produto = item.get("descricaoProduto", "?")
-
-    with st.expander(f"Item {idx} | [{tipo}] {produto} — ICMS R$ {icms:,.2f}", expanded=expanded):
-        alertas = _alertas_item(item, regime_empresa)
-        for alerta in alertas:
-            st.warning(alerta)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"**Produto:** {produto}")
-            st.markdown(f"**NCM:** {item.get('ncm', '—')} | **CFOP:** {item.get('cfop', '—')}")
-            st.markdown(
-                f"**Qtd:** {item.get('quantidade', '—')} {item.get('unidade', '')} "
-                f"x R$ {item.get('valorUnitario', 0):,.2f}"
-            )
-            st.markdown(f"**Valor Total:** R$ {item.get('valorTotal', 0):,.2f}")
-        with c2:
-            st.markdown(f"**ICMS Cobrado:** R$ {icms:,.2f}")
-            st.markdown(f"**Base ICMS:** R$ {item.get('valorBc', 0):,.2f}")
-            st.markdown(f"**Aliq. Interestadual:** {item.get('valorAliquota', 0)}%")
-            st.markdown(f"**ICMS Destacado NF-e:** R$ {item.get('valorIcmsDestacado', 0):,.2f}")
-            st.markdown(f"**FECOP:** R$ {item.get('valorFecop', 0):,.2f}")
-
-        st.markdown(f"**Tipo:** {tipo} | **Regime:** {item.get('nomeConfiguracao', '—')}")
-        st.markdown(
-            f"**CST:** {item.get('codigoCSTA', '—')}/{item.get('codigoCSTB', '—')} | "
-            f"**Cód. Produto:** {item.get('codigoProduto', '—')}"
-        )
-
-        return alertas
-
-
 # ── Tab 1: Consulta NF ──────────────────────────────────────────────────────
 
 def _tab_consulta_nf(user: dict, cnpj: str):
     st.markdown("### Consulta de Nota Fiscal")
     st.caption(
         "Consulte notas fiscais no SITRAM por chave de acesso. "
-        "Exibe classificação fiscal (Antecipado, DIFAL, ST), alertas de atenção "
-        "e detalhamento de ICMS por item."
+        "Classifica itens por regime (Antecipado, DIFAL, ST) e exibe alertas."
     )
 
     regime_empresa = st.radio(
@@ -190,6 +229,21 @@ def _tab_consulta_nf(user: dict, cnpj: str):
         key="sitram_regime",
     )
 
+    modo = st.radio(
+        "Modo de consulta",
+        ["unica", "lote"],
+        format_func=lambda m: {"unica": "Chave única", "lote": "Lote (múltiplas chaves)"}[m],
+        horizontal=True,
+        key="sitram_modo_consulta",
+    )
+
+    if modo == "unica":
+        _consulta_nf_unica(user, cnpj, regime_empresa)
+    else:
+        _consulta_nf_lote(user, cnpj, regime_empresa)
+
+
+def _consulta_nf_unica(user: dict, cnpj: str, regime_empresa: str):
     chave = st.text_input(
         "Chave de acesso (44 dígitos)",
         max_chars=44,
@@ -203,42 +257,186 @@ def _tab_consulta_nf(user: dict, cnpj: str):
             st.warning("Informe uma chave de acesso válida com 44 dígitos.")
             return
 
-        itens, erro = _consultar_itens(user, cnpj, chave_limpa)
+        itens, erro = _consultar_itens_single(user, cnpj, chave_limpa)
         if erro:
             st.error(erro)
             return
 
-        uf = _uf_origem(chave_limpa)
-        aliq_inter = _aliq_inter_padrao(chave_limpa)
-        st.info(f"UF Origem: **{uf}** | Aliq. interestadual presumida: **{aliq_inter}%**")
+        _exibir_resultado_consulta(itens, chave_limpa, regime_empresa)
 
-        total_icms = sum(i.get("icms", 0) for i in itens)
-        total_fecop = sum(i.get("valorFecop", 0) for i in itens)
-        total_valor = sum(i.get("valorTotal", 0) for i in itens)
 
-        st.success(f"**{len(itens)} item(ns)** encontrado(s)")
+def _consulta_nf_lote(user: dict, cnpj: str, regime_empresa: str):
+    chaves_txt = st.text_area(
+        "Chaves de acesso (uma por linha)",
+        height=150,
+        placeholder="Cole aqui as chaves de acesso, uma por linha...",
+        key="sitram_chaves_lote",
+    )
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total ICMS", f"R$ {total_icms:,.2f}")
-        m2.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
-        m3.metric("Valor Total NF", f"R$ {total_valor:,.2f}")
+    uploaded = st.file_uploader(
+        "Ou importe um arquivo CSV/Excel com coluna de chaves",
+        type=["csv", "xlsx", "xls"],
+        key="sitram_upload",
+    )
+
+    if uploaded:
+        try:
+            if uploaded.name.endswith(".csv"):
+                df_upload = pd.read_csv(uploaded, dtype=str)
+            else:
+                df_upload = pd.read_excel(uploaded, dtype=str)
+            col_chave = None
+            for col in df_upload.columns:
+                if "chave" in col.lower():
+                    col_chave = col
+                    break
+            if not col_chave:
+                col_chave = df_upload.columns[0]
+            chaves_arquivo = _extrair_chaves("\n".join(df_upload[col_chave].dropna().tolist()))
+            st.caption(f"{len(chaves_arquivo)} chave(s) encontrada(s) no arquivo (coluna: {col_chave})")
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+            chaves_arquivo = []
+    else:
+        chaves_arquivo = []
+
+    if st.button("Consultar Lote", type="primary", key="sitram_btn_lote"):
+        chaves = _extrair_chaves(chaves_txt) if chaves_txt.strip() else []
+        chaves.extend(chaves_arquivo)
+        chaves = list(dict.fromkeys(chaves))
+
+        if not chaves:
+            st.warning("Nenhuma chave válida encontrada.")
+            return
+
+        st.info(f"Processando **{len(chaves)}** chave(s)...")
+        progress = st.progress(0)
+
+        resultados = _consultar_itens_lote(user, cnpj, chaves, progress_cb=progress.progress)
+        progress.progress(100)
+
+        todos_itens = []
+        erros = []
+        for chave, resultado in resultados.items():
+            if isinstance(resultado, str):
+                erros.append({"Chave": chave, "Erro": resultado})
+            else:
+                for item in resultado:
+                    item["_chave"] = chave
+                    todos_itens.append(item)
+
+        if erros:
+            st.warning(f"{len(erros)} chave(s) com erro")
+            with st.expander("Ver erros"):
+                st.dataframe(pd.DataFrame(erros), use_container_width=True, hide_index=True)
+
+        if not todos_itens:
+            st.error("Nenhum item encontrado nas chaves informadas.")
+            return
+
+        total_icms = sum(i.get("icms", 0) for i in todos_itens)
+        total_fecop = sum(i.get("valorFecop", 0) for i in todos_itens)
+        total_valor = sum(i.get("valorTotal", 0) for i in todos_itens)
+        notas_ok = len(resultados) - len(erros)
+
+        st.success(f"**{notas_ok} nota(s)** com **{len(todos_itens)} item(ns)**")
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Notas", notas_ok)
+        m2.metric("Total ICMS", f"R$ {total_icms:,.2f}")
+        m3.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
+        m4.metric("Valor Total", f"R$ {total_valor:,.2f}")
 
         tipos = {}
-        for item in itens:
+        for item in todos_itens:
             t = _classificar_tipo(item.get("nomeConfiguracao", ""))
             tipos[t] = tipos.get(t, 0) + 1
-        st.markdown("**Classificação:** " + " | ".join(f"{t}: {n}" for t, n in tipos.items()))
+        st.markdown("**Por tipo:** " + " | ".join(f"{t}: {n}" for t, n in tipos.items()))
 
-        total_alertas = 0
-        for i, item in enumerate(itens, 1):
-            alertas = _exibir_item_detalhado(item, i, regime_empresa, expanded=(i == 1))
+        alertas_total = 0
+        for item in todos_itens:
+            alertas_total += len(_alertas_item(item, regime_empresa))
+        if alertas_total:
+            st.warning(f"**{alertas_total} alerta(s) de atenção** — verifique os itens.")
+
+        df = _itens_to_dataframe(todos_itens)
+        for item, row_idx in zip(todos_itens, range(len(todos_itens))):
+            df.loc[row_idx, "Chave"] = item["_chave"]
+
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        csv = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "Exportar CSV",
+            data=csv,
+            file_name="sitram_consulta_lote.csv",
+            mime="text/csv",
+        )
+
+
+def _exibir_resultado_consulta(itens: list[dict], chave: str, regime_empresa: str):
+    uf = _uf_origem(chave)
+    aliq_inter = _aliq_inter_padrao(chave)
+    st.info(f"UF Origem: **{uf}** | Aliq. interestadual presumida: **{aliq_inter}%**")
+
+    total_icms = sum(i.get("icms", 0) for i in itens)
+    total_fecop = sum(i.get("valorFecop", 0) for i in itens)
+    total_valor = sum(i.get("valorTotal", 0) for i in itens)
+
+    st.success(f"**{len(itens)} item(ns)** encontrado(s)")
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total ICMS", f"R$ {total_icms:,.2f}")
+    m2.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
+    m3.metric("Valor Total NF", f"R$ {total_valor:,.2f}")
+
+    tipos = {}
+    for item in itens:
+        t = _classificar_tipo(item.get("nomeConfiguracao", ""))
+        tipos[t] = tipos.get(t, 0) + 1
+    st.markdown("**Classificação:** " + " | ".join(f"{t}: {n}" for t, n in tipos.items()))
+
+    total_alertas = 0
+    for i, item in enumerate(itens, 1):
+        tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
+        icms = item.get("icms", 0)
+        produto = item.get("descricaoProduto", "?")
+
+        with st.expander(f"Item {i} | [{tipo}] {produto} — ICMS R$ {icms:,.2f}", expanded=(i == 1)):
+            alertas = _alertas_item(item, regime_empresa)
+            for alerta in alertas:
+                st.warning(alerta)
             total_alertas += len(alertas)
 
-        if total_alertas:
-            st.markdown("---")
-            st.warning(
-                f"**{total_alertas} alerta(s) de atenção** — revise os itens sinalizados acima."
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**Produto:** {produto}")
+                st.markdown(f"**NCM:** {item.get('ncm', '—')} | **CFOP:** {item.get('cfop', '—')}")
+                st.markdown(
+                    f"**Qtd:** {item.get('quantidade', '—')} {item.get('unidade', '')} "
+                    f"x R$ {item.get('valorUnitario', 0):,.2f}"
+                )
+                st.markdown(f"**Valor Total:** R$ {item.get('valorTotal', 0):,.2f}")
+            with c2:
+                st.markdown(f"**ICMS Cobrado:** R$ {icms:,.2f}")
+                st.markdown(f"**Base ICMS:** R$ {item.get('valorBc', 0):,.2f}")
+                st.markdown(f"**Aliq. Interestadual:** {item.get('valorAliquota', 0)}%")
+                st.markdown(f"**ICMS Destacado NF-e:** R$ {item.get('valorIcmsDestacado', 0):,.2f}")
+                st.markdown(f"**FECOP:** R$ {item.get('valorFecop', 0):,.2f}")
+
+            st.markdown(f"**Tipo:** {tipo} | **Regime:** {item.get('nomeConfiguracao', '—')}")
+            st.markdown(
+                f"**CST:** {item.get('codigoCSTA', '—')}/{item.get('codigoCSTB', '—')} | "
+                f"**Cód. Produto:** {item.get('codigoProduto', '—')}"
             )
+
+    if total_alertas:
+        st.markdown("---")
+        st.warning(f"**{total_alertas} alerta(s) de atenção** encontrado(s).")
+
+    df = _itens_to_dataframe(itens, chave)
+    csv = df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button("Exportar CSV", data=csv, file_name=f"sitram_{chave[-10:]}.csv", mime="text/csv")
 
 
 # ── Tab 2: Conferência ──────────────────────────────────────────────────────
@@ -247,7 +445,7 @@ def _tab_conferencia(user: dict, cnpj: str):
     st.markdown("### Conferência de Cálculo SITRAM")
     st.caption(
         "Confira se o ICMS calculado pelo SITRAM está correto. "
-        "Compare com o cálculo esperado usando alíquotas ajustáveis."
+        "Compare com o cálculo esperado para identificar divergências."
     )
 
     regime_empresa = st.radio(
@@ -258,13 +456,6 @@ def _tab_conferencia(user: dict, cnpj: str):
         key="sitram_conf_regime",
     )
 
-    chave = st.text_input(
-        "Chave de acesso (44 dígitos)",
-        max_chars=44,
-        placeholder="Digite a chave de acesso da NF-e...",
-        key="sitram_conf_chave",
-    )
-
     col_a, col_b = st.columns(2)
     aliq_interna = col_a.number_input(
         "Alíquota interna CE (%)",
@@ -273,109 +464,219 @@ def _tab_conferencia(user: dict, cnpj: str):
         key="sitram_conf_aliq_interna",
     )
 
+    modo = st.radio(
+        "Modo",
+        ["unica", "lote"],
+        format_func=lambda m: {"unica": "Chave única", "lote": "Lote (múltiplas chaves)"}[m],
+        horizontal=True,
+        key="sitram_conf_modo",
+    )
+
+    if modo == "unica":
+        _conferencia_unica(user, cnpj, regime_empresa, aliq_interna)
+    else:
+        _conferencia_lote(user, cnpj, regime_empresa, aliq_interna)
+
+
+def _calcular_icms_esperado(item: dict, aliq_interna: float, aliq_inter_default: float,
+                            regime_empresa: str) -> float:
+    tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
+    bc = item.get("valorBc", 0)
+    icms_dest = item.get("valorIcmsDestacado", 0)
+    aliq_item = item.get("valorAliquota", 0)
+    aliq_inter = aliq_item if aliq_item > 0 else aliq_inter_default
+
+    if tipo in ("ANTECIPADO", "DIFAL"):
+        if regime_empresa == "simples":
+            esperado = bc * (aliq_interna / 100) - icms_dest
+        else:
+            esperado = bc * ((aliq_interna - aliq_inter) / 100)
+    elif tipo == "ST":
+        esperado = bc * (aliq_interna / 100) - icms_dest
+    else:
+        esperado = item.get("icms", 0)
+
+    return max(esperado, 0)
+
+
+def _conferencia_df(itens: list[dict], chave: str, aliq_interna: float,
+                     regime_empresa: str) -> pd.DataFrame:
+    aliq_inter_default = _aliq_inter_padrao(chave)
+    rows = []
+    for i, item in enumerate(itens, 1):
+        tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
+        bc = item.get("valorBc", 0)
+        aliq_item = item.get("valorAliquota", 0)
+        icms_sitram = item.get("icms", 0)
+        icms_esperado = _calcular_icms_esperado(item, aliq_interna, aliq_inter_default, regime_empresa)
+        diferenca = round(icms_sitram - icms_esperado, 2)
+
+        rows.append({
+            "Chave": chave[-10:] + "...",
+            "Item": i,
+            "Produto": item.get("descricaoProduto", "?")[:35],
+            "Tipo": tipo,
+            "BC": bc,
+            "Aliq.Inter.": f"{aliq_item or aliq_inter_default}%",
+            "ICMS SITRAM": icms_sitram,
+            "ICMS Esperado": round(icms_esperado, 2),
+            "Diferença": diferenca,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _conferencia_unica(user: dict, cnpj: str, regime_empresa: str, aliq_interna: float):
+    chave = st.text_input(
+        "Chave de acesso (44 dígitos)",
+        max_chars=44,
+        placeholder="Digite a chave de acesso da NF-e...",
+        key="sitram_conf_chave",
+    )
+
     if st.button("Conferir", type="primary", key="sitram_btn_conferir"):
         chave_limpa = "".join(c for c in chave if c.isdigit())
         if len(chave_limpa) != 44:
             st.warning("Informe uma chave válida com 44 dígitos.")
             return
 
-        itens, erro = _consultar_itens(user, cnpj, chave_limpa)
+        itens, erro = _consultar_itens_single(user, cnpj, chave_limpa)
         if erro:
             st.error(erro)
             return
 
         uf = _uf_origem(chave_limpa)
-        aliq_inter_default = _aliq_inter_padrao(chave_limpa)
+        aliq_inter = _aliq_inter_padrao(chave_limpa)
+        st.info(f"UF Origem: **{uf}** | Aliq. interestadual presumida: **{aliq_inter}%**")
 
-        st.info(f"UF Origem: **{uf}** | Aliq. interestadual presumida: **{aliq_inter_default}%**")
+        df = _conferencia_df(itens, chave_limpa, aliq_interna, regime_empresa)
+        _exibir_conferencia(df, aliq_interna)
 
-        st.markdown("---")
-        st.markdown("#### Comparativo item a item")
 
-        total_sitram = 0.0
-        total_esperado = 0.0
-        total_diferenca = 0.0
-        divergencias = 0
+def _conferencia_lote(user: dict, cnpj: str, regime_empresa: str, aliq_interna: float):
+    chaves_txt = st.text_area(
+        "Chaves de acesso (uma por linha)",
+        height=150,
+        placeholder="Cole aqui as chaves, uma por linha...",
+        key="sitram_conf_chaves_lote",
+    )
 
-        import pandas as pd
-        rows = []
+    uploaded = st.file_uploader(
+        "Ou importe um arquivo CSV/Excel",
+        type=["csv", "xlsx", "xls"],
+        key="sitram_conf_upload",
+    )
 
-        for i, item in enumerate(itens, 1):
-            tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
-            bc = item.get("valorBc", 0)
-            icms_dest = item.get("valorIcmsDestacado", 0)
-            icms_sitram = item.get("icms", 0)
-            aliq_item = item.get("valorAliquota", 0)
-            fecop = item.get("valorFecop", 0)
-            produto = item.get("descricaoProduto", "?")
-
-            aliq_inter_real = aliq_item if aliq_item > 0 else aliq_inter_default
-
-            if tipo in ("ANTECIPADO", "DIFAL"):
-                if regime_empresa == "simples":
-                    icms_esperado = bc * (aliq_interna / 100) - icms_dest
-                else:
-                    icms_esperado = bc * ((aliq_interna - aliq_inter_real) / 100)
-                icms_esperado = max(icms_esperado, 0)
-            elif tipo == "ST":
-                icms_esperado = bc * (aliq_interna / 100) - icms_dest
-                icms_esperado = max(icms_esperado, 0)
+    chaves_arquivo = []
+    if uploaded:
+        try:
+            if uploaded.name.endswith(".csv"):
+                df_up = pd.read_csv(uploaded, dtype=str)
             else:
-                icms_esperado = icms_sitram
+                df_up = pd.read_excel(uploaded, dtype=str)
+            col_chave = None
+            for col in df_up.columns:
+                if "chave" in col.lower():
+                    col_chave = col
+                    break
+            if not col_chave:
+                col_chave = df_up.columns[0]
+            chaves_arquivo = _extrair_chaves("\n".join(df_up[col_chave].dropna().tolist()))
+            st.caption(f"{len(chaves_arquivo)} chave(s) do arquivo")
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
 
-            diferenca = icms_sitram - icms_esperado
+    if st.button("Conferir Lote", type="primary", key="sitram_btn_conf_lote"):
+        chaves = _extrair_chaves(chaves_txt) if chaves_txt.strip() else []
+        chaves.extend(chaves_arquivo)
+        chaves = list(dict.fromkeys(chaves))
 
-            rows.append({
-                "Item": i,
-                "Produto": produto[:30],
-                "Tipo": tipo,
-                "BC": bc,
-                "Aliq.Inter.": f"{aliq_inter_real}%",
-                "ICMS SITRAM": icms_sitram,
-                "ICMS Esperado": round(icms_esperado, 2),
-                "Diferença": round(diferenca, 2),
-            })
+        if not chaves:
+            st.warning("Nenhuma chave válida encontrada.")
+            return
 
-            total_sitram += icms_sitram
-            total_esperado += icms_esperado
-            total_diferenca += diferenca
-            if abs(diferenca) > 0.50:
-                divergencias += 1
+        st.info(f"Processando **{len(chaves)}** chave(s)...")
+        progress = st.progress(0)
+        resultados = _consultar_itens_lote(user, cnpj, chaves, progress_cb=progress.progress)
+        progress.progress(100)
 
-        df = pd.DataFrame(rows)
-        st.dataframe(
-            df.style.applymap(
-                lambda v: "color: red" if isinstance(v, (int, float)) and abs(v) > 0.50 else "",
-                subset=["Diferença"],
-            ),
-            use_container_width=True,
-            hide_index=True,
+        all_dfs = []
+        erros = []
+        for chave, resultado in resultados.items():
+            if isinstance(resultado, str):
+                erros.append({"Chave": chave, "Erro": resultado})
+            else:
+                df_chave = _conferencia_df(resultado, chave, aliq_interna, regime_empresa)
+                df_chave["Chave"] = chave
+                all_dfs.append(df_chave)
+
+        if erros:
+            st.warning(f"{len(erros)} chave(s) com erro")
+
+        if not all_dfs:
+            st.error("Nenhum item encontrado.")
+            return
+
+        df = pd.concat(all_dfs, ignore_index=True)
+        _exibir_conferencia(df, aliq_interna, is_lote=True)
+
+
+def _exibir_conferencia(df: pd.DataFrame, aliq_interna: float, is_lote: bool = False):
+    st.markdown("---")
+    st.markdown("#### Comparativo")
+
+    def _highlight_diff(val):
+        if isinstance(val, (int, float)) and abs(val) > 0.50:
+            return "color: red; font-weight: bold"
+        return ""
+
+    st.dataframe(
+        df.style.applymap(_highlight_diff, subset=["Diferença"]),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    total_sitram = df["ICMS SITRAM"].sum()
+    total_esperado = df["ICMS Esperado"].sum()
+    total_dif = df["Diferença"].sum()
+    divergencias = (df["Diferença"].abs() > 0.50).sum()
+
+    st.markdown("#### Totais")
+    t1, t2, t3 = st.columns(3)
+    t1.metric("ICMS SITRAM", f"R$ {total_sitram:,.2f}")
+    t2.metric("ICMS Esperado", f"R$ {total_esperado:,.2f}")
+    t3.metric("Diferença", f"R$ {total_dif:,.2f}",
+              delta=f"R$ {total_dif:,.2f}" if abs(total_dif) > 0.50 else None)
+
+    if divergencias:
+        st.warning(
+            f"**{divergencias} item(ns)** com diferença > R$ 0,50. "
+            "Ajuste a alíquota interna ou verifique o regime de cada item."
         )
 
-        st.markdown("---")
-        st.markdown("#### Totais")
+        resumo_tipo = df[df["Diferença"].abs() > 0.50].groupby("Tipo").agg(
+            Itens=("Item", "count"),
+            Dif_Total=("Diferença", "sum"),
+        ).reset_index()
+        st.markdown("**Divergências por tipo:**")
+        st.dataframe(resumo_tipo, use_container_width=True, hide_index=True)
+    else:
+        st.success("Nenhuma divergência significativa encontrada.")
 
-        t1, t2, t3 = st.columns(3)
-        t1.metric("ICMS SITRAM", f"R$ {total_sitram:,.2f}")
-        t2.metric("ICMS Esperado", f"R$ {total_esperado:,.2f}")
-        delta_str = f"R$ {total_diferenca:,.2f}"
-        t3.metric("Diferença", delta_str, delta=delta_str if abs(total_diferenca) > 0.50 else None)
+    st.caption(
+        f"Cálculo esperado: BC x ({aliq_interna}% - aliq.interestadual) para Antecipado/DIFAL; "
+        f"BC x {aliq_interna}% - ICMS destacado para ST. "
+        "O SITRAM pode usar fatores adicionais (MVA, FECOP, regras específicas por NCM). "
+        "Ajuste a alíquota interna conforme o produto (20%, 25%, 28%)."
+    )
 
-        if divergencias:
-            st.warning(
-                f"**{divergencias} item(ns)** com diferença superior a R$ 0,50. "
-                "Ajuste a alíquota interna ou verifique o regime de cada item."
-            )
-        else:
-            st.success("Nenhuma divergência significativa encontrada.")
-
-        st.caption(
-            "**Nota:** O cálculo esperado usa a fórmula simplificada "
-            f"BC x ({aliq_interna}% - aliq.interestadual) para Antecipado/DIFAL, e "
-            f"BC x {aliq_interna}% - ICMS destacado para ST. "
-            "O SITRAM pode usar fatores adicionais (MVA, FECOP, arredondamento). "
-            "Ajuste a alíquota interna conforme o produto (20%, 25%, 28%, etc.)."
-        )
+    csv = df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        "Exportar Conferência CSV",
+        data=csv,
+        file_name="sitram_conferencia.csv",
+        mime="text/csv",
+    )
 
 
 # ── Tab 3: Manifestação ─────────────────────────────────────────────────────
@@ -448,10 +749,7 @@ def _tab_manifestacao(user: dict, cnpj: str):
             key="sitram_manif_lote",
         )
         if st.button("Manifestar Lote", type="primary", key="sitram_btn_manif_lote"):
-            linhas = [l.strip() for l in chaves_txt.strip().splitlines() if l.strip()]
-            chaves = ["".join(c for c in l if c.isdigit()) for l in linhas]
-            chaves = [c for c in chaves if len(c) == 44]
-
+            chaves = _extrair_chaves(chaves_txt)
             if not chaves:
                 st.warning("Nenhuma chave válida (44 dígitos) encontrada.")
                 return
@@ -473,7 +771,6 @@ def _tab_manifestacao(user: dict, cnpj: str):
                     chaves, tp_evento=tp_evento, log_cb=_log,
                 )
 
-            import pandas as pd
             rows = []
             for r in resultados:
                 rows.append({
@@ -494,29 +791,25 @@ def _tab_manifestacao(user: dict, cnpj: str):
 def _tab_pagamentos(user: dict, cnpj: str):
     st.markdown("### Pagamentos — DAE / ICMS")
     st.caption(
-        "Gere DAE para pagamento de ICMS por chave de acesso e consulte "
-        "lançamentos pagos e em aberto."
+        "Consulte lançamentos de ICMS por chave de acesso e acesse o portal "
+        "SITRAM para gerar DAEs e verificar pagamentos."
     )
 
-    sub = st.radio(
-        "Operação",
-        ["gerar_dae", "relatorio"],
-        format_func=lambda s: {
-            "gerar_dae": "Gerar DAE por Chave",
-            "relatorio": "Relatório de Pagamentos",
-        }[s],
+    modo = st.radio(
+        "Modo",
+        ["unica", "lote"],
+        format_func=lambda m: {"unica": "Chave única", "lote": "Lote (múltiplas chaves)"}[m],
         horizontal=True,
-        key="sitram_pag_sub",
+        key="sitram_pag_modo",
     )
 
-    if sub == "gerar_dae":
-        _sub_gerar_dae(user, cnpj)
+    if modo == "unica":
+        _pagamentos_unica(user, cnpj)
     else:
-        _sub_relatorio(user, cnpj)
+        _pagamentos_lote(user, cnpj)
 
 
-def _sub_gerar_dae(user: dict, cnpj: str):
-    st.markdown("---")
+def _pagamentos_unica(user: dict, cnpj: str):
     chave = st.text_input(
         "Chave de acesso (44 dígitos)",
         max_chars=44,
@@ -524,13 +817,13 @@ def _sub_gerar_dae(user: dict, cnpj: str):
         key="sitram_pag_chave",
     )
 
-    if st.button("Consultar Lançamentos", type="primary", key="sitram_btn_pag_consultar"):
+    if st.button("Consultar", type="primary", key="sitram_btn_pag"):
         chave_limpa = "".join(c for c in chave if c.isdigit())
         if len(chave_limpa) != 44:
             st.warning("Informe uma chave válida com 44 dígitos.")
             return
 
-        itens, erro = _consultar_itens(user, cnpj, chave_limpa)
+        itens, erro = _consultar_itens_single(user, cnpj, chave_limpa)
         if erro:
             st.error(erro)
             return
@@ -545,139 +838,142 @@ def _sub_gerar_dae(user: dict, cnpj: str):
         m2.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
         m3.metric("Total a Recolher", f"R$ {total_icms + total_fecop:,.2f}")
 
-        ids_lancamento = []
-        for i, item in enumerate(itens, 1):
-            tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
-            icms = item.get("icms", 0)
-            id_lanc = str(item.get("id", ""))
-            ids_lancamento.append(id_lanc)
-            st.markdown(
-                f"**{i}.** [{tipo}] {item.get('descricaoProduto', '?')} — "
-                f"ICMS R$ {icms:,.2f} | FECOP R$ {item.get('valorFecop', 0):,.2f}"
-            )
-
-        st.session_state["_sitram_ids_lancamento"] = ids_lancamento
-        st.session_state["_sitram_pag_chave_atual"] = chave_limpa
-
-    ids = st.session_state.get("_sitram_ids_lancamento", [])
-    if ids:
-        st.markdown("---")
-        st.markdown("#### Gerar DAE")
-
-        tipo_dae = st.selectbox(
-            "Tipo de DAE",
-            ["antecipado", "difal", "nf_difal", "convenio"],
-            format_func=lambda t: {
-                "antecipado": "DAE Antecipado",
-                "difal": "DAE DIFAL",
-                "nf_difal": "DAE NF DIFAL",
-                "convenio": "DAE Convênio",
-            }[t],
-            key="sitram_tipo_dae",
-        )
-
-        col1, col2 = st.columns(2)
-
-        if col1.button("Simular DAE", key="sitram_btn_simular_dae"):
-            client = _get_client(user, cnpj)
-            if not client:
-                return
-            try:
-                with st.spinner("Simulando DAE no SITRAM..."):
-                    if tipo_dae == "difal":
-                        resultado = client.simular_dae_difal(ids)
-                    elif tipo_dae == "nf_difal":
-                        resultado = client.simular_dae_nf_difal(ids)
-                    elif tipo_dae == "convenio":
-                        resultado = client.simular_dae_convenio(ids)
-                    else:
-                        resultado = client.simular_dae(ids)
-                st.success("Simulação concluída!")
-                st.json(resultado)
-                st.session_state["_sitram_dae_simulacao"] = resultado
-            except Exception as e:
-                st.error(f"Erro na simulação: {e}")
-
-        simulacao = st.session_state.get("_sitram_dae_simulacao")
-        if simulacao and col2.button("Emitir DAE", type="primary", key="sitram_btn_emitir_dae"):
-            client = _get_client(user, cnpj)
-            if not client:
-                return
-            try:
-                with st.spinner("Emitindo DAE..."):
-                    resultado = client.emitir_dae(
-                        simulacao,
-                        ids=",".join(ids),
-                    )
-                st.success("DAE emitido com sucesso!")
-                st.json(resultado)
-            except Exception as e:
-                st.error(f"Erro ao emitir DAE: {e}")
-
-
-def _sub_relatorio(user: dict, cnpj: str):
-    st.markdown("---")
-    st.info(
-        "Consulte lançamentos SITRAM por chave de acesso para verificar "
-        "o status de pagamento de cada item."
-    )
-
-    chave = st.text_input(
-        "Chave de acesso (44 dígitos)",
-        max_chars=44,
-        placeholder="Digite a chave de acesso...",
-        key="sitram_rel_chave",
-    )
-
-    if st.button("Consultar Status", type="primary", key="sitram_btn_rel"):
-        chave_limpa = "".join(c for c in chave if c.isdigit())
-        if len(chave_limpa) != 44:
-            st.warning("Informe uma chave válida com 44 dígitos.")
-            return
-
-        itens, erro = _consultar_itens(user, cnpj, chave_limpa)
-        if erro:
-            st.error(erro)
-            return
-
-        client = _get_client(user, cnpj)
-
-        import pandas as pd
         rows = []
         for item in itens:
             tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
-            id_lanc = str(item.get("id", ""))
-
-            status = "—"
-            valor_pago = 0.0
-            if client and id_lanc:
-                try:
-                    som = client.somatorio_lancamento(id_lanc)
-                    status = som.get("situacao", som.get("status", "Consultado"))
-                    valor_pago = som.get("valorPago", som.get("totalPago", 0))
-                except Exception:
-                    status = "Erro ao consultar"
-
             rows.append({
-                "Produto": item.get("descricaoProduto", "?")[:35],
+                "Produto": item.get("descricaoProduto", "?"),
                 "Tipo": tipo,
-                "ICMS Devido": item.get("icms", 0),
+                "ICMS": item.get("icms", 0),
                 "FECOP": item.get("valorFecop", 0),
-                "Valor Pago": valor_pago,
-                "Status": status,
+                "Total": item.get("icms", 0) + item.get("valorFecop", 0),
+                "Regime": item.get("nomeConfiguracao", ""),
             })
 
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("#### Status de Pagamento e DAE")
+        link = _link_sitram_pagamento(chave_limpa)
+        st.markdown(
+            f"Para verificar o **status de pagamento** (pago/em aberto) e "
+            f"**gerar DAE**, acesse diretamente o portal SITRAM:"
+        )
+        st.markdown(f"[Abrir no Portal SITRAM]({link})")
+        st.caption(
+            "O portal SITRAM exibe os lançamentos com situação (Pago/Em aberto), "
+            "permite selecionar itens e gerar o DAE para pagamento."
+        )
+
+
+def _pagamentos_lote(user: dict, cnpj: str):
+    chaves_txt = st.text_area(
+        "Chaves de acesso (uma por linha)",
+        height=150,
+        placeholder="Cole aqui as chaves, uma por linha...",
+        key="sitram_pag_chaves_lote",
+    )
+
+    uploaded = st.file_uploader(
+        "Ou importe um arquivo CSV/Excel",
+        type=["csv", "xlsx", "xls"],
+        key="sitram_pag_upload",
+    )
+
+    chaves_arquivo = []
+    if uploaded:
+        try:
+            if uploaded.name.endswith(".csv"):
+                df_up = pd.read_csv(uploaded, dtype=str)
+            else:
+                df_up = pd.read_excel(uploaded, dtype=str)
+            col_chave = None
+            for col in df_up.columns:
+                if "chave" in col.lower():
+                    col_chave = col
+                    break
+            if not col_chave:
+                col_chave = df_up.columns[0]
+            chaves_arquivo = _extrair_chaves("\n".join(df_up[col_chave].dropna().tolist()))
+            st.caption(f"{len(chaves_arquivo)} chave(s) do arquivo")
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+
+    if st.button("Consultar Lote", type="primary", key="sitram_btn_pag_lote"):
+        chaves = _extrair_chaves(chaves_txt) if chaves_txt.strip() else []
+        chaves.extend(chaves_arquivo)
+        chaves = list(dict.fromkeys(chaves))
+
+        if not chaves:
+            st.warning("Nenhuma chave válida encontrada.")
+            return
+
+        st.info(f"Processando **{len(chaves)}** chave(s)...")
+        progress = st.progress(0)
+        resultados = _consultar_itens_lote(user, cnpj, chaves, progress_cb=progress.progress)
+        progress.progress(100)
+
+        rows = []
+        erros = []
+        for chave, resultado in resultados.items():
+            if isinstance(resultado, str):
+                erros.append({"Chave": chave, "Erro": resultado})
+                continue
+            total_icms = sum(i.get("icms", 0) for i in resultado)
+            total_fecop = sum(i.get("valorFecop", 0) for i in resultado)
+            tipos = set()
+            for item in resultado:
+                tipos.add(_classificar_tipo(item.get("nomeConfiguracao", "")))
+            rows.append({
+                "Chave": chave,
+                "Itens": len(resultado),
+                "Tipos": ", ".join(tipos),
+                "ICMS": total_icms,
+                "FECOP": total_fecop,
+                "Total": total_icms + total_fecop,
+                "Link SITRAM": _link_sitram_pagamento(chave),
+            })
+
+        if erros:
+            st.warning(f"{len(erros)} chave(s) com erro")
+
+        if not rows:
+            st.error("Nenhum resultado encontrado.")
+            return
+
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
 
-        total_devido = sum(r["ICMS Devido"] + r["FECOP"] for r in rows)
-        total_pago = sum(r["Valor Pago"] for r in rows)
-        total_aberto = total_devido - total_pago
+        total_icms_geral = df["ICMS"].sum()
+        total_fecop_geral = df["FECOP"].sum()
+        total_geral = df["Total"].sum()
 
-        t1, t2, t3 = st.columns(3)
-        t1.metric("Total Devido", f"R$ {total_devido:,.2f}")
-        t2.metric("Total Pago", f"R$ {total_pago:,.2f}")
-        t3.metric("Em Aberto", f"R$ {total_aberto:,.2f}")
+        st.success(f"**{len(rows)} nota(s)** processada(s)")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total ICMS", f"R$ {total_icms_geral:,.2f}")
+        m2.metric("Total FECOP", f"R$ {total_fecop_geral:,.2f}")
+        m3.metric("Total a Recolher", f"R$ {total_geral:,.2f}")
+
+        st.dataframe(
+            df.drop(columns=["Link SITRAM"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        csv = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "Exportar CSV",
+            data=csv,
+            file_name="sitram_pagamentos_lote.csv",
+            mime="text/csv",
+        )
+
+        st.markdown("---")
+        st.markdown("#### Links para o Portal SITRAM")
+        st.caption("Clique para verificar status de pagamento e gerar DAE no portal:")
+        for _, row in df.iterrows():
+            ch = row["Chave"]
+            st.markdown(f"- [{ch[-15:]}...]({row['Link SITRAM']}) — ICMS R$ {row['ICMS']:,.2f}")
 
 
 # ── Render principal ─────────────────────────────────────────────────────────
