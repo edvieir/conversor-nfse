@@ -235,20 +235,129 @@ def consultar_itens_por_chave(
     return r.json()
 
 
-# ── Calculadora DIFAL / ICMS ─────────────────────────────────────────────────
+# ── Lançamentos por Nota Fiscal ──────────────────────────────────────────────
+# Endpoints do serviceNotaFiscal (base: /api-nota/notafiscal)
+
+def consultar_icms_nota(
+    sessao: requests.Session,
+    chave_acesso: str,
+) -> list:
+    """
+    Consulta ICMS total/pago/devido de uma nota fiscal.
+    Não requer autenticação.
+    Endpoint: GET /api-nota/notafiscal/consulta-icms-nota/{chave}
+    """
+    chave = "".join(c for c in chave_acesso if c.isdigit())
+    r = sessao.get(
+        f"{API_NOTA}/notafiscal/consulta-icms-nota/{chave}",
+        timeout=30,
+    )
+    _check_sitram_response(r, "Consulta ICMS nota")
+    return r.json()
+
+
+def consultar_nota_por_chave(
+    sessao: requests.Session,
+    token: str,
+    chave_acesso: str,
+) -> dict:
+    """
+    Retorna dados da NF incluindo situação de pagamento.
+    Campos-chave: id, situacaoDescricao, situacaoDoImposto.
+    Endpoint: GET /api-nota/notafiscal/por-chave-de-acesso/{chave}
+    """
+    chave = "".join(c for c in chave_acesso if c.isdigit())
+    r = sessao.get(
+        f"{API_NOTA}/notafiscal/por-chave-de-acesso/{chave}",
+        headers=_headers(token),
+        params={"page": 0, "size": 1},
+        timeout=30,
+    )
+    _check_sitram_response(r, "Consulta NF por chave")
+    data = r.json()
+    content = data.get("content", [])
+    return content[0] if content else {}
+
+
+def consultar_lancamentos_nf(
+    sessao: requests.Session,
+    token: str,
+    id_nota: int,
+) -> list:
+    """
+    Retorna lançamentos de uma NF com status de pagamento.
+    Campos-chave: idLancamentoFront, valor, valorPago, situacao, siuacaoDescricao.
+    Endpoint: GET /api-nota/notafiscal/lancamentos-nota-fiscal/{idNota}
+    """
+    r = sessao.get(
+        f"{API_NOTA}/notafiscal/lancamentos-nota-fiscal/{id_nota}",
+        headers=_headers(token),
+        timeout=30,
+    )
+    _check_sitram_response(r, "Lançamentos da NF")
+    return r.json()
+
+
+def obter_lancamentos_por_nota(
+    sessao: requests.Session,
+    token: str,
+    filtro: dict,
+    page: int = 0,
+    size: int = 100,
+) -> dict:
+    """
+    Retorna detalhes dos lançamentos (com idLancamentoFront) para uma NF.
+    Endpoint: POST /api-nota/notafiscal/obter-detalhes-lancamento-por-notafiscal
+    Filtro: {"numeroDanfe": "chave44dig", ...}
+    """
+    r = sessao.post(
+        f"{API_NOTA}/notafiscal/obter-detalhes-lancamento-por-notafiscal",
+        headers=_headers(token),
+        json=filtro,
+        params={"page": page, "size": size},
+        timeout=30,
+    )
+    _check_sitram_response(r, "Lançamentos por nota fiscal")
+    return r.json()
+
+
+def obter_totais_regime_por_nota(
+    sessao: requests.Session,
+    token: str,
+    filtro: dict,
+) -> dict:
+    """
+    Retorna totais agrupados por regime (ANTECIPADO, DIFAL, ST, etc).
+    Endpoint: POST /api-nota/notafiscal/obter-totais-por-regime-lancamento-por-notafiscal
+    Filtro: {"numeroDanfe": "chave44dig", ...}
+    """
+    r = sessao.post(
+        f"{API_NOTA}/notafiscal/obter-totais-por-regime-lancamento-por-notafiscal",
+        headers=_headers(token),
+        json=filtro,
+        timeout=30,
+    )
+    _check_sitram_response(r, "Totais regime por NF")
+    return r.json()
+
+
+# ── Simulação de DAE ─────────────────────────────────────────────────────────
+# Endpoints confirmados via probing: GET /api-pagamento/dae/simularDae*
 
 def simular_dae(
     sessao: requests.Session,
     token: str,
     ids_lancamento: list[str],
     info: str = "",
-) -> dict:
+) -> list:
     """
-    Simula DAE para os lançamentos informados.
-    Endpoint: GET /api-calculadora/simularDae
+    Simula DAE para os IDs informados.
+    Retorna lista vazia [] se não há DAE pendente (itens já pagos).
+    Retorna dados da simulação se há DAE a gerar.
+    Endpoint: GET /api-pagamento/dae/simularDae
     """
     r = sessao.get(
-        f"{API_CALCULADORA}/simularDae",
+        f"{API_PAGAMENTO}/dae/simularDae",
         headers=_headers(token),
         params={"idsLancamento": ",".join(ids_lancamento), "info": info},
         timeout=30,
@@ -261,13 +370,13 @@ def simular_dae_difal(
     sessao: requests.Session,
     token: str,
     ids_lancamento: list[str],
-) -> dict:
+) -> list:
     """
     Simula DAE DIFAL.
-    Endpoint: GET /api-calculadora/simularDaeDifal
+    Endpoint: GET /api-pagamento/dae/simularDaeDifal
     """
     r = sessao.get(
-        f"{API_CALCULADORA}/simularDaeDifal",
+        f"{API_PAGAMENTO}/dae/simularDaeDifal",
         headers=_headers(token),
         params={"idsLancamento": ",".join(ids_lancamento)},
         timeout=30,
@@ -280,13 +389,13 @@ def simular_dae_nf_difal(
     sessao: requests.Session,
     token: str,
     ids_lancamento: list[str],
-) -> dict:
+) -> list:
     """
     Simula DAE para NF DIFAL.
-    Endpoint: GET /api-calculadora/simularDaeNotaFiscalDifal
+    Endpoint: GET /api-pagamento/dae/simularDaeNotaFiscalDifal
     """
     r = sessao.get(
-        f"{API_CALCULADORA}/simularDaeNotaFiscalDifal",
+        f"{API_PAGAMENTO}/dae/simularDaeNotaFiscalDifal",
         headers=_headers(token),
         params={"idsLancamento": ",".join(ids_lancamento)},
         timeout=30,
@@ -299,13 +408,13 @@ def simular_dae_convenio(
     sessao: requests.Session,
     token: str,
     ids_lancamento: list[str],
-) -> dict:
+) -> list:
     """
     Simula DAE Convênio.
-    Endpoint: GET /api-calculadora/simularDaeConvenio
+    Endpoint: GET /api-pagamento/dae/simularDaeConvenio
     """
     r = sessao.get(
-        f"{API_CALCULADORA}/simularDaeConvenio",
+        f"{API_PAGAMENTO}/dae/simularDaeConvenio",
         headers=_headers(token),
         params={"idsLancamento": ",".join(ids_lancamento)},
         timeout=30,
@@ -314,107 +423,59 @@ def simular_dae_convenio(
     return r.json()
 
 
-def emitir_difal(
-    sessao: requests.Session,
-    token: str,
-    payload: dict,
-) -> dict:
-    """
-    Emite DIFAL.
-    Endpoint: POST /api-calculadora/difal/emitir
-    """
-    r = sessao.post(
-        f"{API_CALCULADORA}/difal/emitir",
-        headers=_headers(token),
-        json=payload,
-        timeout=30,
-    )
-    _check_sitram_response(r, "Emitir DIFAL")
-    return r.json()
-
-
-# ── Pagamentos / DAE ─────────────────────────────────────────────────────────
-
-def emitir_dae(
-    sessao: requests.Session,
-    token: str,
-    payload: dict,
-    ids_lancamento: str = "",
-    info: str = "",
-) -> dict:
-    """
-    Emite DAE.
-    Endpoint: POST /api-pagamento/emitir-dae
-    """
-    params = {}
-    if ids_lancamento:
-        params["idsLancamento"] = ids_lancamento
-    if info:
-        params["info"] = info
-    r = sessao.post(
-        f"{API_PAGAMENTO}/emitir-dae",
-        headers=_headers(token),
-        json=payload,
-        params=params,
-        timeout=30,
-    )
-    _check_sitram_response(r, "Emitir DAE")
-    return r.json()
-
-
-def emitir_dae_convenio(
-    sessao: requests.Session,
-    token: str,
-) -> dict:
-    """
-    Emite DAE Convênio.
-    Endpoint: GET /api-calculadora/emitir-dae-convenio
-    """
-    r = sessao.get(
-        f"{API_CALCULADORA}/emitir-dae-convenio",
-        headers=_headers(token),
-        timeout=30,
-    )
-    _check_sitram_response(r, "Emitir DAE Convênio")
-    return r.json()
-
-
-def simular_dae_sanfit(
-    sessao: requests.Session,
-    token: str,
-    payload: dict,
-) -> dict:
-    """
-    Simula DAE SANFIT.
-    Endpoint: POST /api-pagamento/simular-dae-sanfit
-    """
-    r = sessao.post(
-        f"{API_PAGAMENTO}/simular-dae-sanfit",
-        headers=_headers(token),
-        json=payload,
-        timeout=30,
-    )
-    _check_sitram_response(r, "Simular DAE SANFIT")
-    return r.json()
-
-
-# ── Lançamentos ─────────────────────────────────────────────────────────────
-
-def consultar_somatorio_lancamento(
+def buscar_numero_dae(
     sessao: requests.Session,
     token: str,
     id_lancamento: str,
 ) -> dict:
     """
-    Retorna somatório de um lançamento específico.
-    Endpoint: GET /api-pagamento/lancamento/somatorio-lancamento/{id}
+    Busca número do DAE para um lançamento.
+    Endpoint: GET /api-pagamento/dae/buscarNumeroDae
     """
     r = sessao.get(
-        f"{API_PAGAMENTO}/lancamento/somatorio-lancamento/{id_lancamento}",
+        f"{API_PAGAMENTO}/dae/buscarNumeroDae",
+        headers=_headers(token),
+        params={"idLancamento": id_lancamento},
+        timeout=30,
+    )
+    _check_sitram_response(r, "Buscar número DAE")
+    return r.json()
+
+
+def obter_relatorio_dae(
+    sessao: requests.Session,
+    token: str,
+    id_dae: str,
+) -> bytes:
+    """
+    Baixa relatório/boleto do DAE em PDF.
+    Endpoint: GET /api-pagamento/dae/relatorio-dae/{id}
+    """
+    r = sessao.get(
+        f"{API_PAGAMENTO}/dae/relatorio-dae/{id_dae}",
         headers=_headers(token),
         timeout=30,
     )
-    _check_sitram_response(r, "Somatório lançamento")
+    _check_sitram_response(r, "Relatório DAE")
+    return r.content
+
+
+def obter_data_pagamento(
+    sessao: requests.Session,
+    token: str,
+    data: str,
+) -> dict:
+    """
+    Valida e retorna data de pagamento.
+    Endpoint: GET /api-pagamento/dae/retorna-data-pagamento
+    """
+    r = sessao.get(
+        f"{API_PAGAMENTO}/dae/retorna-data-pagamento",
+        headers=_headers(token),
+        params={"dataPagamento": data},
+        timeout=30,
+    )
+    _check_sitram_response(r, "Data pagamento")
     return r.json()
 
 
@@ -479,41 +540,52 @@ class SitramClient:
     def consultar_itens(self, chave_acesso: str) -> dict:
         return consultar_itens_por_chave(self.sessao, chave_acesso)
 
-    def simular_dae(self, ids: list[str], info: str = "") -> dict:
+    def consultar_icms_nota(self, chave_acesso: str) -> list:
+        return consultar_icms_nota(self.sessao, chave_acesso)
+
+    def consultar_nota_por_chave(self, chave_acesso: str) -> dict:
+        self._check_token()
+        return consultar_nota_por_chave(self.sessao, self.token, chave_acesso)
+
+    def consultar_lancamentos_nf(self, id_nota: int) -> list:
+        self._check_token()
+        return consultar_lancamentos_nf(self.sessao, self.token, id_nota)
+
+    def lancamentos_por_nota(self, filtro: dict, page: int = 0, size: int = 100) -> dict:
+        self._check_token()
+        return obter_lancamentos_por_nota(self.sessao, self.token, filtro, page, size)
+
+    def totais_regime_por_nota(self, filtro: dict) -> dict:
+        self._check_token()
+        return obter_totais_regime_por_nota(self.sessao, self.token, filtro)
+
+    def simular_dae(self, ids: list[str], info: str = "") -> list:
         self._check_token()
         return simular_dae(self.sessao, self.token, ids, info)
 
-    def simular_dae_difal(self, ids: list[str]) -> dict:
+    def simular_dae_difal(self, ids: list[str]) -> list:
         self._check_token()
         return simular_dae_difal(self.sessao, self.token, ids)
 
-    def simular_dae_nf_difal(self, ids: list[str]) -> dict:
+    def simular_dae_nf_difal(self, ids: list[str]) -> list:
         self._check_token()
         return simular_dae_nf_difal(self.sessao, self.token, ids)
 
-    def simular_dae_convenio(self, ids: list[str]) -> dict:
+    def simular_dae_convenio(self, ids: list[str]) -> list:
         self._check_token()
         return simular_dae_convenio(self.sessao, self.token, ids)
 
-    def emitir_difal(self, payload: dict) -> dict:
+    def buscar_numero_dae(self, id_lancamento: str) -> dict:
         self._check_token()
-        return emitir_difal(self.sessao, self.token, payload)
+        return buscar_numero_dae(self.sessao, self.token, id_lancamento)
 
-    def emitir_dae(self, payload: dict, ids: str = "", info: str = "") -> dict:
+    def obter_relatorio_dae(self, id_dae: str) -> bytes:
         self._check_token()
-        return emitir_dae(self.sessao, self.token, payload, ids, info)
+        return obter_relatorio_dae(self.sessao, self.token, id_dae)
 
-    def emitir_dae_convenio(self) -> dict:
+    def obter_data_pagamento(self, data: str) -> dict:
         self._check_token()
-        return emitir_dae_convenio(self.sessao, self.token)
-
-    def simular_dae_sanfit(self, payload: dict) -> dict:
-        self._check_token()
-        return simular_dae_sanfit(self.sessao, self.token, payload)
-
-    def somatorio_lancamento(self, id_lancamento: str) -> dict:
-        self._check_token()
-        return consultar_somatorio_lancamento(self.sessao, self.token, id_lancamento)
+        return obter_data_pagamento(self.sessao, self.token, data)
 
     def gerar_csv(self, payload: dict) -> bytes:
         self._check_token()

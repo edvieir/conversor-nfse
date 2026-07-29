@@ -828,16 +828,40 @@ def _tab_pagamentos(user: dict, cnpj: str):
 
     modo = st.radio(
         "Modo",
-        ["unica", "lote"],
-        format_func=lambda m: {"unica": "Chave única", "lote": "Lote (múltiplas chaves)"}[m],
+        ["unica", "lote", "relatorio"],
+        format_func=lambda m: {
+            "unica": "Chave única",
+            "lote": "Lote (múltiplas chaves)",
+            "relatorio": "Relatório mensal",
+        }[m],
         horizontal=True,
         key="sitram_pag_modo",
     )
 
     if modo == "unica":
         _pagamentos_unica(user, cnpj)
-    else:
+    elif modo == "lote":
         _pagamentos_lote(user, cnpj)
+    else:
+        _relatorio_mensal(user, cnpj)
+
+
+def _consultar_status_pagamento(client, chave: str) -> dict | None:
+    """Consulta NF por chave e retorna dados de pagamento (NF + lançamentos)."""
+    try:
+        nf = client.consultar_nota_por_chave(chave)
+        if not nf:
+            return None
+        id_nota = nf.get("id")
+        lancamentos = []
+        if id_nota:
+            try:
+                lancamentos = client.consultar_lancamentos_nf(id_nota)
+            except Exception:
+                pass
+        return {"nf": nf, "lancamentos": lancamentos}
+    except Exception:
+        return None
 
 
 def _pagamentos_unica(user: dict, cnpj: str):
@@ -862,39 +886,82 @@ def _pagamentos_unica(user: dict, cnpj: str):
         total_icms = sum(i.get("icms", 0) for i in itens)
         total_fecop = sum(i.get("valorFecop", 0) for i in itens)
 
-        st.success(f"**{len(itens)} lançamento(s)** encontrado(s)")
+        st.success(f"**{len(itens)} item(ns)** encontrado(s)")
 
-        m1, m2, m3 = st.columns(3)
+        client = _get_client(user, cnpj)
+        status_data = None
+        if client:
+            with st.spinner("Consultando status de pagamento..."):
+                status_data = _consultar_status_pagamento(client, chave_limpa)
+
+        nf_info = status_data.get("nf", {}) if status_data else {}
+        lancamentos = status_data.get("lancamentos", []) if status_data else []
+
+        sit_imposto = nf_info.get("situacaoDoImposto", "")
+        sit_descricao = nf_info.get("situacaoDescricao", "")
+        is_pago = "pag" in sit_descricao.lower() if sit_descricao else False
+
+        total_valor_lanc = sum(l.get("valor", 0) or 0 for l in lancamentos)
+        total_pago_lanc = sum(l.get("valorPago", 0) or 0 for l in lancamentos)
+        total_pendente = total_valor_lanc - total_pago_lanc
+
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total ICMS", f"R$ {total_icms:,.2f}")
         m2.metric("Total FECOP", f"R$ {total_fecop:,.2f}")
-        m3.metric("Total a Recolher", f"R$ {total_icms + total_fecop:,.2f}")
+        if lancamentos:
+            m3.metric("Pago", f"R$ {total_pago_lanc:,.2f}")
+            m4.metric(
+                "Pendente",
+                f"R$ {total_pendente:,.2f}",
+                delta="Quitado" if total_pendente <= 0 else None,
+                delta_color="normal" if total_pendente <= 0 else "off",
+            )
+        else:
+            m3.metric("Status", sit_imposto.strip() if sit_imposto else "—")
+            m4.metric("Situação", sit_descricao[:25] if sit_descricao else "—")
 
-        rows = []
-        for item in itens:
-            tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
-            rows.append({
-                "Produto": item.get("descricaoProduto", "?"),
-                "Tipo": tipo,
-                "ICMS": item.get("icms", 0),
-                "FECOP": item.get("valorFecop", 0),
-                "Total": item.get("icms", 0) + item.get("valorFecop", 0),
-                "Regime": item.get("nomeConfiguracao", ""),
-            })
+        if lancamentos:
+            rows_lanc = []
+            for lanc in lancamentos:
+                sit = lanc.get("siuacaoDescricao", lanc.get("situacaoDescricao", ""))
+                rows_lanc.append({
+                    "Descrição": lanc.get("descricao", ""),
+                    "Código": lanc.get("codigo", ""),
+                    "Valor": lanc.get("valor", 0),
+                    "Pago": lanc.get("valorPago", 0),
+                    "Vencimento": (lanc.get("vencimento", "") or "")[:10],
+                    "Situação": sit,
+                })
 
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(
+                pd.DataFrame(rows_lanc),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Valor": st.column_config.NumberColumn(format="R$ %.2f"),
+                    "Pago": st.column_config.NumberColumn(format="R$ %.2f"),
+                },
+            )
+        else:
+            rows = []
+            for item in itens:
+                tipo = _classificar_tipo(item.get("nomeConfiguracao", ""))
+                rows.append({
+                    "Produto": item.get("descricaoProduto", "?"),
+                    "Tipo": tipo,
+                    "ICMS": item.get("icms", 0),
+                    "FECOP": item.get("valorFecop", 0),
+                    "Total": item.get("icms", 0) + item.get("valorFecop", 0),
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        st.markdown("#### Status de Pagamento e DAE")
+        if is_pago:
+            st.success(f"NF-e quitada — {sit_imposto.strip()}")
+        elif sit_descricao:
+            st.warning(f"Situação: {sit_descricao}")
+
         link = _link_sitram_pagamento(chave_limpa)
-        st.markdown(
-            f"Para verificar o **status de pagamento** (pago/em aberto) e "
-            f"**gerar DAE**, acesse diretamente o portal SITRAM:"
-        )
         st.markdown(f"[Abrir no Portal SITRAM]({link})")
-        st.caption(
-            "O portal SITRAM exibe os lançamentos com situação (Pago/Em aberto), "
-            "permite selecionar itens e gerar o DAE para pagamento."
-        )
 
 
 def _pagamentos_lote(user: dict, cnpj: str):
@@ -944,9 +1011,11 @@ def _pagamentos_lote(user: dict, cnpj: str):
         resultados = _consultar_itens_lote(user, cnpj, chaves, progress_cb=progress.progress)
         progress.progress(100)
 
+        client = _get_client(user, cnpj)
+
         rows = []
         erros = []
-        for chave, resultado in resultados.items():
+        for idx, (chave, resultado) in enumerate(resultados.items()):
             if isinstance(resultado, str):
                 erros.append({"Chave": chave, "Erro": resultado})
                 continue
@@ -955,6 +1024,15 @@ def _pagamentos_lote(user: dict, cnpj: str):
             tipos = set()
             for item in resultado:
                 tipos.add(_classificar_tipo(item.get("nomeConfiguracao", "")))
+
+            sit_imposto = ""
+            if client:
+                try:
+                    nf = client.consultar_nota_por_chave(chave)
+                    sit_imposto = nf.get("situacaoDoImposto", "") if nf else ""
+                except Exception:
+                    pass
+
             rows.append({
                 "Chave": chave,
                 "Itens": len(resultado),
@@ -962,6 +1040,7 @@ def _pagamentos_lote(user: dict, cnpj: str):
                 "ICMS": total_icms,
                 "FECOP": total_fecop,
                 "Total": total_icms + total_fecop,
+                "Status": sit_imposto.strip() if sit_imposto else "—",
                 "Link SITRAM": _link_sitram_pagamento(chave),
             })
 
@@ -978,12 +1057,16 @@ def _pagamentos_lote(user: dict, cnpj: str):
         total_fecop_geral = df["FECOP"].sum()
         total_geral = df["Total"].sum()
 
+        pagos = df[df["Status"].str.contains("Pago", case=False, na=False)]
+        pendentes = df[~df["Status"].str.contains("Pago", case=False, na=False)]
+
         st.success(f"**{len(rows)} nota(s)** processada(s)")
 
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total ICMS", f"R$ {total_icms_geral:,.2f}")
         m2.metric("Total FECOP", f"R$ {total_fecop_geral:,.2f}")
-        m3.metric("Total a Recolher", f"R$ {total_geral:,.2f}")
+        m3.metric("Pagas", str(len(pagos)))
+        m4.metric("Pendentes", str(len(pendentes)))
 
         st.dataframe(
             df.drop(columns=["Link SITRAM"]),
@@ -991,7 +1074,7 @@ def _pagamentos_lote(user: dict, cnpj: str):
             hide_index=True,
         )
 
-        csv = df.to_csv(index=False).encode("utf-8-sig")
+        csv = df.drop(columns=["Link SITRAM"]).to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "Exportar CSV",
             data=csv,
@@ -999,12 +1082,178 @@ def _pagamentos_lote(user: dict, cnpj: str):
             mime="text/csv",
         )
 
-        st.markdown("---")
-        st.markdown("#### Links para o Portal SITRAM")
-        st.caption("Clique para verificar status de pagamento e gerar DAE no portal:")
-        for _, row in df.iterrows():
-            ch = row["Chave"]
-            st.markdown(f"- [{ch[-15:]}...]({row['Link SITRAM']}) — ICMS R$ {row['ICMS']:,.2f}")
+
+def _relatorio_mensal(user: dict, cnpj: str):
+    """Relatório mensal de NF-e pagas, filtrado por data de emissão."""
+    import datetime
+
+    st.markdown("#### Relatório Mensal — NF-e Pagas")
+    st.caption(
+        "Informe as chaves de acesso ou importe um arquivo. "
+        "O sistema verifica o status de pagamento de cada nota no SITRAM."
+    )
+
+    hoje = datetime.date.today()
+    col_inicio, col_fim = st.columns(2)
+    with col_inicio:
+        dt_inicio = st.date_input(
+            "Data inicial (emissão)",
+            value=hoje.replace(day=1),
+            key="sitram_rel_dt_ini",
+        )
+    with col_fim:
+        dt_fim = st.date_input(
+            "Data final (emissão)",
+            value=hoje,
+            key="sitram_rel_dt_fim",
+        )
+
+    chaves_txt = st.text_area(
+        "Chaves de acesso (uma por linha)",
+        height=120,
+        placeholder="Cole aqui as chaves...",
+        key="sitram_rel_chaves",
+    )
+
+    uploaded = st.file_uploader(
+        "Ou importe um arquivo CSV/Excel",
+        type=["csv", "xlsx", "xls"],
+        key="sitram_rel_upload",
+    )
+
+    chaves_arquivo = []
+    if uploaded:
+        try:
+            if uploaded.name.endswith(".csv"):
+                df_up = pd.read_csv(uploaded, dtype=str)
+            else:
+                df_up = pd.read_excel(uploaded, dtype=str)
+            col_chave = None
+            for col in df_up.columns:
+                if "chave" in col.lower():
+                    col_chave = col
+                    break
+            if not col_chave:
+                col_chave = df_up.columns[0]
+            chaves_arquivo = _extrair_chaves("\n".join(df_up[col_chave].dropna().tolist()))
+            st.caption(f"{len(chaves_arquivo)} chave(s) do arquivo")
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+
+    if st.button("Gerar Relatório", type="primary", key="sitram_btn_relatorio"):
+        chaves = _extrair_chaves(chaves_txt) if chaves_txt.strip() else []
+        chaves.extend(chaves_arquivo)
+        chaves = list(dict.fromkeys(chaves))
+
+        if not chaves:
+            st.warning("Informe ao menos uma chave de acesso.")
+            return
+
+        client = _get_client(user, cnpj)
+        if not client:
+            return
+
+        progress = st.progress(0)
+        rows = []
+        total = len(chaves)
+
+        for idx, chave in enumerate(chaves):
+            progress.progress(int((idx + 1) / total * 100))
+            try:
+                nf = client.consultar_nota_por_chave(chave)
+            except Exception:
+                nf = None
+
+            if not nf:
+                rows.append({
+                    "Emissão": "",
+                    "Chave": chave,
+                    "Emitente": "",
+                    "Valor NF": 0,
+                    "Status": "Erro na consulta",
+                    "Pago": "—",
+                })
+                continue
+
+            emissao = (nf.get("dataEmissao", "") or "")[:10]
+            sit_imposto = (nf.get("situacaoDoImposto", "") or "").strip()
+            sit_desc = (nf.get("situacaoDescricao", "") or "").strip()
+            is_pago = "pag" in sit_desc.lower()
+            valor = nf.get("total", nf.get("totalProdutos", 0)) or 0
+            emitente = nf.get("nomeEmitente", "")
+
+            rows.append({
+                "Emissão": emissao,
+                "Chave": chave,
+                "Emitente": emitente,
+                "Valor NF": valor,
+                "Status": sit_imposto if sit_imposto else sit_desc,
+                "Pago": "Sim" if is_pago else "Não",
+            })
+
+        progress.empty()
+        df = pd.DataFrame(rows)
+
+        if df.empty:
+            st.info("Nenhum resultado.")
+            return
+
+        dt_ini_str = dt_inicio.isoformat()
+        dt_fim_str = dt_fim.isoformat()
+        mask = (df["Emissão"] >= dt_ini_str) & (df["Emissão"] <= dt_fim_str)
+        df_filtrado = df[mask].copy()
+
+        if df_filtrado.empty:
+            st.warning(
+                f"Nenhuma nota com emissão entre {dt_inicio} e {dt_fim}. "
+                f"Foram encontradas {len(df)} notas fora do período."
+            )
+            df_filtrado = df
+
+        pagos = df_filtrado[df_filtrado["Pago"] == "Sim"]
+        pendentes = df_filtrado[df_filtrado["Pago"] == "Não"]
+
+        st.success(
+            f"**{len(df_filtrado)}** nota(s) — "
+            f"emissão de {dt_inicio} a {dt_fim}"
+        )
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Notas", str(len(df_filtrado)))
+        m2.metric("Pagas", str(len(pagos)))
+        m3.metric("Pendentes", str(len(pendentes)))
+        total_valor_pagos = pagos["Valor NF"].sum() if not pagos.empty else 0
+        m4.metric("Valor Pago (NF)", f"R$ {total_valor_pagos:,.2f}")
+
+        if not pagos.empty:
+            st.markdown("##### Notas Pagas")
+            st.dataframe(
+                pagos,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
+                },
+            )
+
+        if not pendentes.empty:
+            st.markdown("##### Notas Pendentes")
+            st.dataframe(
+                pendentes,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
+                },
+            )
+
+        csv = df_filtrado.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "Exportar Relatório CSV",
+            data=csv,
+            file_name=f"sitram_relatorio_{dt_inicio}_{dt_fim}.csv",
+            mime="text/csv",
+        )
 
 
 # ── Render principal ─────────────────────────────────────────────────────────
