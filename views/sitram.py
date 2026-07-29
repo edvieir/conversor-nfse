@@ -1132,12 +1132,14 @@ def _relatorio_mensal(user: dict, cnpj: str):
                 dt_fim.isoformat(),
                 modelo="55",
                 papel="Recebida",
+                raiz=True,
             )
 
         if not nfes:
             st.warning(
                 f"Nenhuma NF-e recebida encontrada no período {dt_inicio} a {dt_fim}. "
-                "Certifique-se de ter baixado os XMLs na aba **Baixar XML** para este certificado."
+                "Certifique-se de ter baixado os XMLs na aba **Baixar XML** "
+                "(incluindo filiais) para este certificado."
             )
             return
 

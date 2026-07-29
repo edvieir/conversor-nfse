@@ -1033,15 +1033,22 @@ def reparar_dados_nfe(cnpj: str) -> int:
 def listar_resultados_por_periodo(
     cnpj: str, data_ini: str, data_fim: str,
     modelo: str | None = None, papel: str | None = None,
+    raiz: bool = False,
 ) -> list[dict]:
     """Retorna NF-es/NFC-es de um CNPJ filtradas por período e tipo.
     modelo: '55' → NF-e, '65' → NFC-e, None → todos.
     papel:  'Recebida' | 'Emitida' | None → todos.
     data_ini/data_fim: formato YYYY-MM-DD.
+    raiz: se True, busca por raiz CNPJ (8 primeiros dígitos) para incluir filiais.
     """
     ph = "%s" if _PG else "?"
-    conditions = [f"cnpj={ph}"]
-    params: list = [cnpj]
+    if raiz and len(cnpj) >= 8:
+        like_fn = "LIKE" if _PG else "LIKE"
+        conditions = [f"cnpj {like_fn} {ph}"]
+        params: list = [cnpj[:8] + "%"]
+    else:
+        conditions = [f"cnpj={ph}"]
+        params: list = [cnpj]
 
     if data_ini:
         conditions.append(f"data_emissao >= {ph}")

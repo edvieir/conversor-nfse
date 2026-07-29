@@ -347,6 +347,20 @@ def _render_tab_lote(user, certs):
                 unsafe_allow_html=True,
             )
 
+    # ── CNPJs de filiais (opcional) ──────────────────────────────────────────
+    with st.expander("Incluir filiais (opcional)"):
+        st.caption(
+            "Se a empresa possui filiais, informe os CNPJs aqui. "
+            "O certificado da matriz permite baixar NFs de todas as filiais (mesma raiz CNPJ). "
+            "Um CNPJ por linha."
+        )
+        filiais_txt = st.text_area(
+            "CNPJs das filiais",
+            placeholder="37.787.770/0002-17\n37.787.770/0003-06",
+            key="nfe_filiais_cnpjs",
+            label_visibility="collapsed",
+        )
+
     # ── Passo 3 — O que baixar ────────────────────────────────────────────────
     with st.container(border=True):
         ic = icon("sliders", 16, "#00CED1")
@@ -438,6 +452,16 @@ def _render_tab_lote(user, certs):
 
                 pfx_bytes, pfx_senha = resultado
                 empresas_lista = [{"cnpj": cnpj_principal, "nome": nome_principal}]
+
+                if filiais_txt and filiais_txt.strip():
+                    raiz_matriz = cnpj_principal[:8]
+                    for linha in filiais_txt.strip().splitlines():
+                        cnpj_fil = "".join(c for c in linha if c.isdigit())
+                        if len(cnpj_fil) == 14 and cnpj_fil != cnpj_principal:
+                            if cnpj_fil[:8] == raiz_matriz:
+                                empresas_lista.append({"cnpj": cnpj_fil, "nome": f"Filial {cnpj_fil}"})
+                            else:
+                                st.warning(f"CNPJ {cnpj_fil} não pertence à mesma raiz ({raiz_matriz}). Ignorado.")
 
                 progress_bar = st.progress(0, text="Iniciando consulta na SEFAZ...")
                 log_placeholder = st.empty()
