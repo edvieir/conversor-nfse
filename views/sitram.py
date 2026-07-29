@@ -899,10 +899,9 @@ def _pagamentos_unica(user: dict, cnpj: str):
 
         sit_imposto = nf_info.get("situacaoDoImposto", "")
         sit_descricao = nf_info.get("situacaoDescricao", "")
-        is_pago = "pag" in sit_descricao.lower() if sit_descricao else False
-
         total_valor_lanc = sum(l.get("valor", 0) or 0 for l in lancamentos)
         total_pago_lanc = sum(l.get("valorPago", 0) or 0 for l in lancamentos)
+        is_pago = total_pago_lanc > 0 and total_pago_lanc >= total_valor_lanc
         total_pendente = total_valor_lanc - total_pago_lanc
 
         m1, m2, m3, m4 = st.columns(4)
@@ -1057,8 +1056,11 @@ def _pagamentos_lote(user: dict, cnpj: str):
         total_fecop_geral = df["FECOP"].sum()
         total_geral = df["Total"].sum()
 
-        pagos = df[df["Status"].str.contains("Pago", case=False, na=False)]
-        pendentes = df[~df["Status"].str.contains("Pago", case=False, na=False)]
+        pagos = df[
+            df["Status"].str.contains("Pago", case=False, na=False)
+            & ~df["Status"].str.contains("A Pagar", case=False, na=False)
+        ]
+        pendentes = df[~df.index.isin(pagos.index)]
 
         st.success(f"**{len(rows)} nota(s)** processada(s)")
 
@@ -1193,8 +1195,6 @@ def _relatorio_mensal(user: dict, cnpj: str):
 
             if nf_sitram:
                 sit_imposto = (nf_sitram.get("situacaoDoImposto", "") or "").strip()
-                sit_desc = (nf_sitram.get("situacaoDescricao", "") or "").strip()
-                is_pago = "pag" in sit_desc.lower()
                 id_nota = nf_sitram.get("id")
                 valor_pago = 0.0
                 valor_icms = 0.0
@@ -1205,6 +1205,7 @@ def _relatorio_mensal(user: dict, cnpj: str):
                         valor_pago = sum(l.get("valorPago", 0) or 0 for l in lancs)
                     except Exception:
                         pass
+                is_pago = valor_pago > 0 and valor_pago >= valor_icms
             else:
                 sit_imposto = "Sem dados SITRAM"
                 is_pago = False
