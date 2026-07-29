@@ -1084,13 +1084,14 @@ def _pagamentos_lote(user: dict, cnpj: str):
 
 
 def _relatorio_mensal(user: dict, cnpj: str):
-    """Relatório mensal de NF-e pagas, filtrado por data de emissão."""
+    """Relatório mensal: busca NF-e do período no banco e verifica status no SITRAM."""
     import datetime
+    from db.database import listar_resultados_por_periodo
 
-    st.markdown("#### Relatório Mensal — NF-e Pagas")
+    st.markdown("#### Relatório Mensal — Status de Pagamento")
     st.caption(
-        "Informe as chaves de acesso ou importe um arquivo. "
-        "O sistema verifica o status de pagamento de cada nota no SITRAM."
+        "Busca NF-e recebidas no período (dados do Baixar XML) e verifica "
+        "o status de pagamento de cada nota no SITRAM automaticamente."
     )
 
     hoje = datetime.date.today()
@@ -1108,46 +1109,25 @@ def _relatorio_mensal(user: dict, cnpj: str):
             key="sitram_rel_dt_fim",
         )
 
-    chaves_txt = st.text_area(
-        "Chaves de acesso (uma por linha)",
-        height=120,
-        placeholder="Cole aqui as chaves...",
-        key="sitram_rel_chaves",
-    )
-
-    uploaded = st.file_uploader(
-        "Ou importe um arquivo CSV/Excel",
-        type=["csv", "xlsx", "xls"],
-        key="sitram_rel_upload",
-    )
-
-    chaves_arquivo = []
-    if uploaded:
-        try:
-            if uploaded.name.endswith(".csv"):
-                df_up = pd.read_csv(uploaded, dtype=str)
-            else:
-                df_up = pd.read_excel(uploaded, dtype=str)
-            col_chave = None
-            for col in df_up.columns:
-                if "chave" in col.lower():
-                    col_chave = col
-                    break
-            if not col_chave:
-                col_chave = df_up.columns[0]
-            chaves_arquivo = _extrair_chaves("\n".join(df_up[col_chave].dropna().tolist()))
-            st.caption(f"{len(chaves_arquivo)} chave(s) do arquivo")
-        except Exception as e:
-            st.error(f"Erro ao ler arquivo: {e}")
-
     if st.button("Gerar Relatório", type="primary", key="sitram_btn_relatorio"):
-        chaves = _extrair_chaves(chaves_txt) if chaves_txt.strip() else []
-        chaves.extend(chaves_arquivo)
-        chaves = list(dict.fromkeys(chaves))
+        with st.spinner("Buscando NF-e do período no banco de dados..."):
+            nfes = listar_resultados_por_periodo(
+                cnpj,
+                dt_inicio.isoformat(),
+                dt_fim.isoformat(),
+                modelo="55",
+                papel="Recebida",
+            )
 
-        if not chaves:
-            st.warning("Informe ao menos uma chave de acesso.")
+        if not nfes:
+            st.warning(
+                f"Nenhuma NF-e recebida encontrada no período {dt_inicio} a {dt_fim}. "
+                "Certifique-se de ter baixado os XMLs na aba **Baixar XML** para este certificado."
+            )
             return
+
+        chaves = [nf["chave"] for nf in nfes if nf.get("chave")]
+        st.info(f"**{len(chaves)}** NF-e encontrada(s) no período. Consultando SITRAM...")
 
         client = _get_client(user, cnpj)
         if not client:
@@ -1157,97 +1137,98 @@ def _relatorio_mensal(user: dict, cnpj: str):
         rows = []
         total = len(chaves)
 
+        nfe_map = {nf["chave"]: nf for nf in nfes}
+
         for idx, chave in enumerate(chaves):
             progress.progress(int((idx + 1) / total * 100))
+            nf_db = nfe_map.get(chave, {})
+
             try:
-                nf = client.consultar_nota_por_chave(chave)
+                nf_sitram = client.consultar_nota_por_chave(chave)
             except Exception:
-                nf = None
+                nf_sitram = None
 
-            if not nf:
-                rows.append({
-                    "Emissão": "",
-                    "Chave": chave,
-                    "Emitente": "",
-                    "Valor NF": 0,
-                    "Status": "Erro na consulta",
-                    "Pago": "—",
-                })
-                continue
+            emissao = (nf_db.get("data_emissao", "") or "")[:10]
+            emitente = nf_db.get("nome_emit", "")
+            valor_nf = nf_db.get("valor_total", 0) or 0
 
-            emissao = (nf.get("dataEmissao", "") or "")[:10]
-            sit_imposto = (nf.get("situacaoDoImposto", "") or "").strip()
-            sit_desc = (nf.get("situacaoDescricao", "") or "").strip()
-            is_pago = "pag" in sit_desc.lower()
-            valor = nf.get("total", nf.get("totalProdutos", 0)) or 0
-            emitente = nf.get("nomeEmitente", "")
+            if nf_sitram:
+                sit_imposto = (nf_sitram.get("situacaoDoImposto", "") or "").strip()
+                sit_desc = (nf_sitram.get("situacaoDescricao", "") or "").strip()
+                is_pago = "pag" in sit_desc.lower()
+                id_nota = nf_sitram.get("id")
+                valor_pago = 0.0
+                valor_icms = 0.0
+                if id_nota:
+                    try:
+                        lancs = client.consultar_lancamentos_nf(id_nota)
+                        valor_icms = sum(l.get("valor", 0) or 0 for l in lancs)
+                        valor_pago = sum(l.get("valorPago", 0) or 0 for l in lancs)
+                    except Exception:
+                        pass
+            else:
+                sit_imposto = "Sem dados"
+                sit_desc = ""
+                is_pago = False
+                valor_icms = 0.0
+                valor_pago = 0.0
 
             rows.append({
                 "Emissão": emissao,
-                "Chave": chave,
+                "NF": nf_db.get("numero", ""),
                 "Emitente": emitente,
-                "Valor NF": valor,
+                "Valor NF": valor_nf,
+                "ICMS": valor_icms,
+                "Pago": valor_pago,
                 "Status": sit_imposto if sit_imposto else sit_desc,
-                "Pago": "Sim" if is_pago else "Não",
+                "Situação": "Pago" if is_pago else "Pendente",
+                "Chave": chave,
             })
 
         progress.empty()
         df = pd.DataFrame(rows)
 
-        if df.empty:
-            st.info("Nenhum resultado.")
-            return
-
-        dt_ini_str = dt_inicio.isoformat()
-        dt_fim_str = dt_fim.isoformat()
-        mask = (df["Emissão"] >= dt_ini_str) & (df["Emissão"] <= dt_fim_str)
-        df_filtrado = df[mask].copy()
-
-        if df_filtrado.empty:
-            st.warning(
-                f"Nenhuma nota com emissão entre {dt_inicio} e {dt_fim}. "
-                f"Foram encontradas {len(df)} notas fora do período."
-            )
-            df_filtrado = df
-
-        pagos = df_filtrado[df_filtrado["Pago"] == "Sim"]
-        pendentes = df_filtrado[df_filtrado["Pago"] == "Não"]
+        pagos = df[df["Situação"] == "Pago"]
+        pendentes = df[df["Situação"] == "Pendente"]
 
         st.success(
-            f"**{len(df_filtrado)}** nota(s) — "
-            f"emissão de {dt_inicio} a {dt_fim}"
+            f"**{len(df)}** nota(s) — emissão de {dt_inicio} a {dt_fim}"
         )
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Notas", str(len(df_filtrado)))
+        m1.metric("Total Notas", str(len(df)))
         m2.metric("Pagas", str(len(pagos)))
         m3.metric("Pendentes", str(len(pendentes)))
-        total_valor_pagos = pagos["Valor NF"].sum() if not pagos.empty else 0
-        m4.metric("Valor Pago (NF)", f"R$ {total_valor_pagos:,.2f}")
+        total_icms_pago = df["Pago"].sum()
+        m4.metric("Total ICMS Pago", f"R$ {total_icms_pago:,.2f}")
 
         if not pagos.empty:
             st.markdown("##### Notas Pagas")
             st.dataframe(
-                pagos,
+                pagos.drop(columns=["Chave"]),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
                     "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
+                    "ICMS": st.column_config.NumberColumn(format="R$ %.2f"),
+                    "Pago": st.column_config.NumberColumn(format="R$ %.2f"),
                 },
             )
 
         if not pendentes.empty:
             st.markdown("##### Notas Pendentes")
             st.dataframe(
-                pendentes,
+                pendentes.drop(columns=["Chave"]),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
                     "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
+                    "ICMS": st.column_config.NumberColumn(format="R$ %.2f"),
+                    "Pago": st.column_config.NumberColumn(format="R$ %.2f"),
                 },
             )
 
-        csv = df_filtrado.to_csv(index=False).encode("utf-8-sig")
+        csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "Exportar Relatório CSV",
             data=csv,
