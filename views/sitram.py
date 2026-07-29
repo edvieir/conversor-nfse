@@ -1083,6 +1083,13 @@ def _pagamentos_lote(user: dict, cnpj: str):
         )
 
 
+def _is_interestadual(chave: str) -> bool:
+    """Verifica se a NF-e é interestadual (emitente fora do CE).
+    Primeiros 2 dígitos da chave = UF do emitente. CE = 23.
+    SITRAM só trata notas interestaduais."""
+    return len(chave) == 44 and chave[:2] != "23"
+
+
 def _relatorio_mensal(user: dict, cnpj: str):
     """Relatório mensal: busca NF-e do período no banco e verifica status no SITRAM."""
     import datetime
@@ -1090,8 +1097,8 @@ def _relatorio_mensal(user: dict, cnpj: str):
 
     st.markdown("#### Relatório Mensal — Status de Pagamento")
     st.caption(
-        "Busca NF-e recebidas no período (dados do Baixar XML) e verifica "
-        "o status de pagamento de cada nota no SITRAM automaticamente."
+        "Busca NF-e interestaduais recebidas no período (dados do Baixar XML) "
+        "e verifica o status de pagamento de cada nota no SITRAM."
     )
 
     hoje = datetime.date.today()
@@ -1108,6 +1115,12 @@ def _relatorio_mensal(user: dict, cnpj: str):
             value=hoje,
             key="sitram_rel_dt_fim",
         )
+
+    cnpj_filtro = st.text_input(
+        "CNPJ destinatário (matriz ou filial — deixe vazio para todas)",
+        placeholder="00.000.000/0000-00 ou só números",
+        key="sitram_rel_cnpj",
+    )
 
     if st.button("Gerar Relatório", type="primary", key="sitram_btn_relatorio"):
         with st.spinner("Buscando NF-e do período no banco de dados..."):
@@ -1126,8 +1139,34 @@ def _relatorio_mensal(user: dict, cnpj: str):
             )
             return
 
-        chaves = [nf["chave"] for nf in nfes if nf.get("chave")]
-        st.info(f"**{len(chaves)}** NF-e encontrada(s) no período. Consultando SITRAM...")
+        cnpj_filtro_limpo = "".join(c for c in cnpj_filtro if c.isdigit()) if cnpj_filtro else ""
+        if cnpj_filtro_limpo:
+            nfes = [
+                nf for nf in nfes
+                if (nf.get("cnpj_dest") or "").replace(".", "").replace("/", "").replace("-", "") == cnpj_filtro_limpo
+            ]
+            if not nfes:
+                st.warning(f"Nenhuma NF-e encontrada para o CNPJ {cnpj_filtro_limpo}.")
+                return
+
+        nfes_inter = [nf for nf in nfes if _is_interestadual(nf.get("chave", ""))]
+        n_intra = len(nfes) - len(nfes_inter)
+
+        if not nfes_inter:
+            st.info(
+                f"{len(nfes)} NF-e encontrada(s), mas todas são internas do CE. "
+                "SITRAM só trata notas interestaduais."
+            )
+            return
+
+        if n_intra > 0:
+            st.caption(
+                f"{n_intra} NF-e interna(s) do CE excluída(s) — "
+                "SITRAM só trata notas interestaduais."
+            )
+
+        chaves = [nf["chave"] for nf in nfes_inter]
+        st.info(f"**{len(chaves)}** NF-e interestadual(is). Consultando SITRAM...")
 
         client = _get_client(user, cnpj)
         if not client:
@@ -1136,8 +1175,7 @@ def _relatorio_mensal(user: dict, cnpj: str):
         progress = st.progress(0)
         rows = []
         total = len(chaves)
-
-        nfe_map = {nf["chave"]: nf for nf in nfes}
+        nfe_map = {nf["chave"]: nf for nf in nfes_inter}
 
         for idx, chave in enumerate(chaves):
             progress.progress(int((idx + 1) / total * 100))
@@ -1151,6 +1189,7 @@ def _relatorio_mensal(user: dict, cnpj: str):
             emissao = (nf_db.get("data_emissao", "") or "")[:10]
             emitente = nf_db.get("nome_emit", "")
             valor_nf = nf_db.get("valor_total", 0) or 0
+            uf_emit = UF_SIGLAS.get(chave[:2], chave[:2])
 
             if nf_sitram:
                 sit_imposto = (nf_sitram.get("situacaoDoImposto", "") or "").strip()
@@ -1167,8 +1206,7 @@ def _relatorio_mensal(user: dict, cnpj: str):
                     except Exception:
                         pass
             else:
-                sit_imposto = "Sem dados"
-                sit_desc = ""
+                sit_imposto = "Sem dados SITRAM"
                 is_pago = False
                 valor_icms = 0.0
                 valor_pago = 0.0
@@ -1176,11 +1214,12 @@ def _relatorio_mensal(user: dict, cnpj: str):
             rows.append({
                 "Emissão": emissao,
                 "NF": nf_db.get("numero", ""),
+                "UF": uf_emit,
                 "Emitente": emitente,
                 "Valor NF": valor_nf,
                 "ICMS": valor_icms,
                 "Pago": valor_pago,
-                "Status": sit_imposto if sit_imposto else sit_desc,
+                "Status": sit_imposto,
                 "Situação": "Pago" if is_pago else "Pendente",
                 "Chave": chave,
             })
@@ -1192,7 +1231,8 @@ def _relatorio_mensal(user: dict, cnpj: str):
         pendentes = df[df["Situação"] == "Pendente"]
 
         st.success(
-            f"**{len(df)}** nota(s) — emissão de {dt_inicio} a {dt_fim}"
+            f"**{len(df)}** nota(s) interestadual(is) — "
+            f"emissão de {dt_inicio} a {dt_fim}"
         )
 
         m1, m2, m3, m4 = st.columns(4)
@@ -1202,17 +1242,19 @@ def _relatorio_mensal(user: dict, cnpj: str):
         total_icms_pago = df["Pago"].sum()
         m4.metric("Total ICMS Pago", f"R$ {total_icms_pago:,.2f}")
 
+        col_fmt = {
+            "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
+            "ICMS": st.column_config.NumberColumn(format="R$ %.2f"),
+            "Pago": st.column_config.NumberColumn(format="R$ %.2f"),
+        }
+
         if not pagos.empty:
             st.markdown("##### Notas Pagas")
             st.dataframe(
                 pagos.drop(columns=["Chave"]),
                 use_container_width=True,
                 hide_index=True,
-                column_config={
-                    "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
-                    "ICMS": st.column_config.NumberColumn(format="R$ %.2f"),
-                    "Pago": st.column_config.NumberColumn(format="R$ %.2f"),
-                },
+                column_config=col_fmt,
             )
 
         if not pendentes.empty:
@@ -1221,11 +1263,7 @@ def _relatorio_mensal(user: dict, cnpj: str):
                 pendentes.drop(columns=["Chave"]),
                 use_container_width=True,
                 hide_index=True,
-                column_config={
-                    "Valor NF": st.column_config.NumberColumn(format="R$ %.2f"),
-                    "ICMS": st.column_config.NumberColumn(format="R$ %.2f"),
-                    "Pago": st.column_config.NumberColumn(format="R$ %.2f"),
-                },
+                column_config=col_fmt,
             )
 
         csv = df.to_csv(index=False).encode("utf-8-sig")
