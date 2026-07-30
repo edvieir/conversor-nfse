@@ -390,6 +390,66 @@ def _segundos_restantes(proxima_consulta: str | None) -> int:
         return 0
 
 
+def _fmt_cnpj_local(c: str) -> str:
+    c = "".join(d for d in c if d.isdigit())
+    if len(c) == 14:
+        return f"{c[:2]}.{c[2:5]}.{c[5:8]}/{c[8:12]}-{c[12:]}"
+    return c
+
+
+def _secao_filiais(cnpj_matriz: str):
+    """Gerencia filiais vinculadas à matriz."""
+    from db.database import listar_filiais, adicionar_filial, remover_filial
+
+    filiais = listar_filiais(cnpj_matriz)
+
+    with st.expander(f"Filiais cadastradas ({len(filiais)})", expanded=False):
+        st.caption(
+            "Cadastre as filiais para que o sistema também baixe as NF-e delas. "
+            "O certificado da matriz permite consultar NFs de todas as filiais (mesma raiz CNPJ)."
+        )
+
+        if filiais:
+            for f in filiais:
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    nome = f["nome_filial"] or "Filial"
+                    st.text(f"{_fmt_cnpj_local(f['cnpj_filial'])}  —  {nome}")
+                with c2:
+                    if st.button("Remover", key=f"rm_fil_{f['cnpj_filial']}"):
+                        remover_filial(cnpj_matriz, f["cnpj_filial"])
+                        st.rerun()
+
+        raiz = cnpj_matriz[:8]
+        c1, c2, c3 = st.columns([2, 2, 1])
+        with c1:
+            novo_cnpj = st.text_input(
+                "CNPJ da filial",
+                placeholder="00.000.000/0002-00",
+                key="siga_novo_cnpj_fil",
+            )
+        with c2:
+            novo_nome = st.text_input(
+                "Nome (opcional)",
+                placeholder="Filial Centro",
+                key="siga_novo_nome_fil",
+            )
+        with c3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Adicionar", key="siga_btn_add_fil"):
+                cnpj_limpo = "".join(d for d in novo_cnpj if d.isdigit())
+                if len(cnpj_limpo) != 14:
+                    st.error("CNPJ inválido (14 dígitos).")
+                elif cnpj_limpo[:8] != raiz:
+                    st.error(f"CNPJ não pertence à mesma raiz ({raiz}).")
+                elif cnpj_limpo == cnpj_matriz:
+                    st.error("Este é o CNPJ da própria matriz.")
+                else:
+                    adicionar_filial(cnpj_matriz, cnpj_limpo, novo_nome.strip())
+                    st.success(f"Filial {_fmt_cnpj_local(cnpj_limpo)} adicionada.")
+                    st.rerun()
+
+
 def _secao_baixar_tudo(user: dict, cnpj: str, razao_social: str):
     """Baixa o XML completo (NF-e + NFC-e, emitidas e recebidas) via distribuição
     NSU da SEFAZ Nacional -- mesmo motor da página NFE/NFCE, sem o limite de
@@ -439,10 +499,18 @@ def _secao_baixar_tudo(user: dict, cnpj: str, razao_social: str):
             try:
                 from core.nfe_sefaz import executar_consulta_sefaz
 
+                from db.database import listar_filiais
+                empresas_lista = [{"cnpj": cnpj, "nome": razao_social}]
+                for fil in listar_filiais(cnpj):
+                    empresas_lista.append({
+                        "cnpj": fil["cnpj_filial"],
+                        "nome": fil["nome_filial"] or f"Filial {fil['cnpj_filial']}",
+                    })
+
                 zip_bytes, log_final = executar_consulta_sefaz(
                     pfx_bytes=pfx_bytes,
                     pfx_senha=pfx_senha,
-                    empresas=[{"cnpj": cnpj, "nome": razao_social}],
+                    empresas=empresas_lista,
                     ambiente="1",
                     uf="CE",
                     data_ini=data_ini,
@@ -698,6 +766,8 @@ def render():
     razao_sel = next(c["razao_social"] for c in certs if c["cnpj"] == cnpj_sel)
 
     st.markdown("---")
+
+    _secao_filiais(cnpj_sel)
 
     _secao_baixar_tudo(user, cnpj_sel, razao_sel)
 

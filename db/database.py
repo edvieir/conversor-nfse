@@ -226,6 +226,16 @@ def _init_pg():
                 UNIQUE(cnpj, indicador, chave)
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS filiais (
+                id           SERIAL PRIMARY KEY,
+                cnpj_matriz  TEXT NOT NULL,
+                cnpj_filial  TEXT NOT NULL,
+                nome_filial  TEXT DEFAULT '',
+                criado_em    TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cnpj_matriz, cnpj_filial)
+            )
+        """)
 
 
 def _init_sqlite():
@@ -343,6 +353,14 @@ def _init_sqlite():
                 contraparte_cnpj TEXT DEFAULT '',
                 atualizado_em    TEXT DEFAULT (datetime('now','localtime')),
                 UNIQUE(cnpj, indicador, chave)
+            );
+            CREATE TABLE IF NOT EXISTS filiais (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj_matriz  TEXT NOT NULL,
+                cnpj_filial  TEXT NOT NULL,
+                nome_filial  TEXT DEFAULT '',
+                criado_em    TEXT DEFAULT (datetime('now','localtime')),
+                UNIQUE(cnpj_matriz, cnpj_filial)
             );
         """)
     try:
@@ -912,6 +930,40 @@ def listar_auto_sync_ativos() -> list[dict]:
         "SELECT cnpj, username FROM nfe_auto_sync WHERE ativo=1",
         fetch_all=True,
     ) or []
+
+
+# ── CRUD — Filiais ───────────────────────────────────────────────────────────
+
+def listar_filiais(cnpj_matriz: str) -> list[dict]:
+    ph = "%s" if _PG else "?"
+    return _exec(
+        f"SELECT cnpj_filial, nome_filial FROM filiais WHERE cnpj_matriz={ph} ORDER BY cnpj_filial",
+        (cnpj_matriz,), fetch_all=True,
+    ) or []
+
+
+def adicionar_filial(cnpj_matriz: str, cnpj_filial: str, nome_filial: str = ""):
+    ph = "%s" if _PG else "?"
+    if _PG:
+        _exec(
+            f"INSERT INTO filiais (cnpj_matriz, cnpj_filial, nome_filial) VALUES ({ph},{ph},{ph}) "
+            f"ON CONFLICT (cnpj_matriz, cnpj_filial) DO UPDATE SET nome_filial=EXCLUDED.nome_filial",
+            (cnpj_matriz, cnpj_filial, nome_filial),
+        )
+    else:
+        _exec(
+            f"INSERT INTO filiais (cnpj_matriz, cnpj_filial, nome_filial) VALUES ({ph},{ph},{ph}) "
+            f"ON CONFLICT(cnpj_matriz, cnpj_filial) DO UPDATE SET nome_filial=excluded.nome_filial",
+            (cnpj_matriz, cnpj_filial, nome_filial),
+        )
+
+
+def remover_filial(cnpj_matriz: str, cnpj_filial: str):
+    ph = "%s" if _PG else "?"
+    _exec(
+        f"DELETE FROM filiais WHERE cnpj_matriz={ph} AND cnpj_filial={ph}",
+        (cnpj_matriz, cnpj_filial),
+    )
 
 
 # ── CRUD — Resultados NF-e (auto-sync) ───────────────────────────────────────

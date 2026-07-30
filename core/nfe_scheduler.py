@@ -48,6 +48,7 @@ def main():
 
     from db.database import (
         listar_auto_sync_ativos, carregar_certificado, get_nsu_cnpj,
+        listar_filiais,
     )
 
     ativos = listar_auto_sync_ativos()
@@ -83,6 +84,15 @@ def main():
 
         pfx_bytes, pfx_senha = resultado_cert
 
+        empresas_lista = [{"cnpj": cnpj, "nome": cnpj}]
+        for fil in listar_filiais(cnpj):
+            empresas_lista.append({
+                "cnpj": fil["cnpj_filial"],
+                "nome": fil["nome_filial"] or f"Filial {fil['cnpj_filial']}",
+            })
+        if len(empresas_lista) > 1:
+            _log(f"  [{cnpj}] + {len(empresas_lista)-1} filial(is) cadastrada(s)")
+
         try:
             from core.nfe_sefaz import executar_consulta_sefaz
 
@@ -95,7 +105,7 @@ def main():
             _zip, log_final = executar_consulta_sefaz(
                 pfx_bytes=pfx_bytes,
                 pfx_senha=pfx_senha,
-                empresas=[{"cnpj": cnpj, "nome": cnpj}],
+                empresas=empresas_lista,
                 ambiente="1",
                 uf="CE",
                 data_ini=None,
