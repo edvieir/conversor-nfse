@@ -985,6 +985,129 @@ def _is_interestadual(chave: str) -> bool:
     return len(chave) == 44 and chave[:2] != "23"
 
 
+def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
+                          dt_inicio, dt_fim) -> bytes:
+    """Gera PDF no padrão SITRAM com totais e lançamentos."""
+    from fpdf import FPDF
+
+    class RelatorioPDF(FPDF):
+        def header(self):
+            self.set_font("Helvetica", "B", 14)
+            self.set_text_color(0, 100, 60)
+            self.cell(0, 8, "SITRAM - SISTEMA DE TRÂNSITO DE MERCADORIAS", ln=True, align="C")
+            self.set_font("Helvetica", "", 9)
+            self.set_text_color(80, 80, 80)
+            self.cell(0, 5, "Relatório de Pagamento de ICMS — Fiscal Hub", ln=True, align="C")
+            self.ln(3)
+            self.set_draw_color(0, 100, 60)
+            self.set_line_width(0.5)
+            self.line(10, self.get_y(), self.w - 10, self.get_y())
+            self.ln(4)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("Helvetica", "I", 7)
+            self.set_text_color(150, 150, 150)
+            import datetime
+            ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+            self.cell(0, 10, f"Gerado em {ts}  —  Página {self.page_no()}/{{nb}}", align="C")
+
+    pdf = RelatorioPDF("L", "mm", "A4")
+    pdf.alias_nb_pages()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # -- Info da empresa --
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(40, 6, "Empresa:", ln=False)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"{razao}  ({_fmt_cnpj(cnpj)})", ln=True)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(40, 6, "Período:", ln=False)
+    pdf.set_font("Helvetica", "", 10)
+    di = dt_inicio.strftime("%d/%m/%Y") if hasattr(dt_inicio, "strftime") else str(dt_inicio)
+    df_str = dt_fim.strftime("%d/%m/%Y") if hasattr(dt_fim, "strftime") else str(dt_fim)
+    pdf.cell(0, 6, f"{di} a {df_str}", ln=True)
+    pdf.ln(4)
+
+    # -- Totais por Regime --
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(0, 80, 50)
+    pdf.cell(0, 7, "Totais por Regime", ln=True)
+    pdf.set_text_color(0, 0, 0)
+
+    total_icms = df["ICMS"].sum()
+    total_pago = df["Pago"].sum()
+    total_diff = total_icms - total_pago
+    n_pagos = len(df[df["Situação"] == "Pago"])
+    n_pend = len(df[df["Situação"] == "Pendente"])
+
+    hdr = ["Regime", "Qtd Notas", "Total de ICMS", "Total Pago", "Total da Diferença"]
+    w_totais = [80, 30, 45, 45, 50]
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(230, 240, 235)
+    for i, h in enumerate(hdr):
+        pdf.cell(w_totais[i], 7, h, border=1, fill=True, align="C")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(w_totais[0], 7, "1023 (ANTC) ICMS ANTECIPADO", border=1)
+    pdf.cell(w_totais[1], 7, str(len(df)), border=1, align="C")
+    pdf.cell(w_totais[2], 7, f"R$ {total_icms:,.2f}", border=1, align="R")
+    pdf.cell(w_totais[3], 7, f"R$ {total_pago:,.2f}", border=1, align="R")
+    pdf.cell(w_totais[4], 7, f"R$ {total_diff:,.2f}", border=1, align="R")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "B", 9)
+    x_recolher = sum(w_totais[:4])
+    pdf.cell(x_recolher, 7, "Total a Recolher:", align="R")
+    pdf.cell(w_totais[4], 7, f"R$ {total_diff:,.2f}", border=1, align="R")
+    pdf.ln(10)
+
+    # -- Lançamentos --
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(0, 80, 50)
+    pdf.cell(0, 7, f"Lançamentos  ({n_pagos} paga(s), {n_pend} pendente(s))", ln=True)
+    pdf.set_text_color(0, 0, 0)
+
+    cols = ["Emissão", "NF", "UF", "Emitente", "Valor NF", "ICMS", "Pago", "Status", "Situação"]
+    w = [22, 16, 10, 80, 28, 25, 25, 38, 20]
+
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_fill_color(230, 240, 235)
+    for i, c in enumerate(cols):
+        pdf.cell(w[i], 6, c, border=1, fill=True, align="C")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 7)
+    for _, row in df.iterrows():
+        sit = row["Situação"]
+        if sit == "Pago":
+            pdf.set_fill_color(232, 255, 232)
+        else:
+            pdf.set_fill_color(255, 245, 230)
+
+        vals = [
+            str(row.get("Emissão", "")),
+            str(row.get("NF", "")),
+            str(row.get("UF", "")),
+            str(row.get("Emitente", ""))[:42],
+            f"R$ {row.get('Valor NF', 0):,.2f}",
+            f"R$ {row.get('ICMS', 0):,.2f}",
+            f"R$ {row.get('Pago', 0):,.2f}",
+            str(row.get("Status", "")),
+            sit,
+        ]
+        aligns = ["C", "C", "C", "L", "R", "R", "R", "C", "C"]
+        for i, v in enumerate(vals):
+            pdf.cell(w[i], 6, v, border=1, fill=True, align=aligns[i])
+        pdf.ln()
+
+    return pdf.output()
+
+
 def _relatorio_mensal(user: dict, cnpj: str):
     """Relatório mensal: busca NF-e do período no banco e verifica status no SITRAM."""
     import datetime
@@ -1162,13 +1285,29 @@ def _relatorio_mensal(user: dict, cnpj: str):
                 column_config=col_fmt,
             )
 
-        csv = df.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "Exportar Relatório CSV",
-            data=csv,
-            file_name=f"sitram_relatorio_{dt_inicio}_{dt_fim}.csv",
-            mime="text/csv",
-        )
+        col_csv, col_pdf = st.columns(2)
+        with col_csv:
+            csv = df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "Exportar CSV",
+                data=csv,
+                file_name=f"sitram_relatorio_{dt_inicio}_{dt_fim}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with col_pdf:
+            razao = next(
+                (c["razao_social"] for c in listar_certificados(user["username"]) if c["cnpj"] == cnpj),
+                cnpj,
+            )
+            pdf_bytes = _gerar_pdf_relatorio(df, razao, cnpj, dt_inicio, dt_fim)
+            st.download_button(
+                "Exportar PDF",
+                data=pdf_bytes,
+                file_name=f"sitram_relatorio_{dt_inicio}_{dt_fim}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
 
 # ── Render principal ─────────────────────────────────────────────────────────
