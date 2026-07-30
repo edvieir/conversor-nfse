@@ -990,14 +990,17 @@ def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
     """Gera PDF no padrão SITRAM com totais e lançamentos."""
     from fpdf import FPDF
 
+    def _safe(txt: str) -> str:
+        return (txt or "").replace("—", "-").replace("–", "-").replace("’", "'")
+
     class RelatorioPDF(FPDF):
         def header(self):
             self.set_font("Helvetica", "B", 14)
             self.set_text_color(0, 100, 60)
-            self.cell(0, 8, "SITRAM - SISTEMA DE TRÂNSITO DE MERCADORIAS", ln=True, align="C")
+            self.cell(0, 8, "SITRAM - SISTEMA DE TRANSITO DE MERCADORIAS", ln=True, align="C")
             self.set_font("Helvetica", "", 9)
             self.set_text_color(80, 80, 80)
-            self.cell(0, 5, "Relatório de Pagamento de ICMS — Fiscal Hub", ln=True, align="C")
+            self.cell(0, 5, "Relatorio de Pagamento de ICMS - Fiscal Hub", ln=True, align="C")
             self.ln(3)
             self.set_draw_color(0, 100, 60)
             self.set_line_width(0.5)
@@ -1010,7 +1013,7 @@ def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
             self.set_text_color(150, 150, 150)
             import datetime
             ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-            self.cell(0, 10, f"Gerado em {ts}  —  Página {self.page_no()}/{{nb}}", align="C")
+            self.cell(0, 10, f"Gerado em {ts} - Pagina {self.page_no()}/{{nb}}", align="C")
 
     pdf = RelatorioPDF("L", "mm", "A4")
     pdf.alias_nb_pages()
@@ -1022,10 +1025,10 @@ def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
     pdf.set_text_color(0, 0, 0)
     pdf.cell(40, 6, "Empresa:", ln=False)
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 6, f"{razao}  ({_fmt_cnpj(cnpj)})", ln=True)
+    pdf.cell(0, 6, _safe(f"{razao}  ({_fmt_cnpj(cnpj)})"), ln=True)
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(40, 6, "Período:", ln=False)
+    pdf.cell(40, 6, "Periodo:", ln=False)
     pdf.set_font("Helvetica", "", 10)
     di = dt_inicio.strftime("%d/%m/%Y") if hasattr(dt_inicio, "strftime") else str(dt_inicio)
     df_str = dt_fim.strftime("%d/%m/%Y") if hasattr(dt_fim, "strftime") else str(dt_fim)
@@ -1072,7 +1075,7 @@ def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
     pdf.cell(0, 7, f"Lançamentos  ({n_pagos} paga(s), {n_pend} pendente(s))", ln=True)
     pdf.set_text_color(0, 0, 0)
 
-    cols = ["Emissão", "NF", "UF", "Emitente", "Valor NF", "ICMS", "Pago", "Status", "Situação"]
+    cols = ["Emissao", "NF", "UF", "Emitente", "Valor NF", "ICMS", "Pago", "Status", "Situacao"]
     w = [22, 16, 10, 80, 28, 25, 25, 38, 20]
 
     pdf.set_font("Helvetica", "B", 7)
@@ -1083,22 +1086,22 @@ def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
 
     pdf.set_font("Helvetica", "", 7)
     for _, row in df.iterrows():
-        sit = row["Situação"]
+        sit = str(row.get("Situação", ""))
         if sit == "Pago":
             pdf.set_fill_color(232, 255, 232)
         else:
             pdf.set_fill_color(255, 245, 230)
 
         vals = [
-            str(row.get("Emissão", "")),
-            str(row.get("NF", "")),
-            str(row.get("UF", "")),
-            str(row.get("Emitente", ""))[:42],
+            _safe(str(row.get("Emissão", ""))),
+            _safe(str(row.get("NF", ""))),
+            _safe(str(row.get("UF", ""))),
+            _safe(str(row.get("Emitente", "")))[:42],
             f"R$ {row.get('Valor NF', 0):,.2f}",
             f"R$ {row.get('ICMS', 0):,.2f}",
             f"R$ {row.get('Pago', 0):,.2f}",
-            str(row.get("Status", "")),
-            sit,
+            _safe(str(row.get("Status", ""))),
+            _safe(sit),
         ]
         aligns = ["C", "C", "C", "L", "R", "R", "R", "C", "C"]
         for i, v in enumerate(vals):
