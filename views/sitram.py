@@ -1108,7 +1108,7 @@ def _gerar_pdf_relatorio(df: pd.DataFrame, razao: str, cnpj: str,
             pdf.cell(w[i], 6, v, border=1, fill=True, align=aligns[i])
         pdf.ln()
 
-    return pdf.output()
+    return bytes(pdf.output())
 
 
 def _relatorio_mensal(user: dict, cnpj: str):
