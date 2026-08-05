@@ -1,9 +1,8 @@
 #!/bin/sh
-# Fixa a porta — impede qualquer override
-export PORT=8080
-export STREAMLIT_SERVER_PORT=8080
+# Remove variavel que Railway injeta com valor invalido
+unset STREAMLIT_SERVER_PORT
 
-# Se o DB não existir, descomprime do seed
+# Se o DB nao existir, descomprime do seed
 if [ ! -f /app/data/conversor.db ]; then
     echo "[init] Descomprimindo banco de dados..."
     gunzip -c /app/data-seed/conversor.db.gz > /app/data/conversor.db
