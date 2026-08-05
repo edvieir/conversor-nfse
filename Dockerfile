@@ -7,6 +7,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Guarda o DB comprimido como seed para volumes vazios
+RUN mkdir -p /app/data-seed && cp /app/data/conversor.db.gz /app/data-seed/conversor.db.gz
+
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
 EXPOSE 8080
 
-CMD ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--server.fileWatcherType=none"]
+ENTRYPOINT ["/app/entrypoint.sh"]

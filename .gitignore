@@ -49,4 +49,3 @@ ssh-key-*.key
 
 # Banco de dados local (SQLite)
 data/*.db
-!data/conversor.db
