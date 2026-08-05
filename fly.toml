@@ -1,3 +1,8 @@
+# fly.toml app configuration file generated for conversor-nfse on 2026-08-05T19:19:46Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
 app = 'conversor-nfse'
 primary_region = 'gru'
 
@@ -14,3 +19,4 @@ primary_region = 'gru'
   memory = '256mb'
   cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
