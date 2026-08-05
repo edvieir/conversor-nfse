@@ -1,0 +1,14 @@
+data/supabase_export/
+__pycache__/
+*.pyc
+.git/
+.github/
+*.xml
+*.jpeg
+*.ico
+*.fs
+*.pdf
+CODIGO_COMPLETO.py
+Untitled-1.py
+launcher_web.py
+SPEC_CONVERSOR_NFSE.md
