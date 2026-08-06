@@ -170,6 +170,65 @@ def _is_cancelada(root) -> bool:
     return False
 
 
+# Código do evento vem como nome do elemento: <e101101>, <e105102>, etc.
+_RE_COD_EVENTO = re.compile(r"^e(\d{6})$")
+
+# 101101 = "Cancelamento de NFS-e", confirmado em produção. O prefixo cobre as
+# demais variantes do mesmo grupo (cancelamento por substituição, etc.).
+_PREFIXO_EVENTO_CANCELAMENTO = "1011"
+
+
+def _chave_evento_cancelamento(root) -> str:
+    """
+    Se o <evento> for de cancelamento, devolve a chave da NFS-e que ele cancela.
+    Caso contrário devolve string vazia.
+
+    O XML da NFS-e NÃO muda quando a nota é cancelada — segue com cStat=100 para
+    sempre. O cancelamento chega só neste documento separado, que aponta a nota
+    alvo em <chNFSe>. Por isso é a única fonte possível dessa informação.
+    """
+    cancelamento = False
+    for el in root.iter():
+        m = _RE_COD_EVENTO.match(el.tag.split("}")[-1])
+        if not m:
+            continue
+        if m.group(1).startswith(_PREFIXO_EVENTO_CANCELAMENTO):
+            cancelamento = True
+            break
+        # Rede de segurança para códigos fora do prefixo conhecido
+        desc = next(
+            (f.text or "" for f in el.iter() if f.tag.split("}")[-1] == "xDesc"), ""
+        )
+        if "cancel" in desc.lower():
+            cancelamento = True
+            break
+
+    if not cancelamento:
+        return ""
+
+    el_ch = next((e for e in root.iter() if e.tag.split("}")[-1] == "chNFSe"), None)
+    return el_ch.text.strip() if el_ch is not None and el_ch.text else ""
+
+
+def _chave_infnfse(xml_bytes: bytes) -> str:
+    """
+    Chave da NFS-e derivada do atributo Id de <infNFSe>, que vem prefixado com
+    'NFS'. Serve de segunda via de comparação caso o ChaveAcesso devolvido pela
+    API não bata exatamente com o <chNFSe> do evento.
+    """
+    import defusedxml.ElementTree as _ET
+
+    try:
+        root = _ET.fromstring(xml_bytes)
+    except Exception:
+        return ""
+    el = next((e for e in root.iter() if e.tag.split("}")[-1] == "infNFSe"), None)
+    if el is None:
+        return ""
+    ident = (el.get("Id") or "").strip()
+    return ident[3:] if ident.startswith("NFS") else ident
+
+
 def _nome_arquivo(n_nfse: str, x_nome: str, cod_mun: str = "") -> str:
     """Gera identificador legível: {cod_mun}_{nNFSe}_{fornecedor_sanitizado}"""
     nome = re.sub(r"^\d[\d.\-/]+\s*", "", x_nome).strip()
@@ -340,6 +399,11 @@ def baixar_xmls_nfse(
         # tupla: (chave, xml_bytes, chave_pdf, cancelada)
         xmls_aprovados: list[tuple[str, bytes, str, bool]] = []
 
+        # Chaves das notas canceladas, colhidas dos documentos <evento>.
+        # A marcação só pode acontecer depois de varrer toda a fila: o evento
+        # chega num NSU maior que o da nota, às vezes em outro lote.
+        chaves_canceladas: set[str] = set()
+
         import defusedxml.ElementTree as _ET2
 
         while True:
@@ -393,10 +457,19 @@ def baixar_xmls_nfse(
                     try:
                         _root = _ET2.fromstring(xml_bytes)
 
-                        # ignora documentos que não são NFS-e (eventos: cancelamento, substituição, etc.)
+                        # Eventos não entram no ZIP, mas o de cancelamento carrega a
+                        # única indicação de que a nota foi cancelada. Colhido aqui,
+                        # antes do filtro de competência: uma nota de julho cancelada
+                        # em agosto gera evento datado de agosto, que o filtro
+                        # descartaria — e a nota nunca seria marcada.
                         _root_local = _root.tag.split("}")[-1] if "}" in _root.tag else _root.tag
                         if _root_local == "evento":
-                            log.append(f"    -> evento administrativo (não é NFS-e), ignorado")
+                            _ch_canc = _chave_evento_cancelamento(_root)
+                            if _ch_canc:
+                                chaves_canceladas.add(_ch_canc)
+                                log.append(f"    -> evento de CANCELAMENTO da nota {_ch_canc}")
+                            else:
+                                log.append(f"    -> evento administrativo, ignorado")
                             continue
 
                         # determina papel (tomados/prestados) para filtro e pasta
@@ -510,6 +583,24 @@ def baixar_xmls_nfse(
             if log_cb: log_cb(log)
             if progress_cb:
                 progress_cb(min(lote_num / (lote_num + 3), 0.5))
+
+        # ── Aplica os cancelamentos colhidos dos eventos ─────────────────────
+        if chaves_canceladas:
+            marcadas = 0
+            for _i, _item in enumerate(xmls_aprovados):
+                _chave, _xml, _ch_pdf, _canc, _papel, _nome = _item
+                if _canc:
+                    continue
+                if (_chave not in chaves_canceladas
+                        and _chave_infnfse(_xml) not in chaves_canceladas):
+                    continue
+                xmls_aprovados[_i] = (_chave, _xml, _ch_pdf, True, _papel, _nome)
+                marcadas += 1
+            log.append(
+                f"  {len(chaves_canceladas)} evento(s) de cancelamento -> "
+                f"{marcadas} nota(s) marcada(s) como cancelada(s)."
+            )
+            if log_cb: log_cb(log)
 
         total_canc = sum(1 for _, _, _, c, _, _ in xmls_aprovados if c)
         log.append(f"  Total de NFS-e no periodo: {total_ok} ({total_canc} cancelada(s))")

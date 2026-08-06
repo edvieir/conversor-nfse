@@ -355,10 +355,16 @@ def processar_xlsx_sped(uploaded_files, im: str, competencia_filtro: str = ""):
 
     def _is_cancelada_xml(xml_path):
         """
+        Filtro 0: sufixo _CANC no nome do arquivo — o XML da nota nunca registra
+                  o cancelamento (segue com cStat=100), então para arquivos
+                  soltos esse é o único sinal. Ver core/nfse_status.py.
         Filtro 1: elemento <nfseCanc> presente.
         Filtro 2: cStat em {101, 108} (cancelamento NFS-e Nacional).
         cStat=107 = NFS-e do MEI Gerada = AUTORIZADA.
         """
+        from core.nfse_status import nome_indica_cancelada
+        if nome_indica_cancelada(xml_path):
+            return True
         _cstat_canc = {"101", "108"}
         import xml.etree.ElementTree as ET
         try:

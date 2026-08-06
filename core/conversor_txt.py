@@ -283,12 +283,18 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
 
     _CSTAT_CANCELADO_TXT = {"101", "108"}
 
-    def _is_cancelada_bytes(content: bytes) -> bool:
+    def _is_cancelada_bytes(content: bytes, nome_arquivo: str = "") -> bool:
         """
+        Filtro 0: sufixo _CANC no nome do arquivo — o XML da nota nunca registra
+                  o cancelamento (segue com cStat=100), então para arquivos
+                  soltos esse é o único sinal. Ver core/nfse_status.py.
         Filtro 1: elemento <nfseCanc> presente.
         Filtro 2: cStat em {101, 108} (cancelamento NFS-e Nacional).
         cStat=107 = NFS-e do MEI Gerada = AUTORIZADA.
         """
+        from core.nfse_status import nome_indica_cancelada
+        if nome_indica_cancelada(nome_arquivo):
+            return True
         try:
             root = _ET.fromstring(_re.sub(rb'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', b'&amp;', content.replace(b'&#13;', b'')))
             if any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter()):
@@ -312,7 +318,7 @@ def processar_uploads(uploaded_files, im: str, modo: str, competencia_filtro: st
                 if comp and comp != competencia_filtro:
                     ignorados += 1
                     continue
-            if _is_cancelada_bytes(content):
+            if _is_cancelada_bytes(content, uf.name):
                 canc_ignorados += 1
                 continue
             # TXT Fortaleza: ignora emitentes PJ que não sejam MEI ou Pessoa Física

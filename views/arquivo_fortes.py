@@ -139,7 +139,7 @@ def render():
                 for arq in arquivos:
                     try:
                         xml_bytes = arq.read()
-                        nota = parse_nfse_xml(xml_bytes)
+                        nota = parse_nfse_xml(xml_bytes, arq.name)
                         notas.append(nota)
                     except Exception as exc:
                         erros.append(f"{arq.name}: {exc}")

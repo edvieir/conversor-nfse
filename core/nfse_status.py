@@ -18,9 +18,26 @@ TABELA DE STATUS (cStat) — NFS-e Nacional
 
 ATENÇÃO: cStat=107 significa AUTORIZADA (nota do MEI), NÃO cancelada.
          Tratá-la como cancelamento é um erro comum.
+
+──────────────────────────────────────────────────────────────────────────────
+LIMITE IMPORTANTE DESTA VERIFICAÇÃO
+──────────────────────────────────────────────────────────────────────────────
+O XML da NFS-e NÃO é reescrito quando a nota é cancelada: ela permanece com
+cStat=100 para sempre. Na distribuição de DFe o cancelamento chega como um
+DOCUMENTO SEPARADO, com raiz <evento>, que aponta a nota em <chNFSe> e traz o
+código do evento como nome do elemento (ex: <e101101>).
+
+Ou seja: olhando só o XML da nota é IMPOSSÍVEL saber que ela foi cancelada.
+Quem baixa da API deve cruzar os eventos — é o que core/api_nfse.py faz.
+
+Para XMLs já baixados e soltos, o único sinal disponível é o nome do arquivo:
+o downloader grava as canceladas com o sufixo _CANC. Daí `nome_indica_cancelada`.
 """
 
 import xml.etree.ElementTree as ET
+
+# Sufixo que core/api_nfse.py aplica ao nome dos arquivos na pasta cancelados/
+SUFIXO_ARQUIVO_CANCELADO = "_CANC"
 
 # Códigos que indicam nota AUTORIZADA
 CSTAT_AUTORIZADO = {
@@ -77,11 +94,29 @@ def is_cancelada_bytes(xml_bytes: bytes) -> bool:
         return False
 
 
+def nome_indica_cancelada(nome_arquivo: str) -> bool:
+    """
+    True se o NOME do arquivo marcar a nota como cancelada (sufixo _CANC).
+
+    É o único sinal que sobrevive quando o XML sai do ZIP e passa a circular
+    solto, já que o conteúdo da nota nunca registra o cancelamento.
+    Aceita caminho completo ou apenas o nome.
+    """
+    if not nome_arquivo:
+        return False
+    base = nome_arquivo.replace("\\", "/").rsplit("/", 1)[-1]
+    raiz = base.rsplit(".", 1)[0]
+    return raiz.upper().endswith(SUFIXO_ARQUIVO_CANCELADO)
+
+
 def is_cancelada_arquivo(xml_path: str) -> bool:
     """
     Versão que recebe o caminho do arquivo XML no disco.
+    Considera tanto o conteúdo quanto o sufixo _CANC no nome.
     Retorna False em caso de erro de leitura ou parse.
     """
+    if nome_indica_cancelada(xml_path):
+        return True
     try:
         root = ET.parse(xml_path).getroot()
         return is_cancelada(root)

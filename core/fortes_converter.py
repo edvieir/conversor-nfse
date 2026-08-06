@@ -6,6 +6,8 @@ import re as _re
 import defusedxml.ElementTree as ET
 from datetime import date
 
+from core.nfse_status import nome_indica_cancelada
+
 
 def _sanitize_xml_bytes(data: bytes) -> bytes:
     """Remove &#13; e escapa & soltos que causam 'invalid token' no Expat."""
@@ -62,13 +64,18 @@ def _nota_cancelada(root) -> bool:
     return False
 
 
-def parse_nfse_xml(xml_bytes: bytes) -> dict:
+def parse_nfse_xml(xml_bytes: bytes, nome_arquivo: str = "") -> dict:
+    """
+    `nome_arquivo` é opcional mas importante: o XML da NFS-e nunca registra o
+    cancelamento (segue com cStat=100), então para arquivos soltos o sufixo
+    _CANC no nome é o único sinal disponível. Ver core/nfse_status.py.
+    """
     try:
         root = ET.fromstring(_sanitize_xml_bytes(xml_bytes))
     except ET.ParseError as exc:
         raise ValueError(f"XML inválido: {exc}") from exc
 
-    cancelada = _nota_cancelada(root)
+    cancelada = _nota_cancelada(root) or nome_indica_cancelada(nome_arquivo)
 
     inf = root.find(f"{{{_NS}}}infNFSe")
     if inf is None:
