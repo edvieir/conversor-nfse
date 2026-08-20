@@ -49,3 +49,6 @@ ssh-key-*.key
 
 # Banco de dados local (SQLite)
 data/*.db
+
+# Excecao: as skills do motor de prospeccao fazem parte do projeto
+!rodrigues-prospeccao/.claude/

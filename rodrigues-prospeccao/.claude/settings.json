@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Read(./**)",
+      "Write(./saidas/**)",
+      "Edit(./scripts/**)"
+    ],
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}
