@@ -27,6 +27,7 @@ TIMEOUT   = 90
 _RETRIES        = 3
 _PDF_WORKERS    = 3   # workers paralelos na fila de retry
 _PDF_MAX_TRIES  = 10  # máx tentativas por PDF antes de desistir
+_PDF_FORA_LIMITE = 12 # respostas 502/503 seguidas que caracterizam servico fora
 
 
 def _limpar_cnpj(cnpj: str) -> str:
@@ -264,8 +265,15 @@ def _consultar_lote(cert_path: str, key_path: str, cnpj: str, nsu: int) -> dict 
 _DANFSE_URL = "https://adn.nfse.gov.br/danfse"
 
 
-def _tentar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str) -> tuple[bytes | None, bool]:
-    """Uma única tentativa HTTP. Retorna (pdf_bytes, deve_retry)."""
+def _tentar_danfse(
+    cert_path: str, key_path: str, cnpj: str, chave: str
+) -> tuple[bytes | None, bool, bool]:
+    """Uma única tentativa HTTP.
+
+    Retorna (pdf_bytes, deve_retry, servico_fora). `servico_fora` distingue
+    "o serviço de DANFSe está indisponível" de "esta nota falhou": só o
+    primeiro justifica desistir do lote inteiro.
+    """
     url = f"{_DANFSE_URL}/{chave}"
     try:
         with _make_session(cert_path, key_path) as s:
@@ -274,14 +282,14 @@ def _tentar_danfse(cert_path: str, key_path: str, cnpj: str, chave: str) -> tupl
         if resp.status_code == 200:
             ct = resp.headers.get("Content-Type", "")
             if "pdf" in ct.lower() or len(resp.content) > 500:
-                return resp.content, False
-            return None, False  # resposta inesperada mas definitiva
+                return resp.content, False, False
+            return None, False, False  # resposta inesperada mas definitiva
         if resp.status_code == 404:
-            return None, False  # chave nao disponivel — definitivo
-        # 429, 502, 503 ou qualquer outro erro transitorio
-        return None, True
+            return None, False, False  # chave nao disponivel — definitivo
+        # 502/503 = balanceador sem backend; 429 = excesso de requisicoes
+        return None, True, resp.status_code in (502, 503)
     except Exception:
-        return None, True  # timeout / erro de rede — pode tentar de novo
+        return None, True, False  # timeout / erro de rede — pode tentar de novo
 
 
 def _baixar_pdfs_paralelo(
@@ -292,11 +300,13 @@ def _baixar_pdfs_paralelo(
     log: list,
     log_lock: threading.Lock,
     log_cb=None,
-) -> dict[str, bytes]:
+) -> tuple[dict[str, bytes], bool]:
     """Baixa PDFs com fila de retry compartilhada entre N workers.
 
     Quando um PDF falha, volta para a fila (outros workers continuam).
     Muito mais rapido que retry sequencial para muitas notas.
+
+    Retorna (pdfs_por_nome, servico_indisponivel).
     """
     from queue import Queue, Empty
 
@@ -304,6 +314,13 @@ def _baixar_pdfs_paralelo(
     res_lock   = threading.Lock()
     total      = len(tarefas)
     fila: Queue = Queue()
+
+    # Corte de circuito: quando o serviço de DANFSe cai, TODA requisicao volta
+    # 502/503. Sem isso o lote inteiro percorre 10 tentativas por nota, em 3
+    # ondas — milhares de chamadas inuteis. Uma resposta boa zera o contador,
+    # entao instabilidade passageira nao abre o circuito.
+    circuito = threading.Event()
+    fora_seguidos = [0]
 
     # (indice_exibicao, chave, nome_arquivo, tentativas_restantes)
     for i, (chave, nome, _xml_b) in enumerate(tarefas):
@@ -320,8 +337,37 @@ def _baixar_pdfs_paralelo(
 
             deve_retry = False
             try:
-                pdf, retry = _tentar_danfse(cert_path, key_path, cnpj, chave)
+                if circuito.is_set():
+                    # Serviço fora: nao gasta mais tentativas, o fallback local cobre.
+                    # task_done fica por conta do finally.
+                    with log_lock:
+                        concluidos[0] += 1
+                    continue
+
+                pdf, retry, servico_fora = _tentar_danfse(cert_path, key_path, cnpj, chave)
                 tentativa_num = _PDF_MAX_TRIES - restantes + 1
+
+                abriu_circuito = False
+                with res_lock:
+                    if servico_fora:
+                        fora_seguidos[0] += 1
+                        if fora_seguidos[0] >= _PDF_FORA_LIMITE and not circuito.is_set():
+                            circuito.set()
+                            abriu_circuito = True
+                    elif pdf:
+                        fora_seguidos[0] = 0
+
+                if abriu_circuito:
+                    with log_lock:
+                        log.append(
+                            "  Servico de DANFSe indisponivel "
+                            f"({_PDF_FORA_LIMITE} respostas seguidas sem servidor) "
+                            "— parando de insistir."
+                        )
+                        try:
+                            if log_cb: log_cb(log)
+                        except Exception:
+                            pass
 
                 if pdf:
                     with res_lock:
@@ -334,7 +380,7 @@ def _baixar_pdfs_paralelo(
                             if log_cb: log_cb(log)
                         except Exception:
                             pass
-                elif retry and restantes > 1:
+                elif retry and restantes > 1 and not circuito.is_set():
                     deve_retry = True
                 else:
                     with log_lock:
@@ -359,7 +405,7 @@ def _baixar_pdfs_paralelo(
     for t in threads:
         t.start()
     fila.join()
-    return resultados
+    return resultados, circuito.is_set()
 
 
 def baixar_xmls_nfse(
@@ -629,12 +675,16 @@ def baixar_xmls_nfse(
                 log.append(f"  Baixando {len(tarefas_pdf)} PDFs via API DANFSe...")
                 if log_cb: log_cb(log)
 
-                pdfs = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, tarefas_pdf, log, log_lock, log_cb)
+                pdfs, servico_fora = _baixar_pdfs_paralelo(
+                    cert_path, key_path, cnpj, tarefas_pdf, log, log_lock, log_cb
+                )
 
                 # ondas de rescue com contagem regressiva visivel
                 _MAX_ONDAS   = 2
                 _ESPERA_ONDA = 30
                 for onda in range(1, _MAX_ONDAS + 1):
+                    if servico_fora:
+                        break  # esperar nao adianta: o servico esta fora do ar
                     falhas = [(chave, nome, xml_b) for chave, nome, xml_b in tarefas_pdf if nome not in pdfs]
                     if not falhas:
                         break
@@ -647,12 +697,40 @@ def baixar_xmls_nfse(
                         time.sleep(min(3, seg))
                     log[-1] = f"  Onda {onda+1}/{_MAX_ONDAS+1}: retentando {len(falhas)} PDFs..."
                     if log_cb: log_cb(log)
-                    pdfs2 = _baixar_pdfs_paralelo(cert_path, key_path, cnpj, falhas, log, log_lock, log_cb)
+                    pdfs2, fora2 = _baixar_pdfs_paralelo(
+                        cert_path, key_path, cnpj, falhas, log, log_lock, log_cb
+                    )
                     pdfs.update(pdfs2)
+                    servico_fora = servico_fora or fora2
+
+                baixados_api = len(pdfs)
+
+                # ── Fallback: gera o DANFSe localmente a partir do XML ────────
+                # A API oficial e a fonte preferida, mas quando ela esta fora o
+                # XML que ja temos em maos basta para montar o mesmo documento.
+                pendentes = [(nome, xml_b) for _c, nome, xml_b in tarefas_pdf if nome not in pdfs]
+                if pendentes:
+                    log.append(f"  Gerando {len(pendentes)} PDF(s) localmente a partir do XML...")
+                    if log_cb: log_cb(log)
+                    from core.conversor_pdf import gerar_danfse
+
+                    gerados = falhas_local = 0
+                    for nome_pdf, xml_b in pendentes:
+                        try:
+                            pdfs[nome_pdf] = gerar_danfse(xml_b)
+                            gerados += 1
+                        except Exception as exc:
+                            falhas_local += 1
+                            log.append(f"    {nome_pdf}: {type(exc).__name__}")
+                    log.append(f"  Gerados localmente: {gerados}/{len(pendentes)}")
+                    if log_cb: log_cb(log)
 
                 for nome_pdf, pdf_bytes in pdfs.items():
                     zf.writestr(nome_pdf, pdf_bytes)
-                log.append(f"  PDFs baixados: {len(pdfs)}/{len(tarefas_pdf)}")
+                log.append(
+                    f"  PDFs: {len(pdfs)}/{len(tarefas_pdf)} "
+                    f"({baixados_api} da API, {len(pdfs) - baixados_api} gerados localmente)"
+                )
                 if log_cb: log_cb(log)
                 if progress_cb:
                     progress_cb(0.95)
