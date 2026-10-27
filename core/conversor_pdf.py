@@ -12,7 +12,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from pathlib import Path
+
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
+)
 from reportlab.platypus.flowables import Flowable
 
 try:
@@ -21,16 +25,19 @@ try:
 except ImportError:
     _QR_OK = False
 
+from core.ibge_municipios import municipio as _municipio_ibge
+
 # ── Cores ──────────────────────────────────────────────────────────────────────
-C_SEC  = colors.HexColor("#1F3864")   # cabeçalho de seção (azul escuro)
-C_LBL  = colors.HexColor("#E8EEF4")   # fundo linha de rótulos (azul bem claro)
+# O DANFSe oficial é monocromático: cinzas e preto, cor só no logo.
+C_SEC  = colors.HexColor("#D9D9D9")   # célula do título de seção (cinza)
+C_LBL  = colors.white                 # linha de rótulos — sem fundo no modelo oficial
 C_BRD  = colors.HexColor("#AAAAAA")   # bordas
 C_WHT  = colors.white
 C_BLK  = colors.black
 C_GRN  = colors.HexColor("#00AA44")   # verde do "e" no logo
 
 PAGE_W, PAGE_H = A4
-M = 10 * mm   # margem
+M = 7 * mm    # margem — apertada para o DANFSe caber em 1 página, como manda o modelo
 USABLE = PAGE_W - 2 * M
 
 
@@ -92,12 +99,25 @@ _MUN = {
 }
 
 def _mun(cod, uf=""):
-    nome = _MUN.get(cod, cod or "-")
-    return f"{nome.title()} - {uf}" if uf else nome
+    """"Município / Sigla UF" — a UF do XML tem prioridade sobre a da tabela."""
+    nome, uf_tab = _municipio_ibge(cod)
+    sigla = uf if uf and uf != "-" else uf_tab
+    return f"{nome} / {sigla}" if sigla else (nome or "-")
 
 
 def _mun_upper(cod):
-    return _MUN.get(cod, cod or "-")
+    nome, uf = _municipio_ibge(cod)
+    return f"{nome.upper()} / {uf}" if uf else (nome.upper() if nome else "-")
+
+
+def _fmt_fone(s):
+    """(85) 99637-7390 — o XML entrega só dígitos."""
+    d = "".join(c for c in (s or "") if c.isdigit())
+    if len(d) == 11:
+        return f"({d[:2]}) {d[2:7]}-{d[7:]}"
+    if len(d) == 10:
+        return f"({d[:2]}) {d[2:6]}-{d[6:]}"
+    return s or "-"
 
 
 def _simp(cod):
@@ -109,10 +129,59 @@ def _simp(cod):
 
 def _reg_sn(cod):
     return {
-        "1": "Regime de apuração dos tributos federais e municipal pelo Simples Nacional",
-        "2": "Regime de apuração dos tributos federais pelo Simples Nacional e tributação municipal fora do Simples Nacional",
-        "3": "Regime de apuração dos tributos municipais pelo Simples Nacional e tributação federal fora do Simples Nacional",
+        "1": "Federal e Municipal pelo SN",
+        "2": "Federal pelo SN e Municipal por fora",
+        "3": "Municipal pelo SN e Federal por fora",
     }.get(cod, cod or "-")
+
+
+def _amb_ger(cod):
+    """Ambiente gerador da NFS-e (cabeçalho do DANFSe)."""
+    return {
+        "1": "Sistema Próprio do Município",
+        "2": "Sistema Nacional da NFS-e",
+    }.get(cod, cod or "-")
+
+
+def _tp_amb(cod):
+    return {"1": "Produção", "2": "Homologação"}.get(cod, cod or "-")
+
+
+def _tp_emit(cod):
+    """Quem emitiu a NFS-e."""
+    return {
+        "1": "Prestador",
+        "2": "Tomador",
+        "3": "Intermediário",
+    }.get(cod, cod or "-")
+
+
+def _situacao(cstat, cancelada):
+    """Situação da NFS-e. cStat 100/107 = regular; 101/108 = cancelada."""
+    if cancelada or cstat in ("101", "108"):
+        return "NFS-e cancelada"
+    if cstat in ("100", "107"):
+        return "NFS-e regular (Autorizada)"
+    return "-"
+
+
+def _reg_esp(cod):
+    """Regime Especial de Tributação do ISSQN. 0 (ou ausente) = Nenhum."""
+    return {
+        "0": "Nenhum",
+        "1": "Ato Cooperado",
+        "2": "Estimativa",
+        "3": "Microempresa Municipal",
+        "4": "Notário ou Registrador",
+        "5": "Profissional Autônomo",
+        "6": "Sociedade de Profissionais",
+    }.get(_norm_cod(cod) or "0", cod or "Nenhum")
+
+
+def _norm_cod(cod):
+    """'-' e vazio significam ausente; _t devolve '-' quando a tag não existe."""
+    c = (cod or "").strip()
+    return "" if c == "-" else c
 
 
 def _ret_iss(cod):
@@ -125,6 +194,20 @@ def _trib_iss(cod):
         "4": "Exportação", "5": "Não Incidência",
         "6": "Suspensa - Decisão Judicial", "7": "Suspensa - Processo Adm.",
     }.get(cod, cod or "-")
+
+
+def _fmt_nbs(s):
+    """Código NBS: 114061100 -> 1.1406.11.00"""
+    d = "".join(c for c in (s or "") if c.isdigit())
+    return f"{d[0]}.{d[1:5]}.{d[5:7]}.{d[7:]}" if len(d) == 9 else (s or "-")
+
+
+def _corta(texto: str, limite: int) -> str:
+    """Trunca preservando a última palavra inteira e sinalizando o corte."""
+    if not texto or len(texto) <= limite:
+        return texto or "-"
+    corte = texto[:limite].rsplit(" ", 1)[0].rstrip(" ,;.-")
+    return corte + " […]"
 
 
 def _cod_nac(s):
@@ -201,7 +284,14 @@ def _parse(xml_bytes: bytes) -> dict:
     vISSQN_raw = _t(vals_nfse, "vISSQN") if vals_nfse else "-"
     vLiq_raw   = _t(vals_nfse, "vLiq") if vals_nfse else vServ_raw
 
-    pAliq_raw = _t(tribMun, "pAliq") if tribMun else _t(vals_nfse, "pAliqAplic")
+    # A alíquota pode estar em <tribMun><pAliq> ou em <valores><pAliqAplic>;
+    # tentar só a primeira deixava o campo vazio na maioria das notas.
+    pAliq_raw = "-"
+    for _origem, _tag in ((tribMun, "pAliq"), (vals_nfse, "pAliqAplic"), (root, "pAliqAplic")):
+        _v = _t(_origem, _tag) if _origem is not None else "-"
+        if _v not in ("-", ""):
+            pAliq_raw = _v
+            break
     try:
         pAliq_fmt = f"{float(pAliq_raw):.2f}%"
     except Exception:
@@ -223,7 +313,70 @@ def _parse(xml_bytes: bytes) -> dict:
 
     indTotTrib = _t(totTrib, "indTotTrib") if totTrib else "0"
 
+    # ── Cabeçalho v2.0: ambiente, emitente, situação ─────────────────────────
+    cancelada = any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter())
+    cstat = _t(root, "cStat")
+    if cstat == "-":
+        cstat = ""
+
+    # ── IBS/CBS ──────────────────────────────────────────────────────────────
+    # Bloco da reforma tributária. Ausente nos XMLs antigos — a NT-008 manda
+    # imprimir o bloco mesmo assim, com traço nos campos sem informação.
+    ibscbs = next((e for e in root.iter() if e.tag.split("}")[-1] == "IBSCBS"), None)
+    gibscbs = next((e for e in root.iter() if e.tag.split("}")[-1] == "gIBSCBS"), None)
+    tot_cibs = next((e for e in root.iter() if e.tag.split("}")[-1] == "totCIBS"), None)
+    uf_ibs = next((e for e in (ibscbs or root).iter() if e.tag.split("}")[-1] == "uf"), None)
+    mun_ibs = next((e for e in (ibscbs or root).iter() if e.tag.split("}")[-1] == "mun"), None)
+    fed_ibs = next((e for e in (ibscbs or root).iter() if e.tag.split("}")[-1] == "fed"), None)
+
+    def _pct(el, tag):
+        v = _t(el, tag) if el is not None else "-"
+        try:
+            return f"{float(v):.2f}%"
+        except Exception:
+            return "-"
+
+    vIBSTot = _t(tot_cibs, "vIBSTot") if tot_cibs is not None else "-"
+    vCBSTot = _t(tot_cibs, "vCBS") if tot_cibs is not None else "-"
+    total_ibscbs = "-"
+    try:
+        total_ibscbs = _fmt_val(str(float(vIBSTot) + float(vCBSTot)))
+    except Exception:
+        pass
+    liq_mais_ibscbs = "-"
+    try:
+        liq_mais_ibscbs = _fmt_val(str(float(vLiq_raw) + float(vIBSTot) + float(vCBSTot)))
+    except Exception:
+        pass
+
     return {
+        # cabeçalho v2.0
+        "ambGer":     _amb_ger(_t(root, "ambGer")),
+        "tpAmb":      _tp_amb(_t(root, "tpAmb")),
+        "tpEmit":     _tp_emit(_t(root, "tpEmit")),
+        "situacao":   _situacao(cstat, cancelada),
+        "cancelada":  cancelada or cstat in ("101", "108"),
+        "finalidade": "NFS-e",
+        # IBS/CBS
+        "ibs_cst":        _t(gibscbs, "CST"),
+        "ibs_classtrib":  _t(gibscbs, "cClassTrib"),
+        "ibs_indop":      _t(root, "cIndOp"),
+        "ibs_mun_incid":  _t(ibscbs, "xLocalidadeIncid"),
+        "ibs_cod_incid":  _t(ibscbs, "cLocalidadeIncid"),
+        "ibs_exclusoes":  _fmt_val(_t(ibscbs, "vCalcReeRepRes")) if ibscbs is not None else "-",
+        "ibs_bc":         _fmt_val(_t(ibscbs, "vBC")) if ibscbs is not None else "-",
+        "ibs_aliq_uf":    _pct(uf_ibs, "pIBSUF"),
+        "ibs_aliq_mun":   _pct(mun_ibs, "pIBSMun"),
+        "ibs_efet_uf":    _pct(uf_ibs, "pAliqEfetUF"),
+        "ibs_efet_mun":   _pct(mun_ibs, "pAliqEfetMun"),
+        "ibs_val_uf":     _fmt_val(_t(root, "vIBSUF")),
+        "ibs_val_mun":    _fmt_val(_t(root, "vIBSMun")),
+        "ibs_val_tot":    _fmt_val(vIBSTot),
+        "cbs_aliq":       _pct(fed_ibs, "pCBS"),
+        "cbs_efet":       _pct(fed_ibs, "pAliqEfetCBS"),
+        "cbs_val_tot":    _fmt_val(vCBSTot),
+        "total_ibscbs":   total_ibscbs,
+        "liq_mais_ibscbs": liq_mais_ibscbs,
         "chave":       chave,
         "nNFSe":       _t(root, "nNFSe"),
         "competencia": _fmt_dc(_t(dps, "dCompet")),
@@ -236,10 +389,10 @@ def _parse(xml_bytes: bytes) -> dict:
         "emit_im":     _t(emit, "IM"),
         "emit_nome":   _t(emit, "xNome"),
         "emit_email":  _t(emit, "email"),
-        "emit_fone":   _t(emit, "fone"),
+        "emit_fone":   _fmt_fone(_t(emit, "fone")),
         "emit_end":    emit_end,
         "emit_mun":    _mun(cMun_e, uf_e),
-        "emit_cep":    _fmt_cep(_t(ender_e, "CEP")),
+        "emit_cep":    f"{cMun_e} / {_fmt_cep(_t(ender_e, 'CEP'))}",
         "opSimpNac":   _simp(_t(reg, "opSimpNac")),
         "regApTribSN": _reg_sn(_t(reg, "regApTribSN")),
         # tomador
@@ -247,22 +400,27 @@ def _parse(xml_bytes: bytes) -> dict:
         "toma_im":     _t(toma, "IM"),
         "toma_nome":   _t(toma, "xNome"),
         "toma_email":  _t(toma, "email"),
-        "toma_fone":   _t(toma, "fone"),
+        "toma_fone":   _fmt_fone(_t(toma, "fone")),
         "toma_end":    toma_end,
         "toma_mun":    _mun(cMun_t, uf_t),
-        "toma_cep":    _fmt_cep(_t(toma_ender_nac, "CEP")),
+        "toma_cep":    f"{cMun_t} / {_fmt_cep(_t(toma_ender_nac, 'CEP'))}",
         # serviço
         "cod_nac":     cod_nac_label,
+        "cod_nac_mun": f"{cTribNac_fmt} / {_t(root, 'cTribMun') if _t(root, 'cTribMun') != '-' else _t(cServ, 'cTribMun')}",
         "cod_mun":     _t(root, "xTribMun"),
         "loc_prest":   _mun_upper(cLocPrest) if cLocPrest != "-" else _t(root, "xLocPrestacao"),
         "pais_prest":  _t(root, "xPaisPrestacao"),
-        "desc_serv":   _t(cServ, "xDescServ"),
-        "cNBS":        _t(cServ, "cNBS"),
+        # O DANFSe é documento de "consulta resumida" (NT-008, item 2); descrições
+        # muito longas são cortadas para o documento caber em 1 página, com
+        # reticências sinalizando que o texto integral está no XML.
+        "desc_serv":   _corta(_t(cServ, "xDescServ"), 480),
+        "cNBS":        _fmt_nbs(_t(cServ, "cNBS")),
         # trib mun
         "tribISSQN":   _trib_iss(_t(tribMun, "tribISSQN")),
         "paisResult":  _t(tribMun, "cPaisResult"),
         "munIncid":    _mun_upper(cLocPrest) if cLocPrest != "-" else _t(root, "xLocIncid"),
-        "regEsp":      _t(tribMun, "regEspTrib") or "0",
+        "regEsp":      _reg_esp(_t(tribMun, "regEspTrib") if tribMun is not None
+                                else _t(reg, "regEspTrib")),
         "tipoImun":    _t(tribMun, "tpImunidade"),
         "suspExig":    "Não",
         "numProc":     _t(root, "nProcesso"),
@@ -279,9 +437,15 @@ def _parse(xml_bytes: bytes) -> dict:
         "irrf":        _fmt_val(_t(root, "vIRRF")),
         "contPrev":    _fmt_val(_t(root, "vCP")),
         "contSoc":     _fmt_val(_t(root, "vCSLL")),
-        "descCont":    _t(root, "xContribSoc"),
-        "pis":         _fmt_val(_t(root, "vPIS")),
-        "cofins":      _fmt_val(_t(root, "vCOFINS")),
+        # Sem nenhuma retenção federal informada, o modelo oficial declara isso
+        # por extenso em vez de deixar o campo com traço.
+        "descCont":    (_t(root, "xContribSoc") if _t(root, "xContribSoc") != "-"
+                        else ("PIS/COFINS/CSLL Não Retidos"
+                              if _t(root, "vTotRet") in ("-", "", "0.00", "0")
+                              else "-")),
+        # No XML as tags são vPis/vCofins (e não vPIS/vCOFINS); _t é sensível a caixa.
+        "pis":         _fmt_val(_t(root, "vPis", "vPIS")),
+        "cofins":      _fmt_val(_t(root, "vCofins", "vCOFINS")),
         # valor total
         "vServT":      _fmt_val(vServ_raw),
         "descCond":    _fmt_val(_t(root, "vDescCond")),
@@ -290,12 +454,15 @@ def _parse(xml_bytes: bytes) -> dict:
         "totRetFed":   _fmt_val(_t(root, "vTotRet")),
         "pisCofins":   "-",
         "vLiq":        _fmt_val(vLiq_raw),
-        # tributos aproximados
-        "tbFed": "-" if indTotTrib == "0" else _fmt_val(_t(root, "vTotFed")),
-        "tbEst": "-" if indTotTrib == "0" else _fmt_val(_t(root, "vTotEst")),
-        "tbMun": "-" if indTotTrib == "0" else _fmt_val(_t(root, "vTotMun")),
+        # Tributos aproximados (Lei 12.741/2012). As tags corretas são
+        # vTotTribFed/Est/Mun — ler vTotFed/Est/Mun deixava os três vazios.
+        "tbFed": _fmt_val(_t(root, "vTotTribFed", "vTotFed")),
+        "tbEst": _fmt_val(_t(root, "vTotTribEst", "vTotEst")),
+        "tbMun": _fmt_val(_t(root, "vTotTribMun", "vTotMun")),
         # info complementar
-        "infoComp":  f"NBS: {_t(cServ, 'cNBS')}" if _t(cServ, "cNBS") != "-" else "-",
+        "infoComp":  (f"<b>NBS:</b> {_fmt_nbs(_t(cServ, 'cNBS'))} - {_t(root, 'xNBS')}"
+                      if _t(cServ, "cNBS") != "-" else "-"),
+        "xTribNac_desc": xTribNac_desc,
         "xLocEmi":   xLocEmi,
         "uf_emit":   uf_emit,
     }
@@ -309,22 +476,39 @@ def _ps(name, **kw):
     return ParagraphStyle(name, **defaults)
 
 
-S_LBL  = _ps("lbl",  fontSize=6,   leading=7.5, textColor=colors.HexColor("#444444"))
-S_VAL  = _ps("val",  fontSize=7,   leading=8.5)
+# No modelo oficial o rótulo é preto e em negrito; o valor é que vem sem peso.
+S_LBL  = _ps("lbl",  fontSize=6,   leading=6.6, fontName="Helvetica-Bold")
+S_VAL  = _ps("val",  fontSize=7,   leading=7.7)
 S_VAL_B= _ps("valb", fontSize=8.5, leading=10,  fontName="Helvetica-Bold")
-S_SEC  = _ps("sec",  fontSize=7.5, leading=9,   fontName="Helvetica-Bold", textColor=C_WHT)
-S_TTL  = _ps("ttl",  fontSize=13,  leading=16,  fontName="Helvetica-Bold", alignment=TA_CENTER)
+S_SEC  = _ps("sec",  fontSize=7,   leading=8,   fontName="Helvetica-Bold", textColor=C_BLK)
+S_TTL  = _ps("ttl",  fontSize=11,  leading=13,  fontName="Helvetica-Bold", alignment=TA_CENTER)
 S_SUB  = _ps("sub",  fontSize=8.5, leading=10,  alignment=TA_CENTER)
-S_PRF  = _ps("prf",  fontSize=7,   leading=9,   fontName="Helvetica-Bold", alignment=TA_RIGHT)
+S_PRF  = _ps("prf",  fontSize=6,   leading=7.6, alignment=TA_RIGHT)
 S_NOTE = _ps("note", fontSize=5.5, leading=7,   textColor=colors.HexColor("#555555"), alignment=TA_RIGHT)
 S_INTER= _ps("int",  fontSize=7,   leading=9,   fontName="Helvetica-Bold", alignment=TA_CENTER)
 
 
 # ── Logo NFS-e vetorial ───────────────────────────────────────────────────────
 
+_LOGO_PNG = Path(__file__).resolve().parent.parent / "assets" / "nfse_logo.png"
+
+
+def _logo_oficial(largura_mm: float = 42):
+    """Logo oficial da NFS-e como imagem, igual ao DANFSe do padrão nacional.
+
+    Desenhar a marca à mão nunca fica igual — e quebrava junto com a paleta.
+    Se o arquivo faltar, cai no desenho antigo para não derrubar a geração.
+    """
+    if not _LOGO_PNG.exists():
+        return NfseLogo()
+    larg = largura_mm * mm
+    return Image(str(_LOGO_PNG), width=larg, height=larg * 105 / 533)
+
+
 class NfseLogo(Flowable):
-    W = 46 * mm
-    H = 13 * mm
+    """Fallback desenhado — só entra em uso se o PNG oficial sumir."""
+    W = 40 * mm
+    H = 10 * mm
 
     def __init__(self):
         super().__init__()
@@ -364,8 +548,10 @@ class NfseLogo(Flowable):
 _STD = TableStyle([
     ("FONTNAME",      (0,0), (-1,-1), "Helvetica"),
     ("FONTSIZE",      (0,0), (-1,-1), 7),
-    ("TOPPADDING",    (0,0), (-1,-1), 1.5),
-    ("BOTTOMPADDING", (0,0), (-1,-1), 1.5),
+    # Padding mínimo: são ~25 grades de 2 linhas, e cada ponto aqui vira
+    # 50 pontos de altura no documento — é o que decide 1 ou 2 páginas.
+    ("TOPPADDING",    (0,0), (-1,-1), 0.6),
+    ("BOTTOMPADDING", (0,0), (-1,-1), 0.6),
     ("LEFTPADDING",   (0,0), (-1,-1), 2.5),
     ("RIGHTPADDING",  (0,0), (-1,-1), 2),
     ("VALIGN",        (0,0), (-1,-1), "TOP"),
@@ -378,32 +564,47 @@ def _sec_bar(label: str) -> Table:
     t = Table([[Paragraph(f"<b>{label}</b>", S_SEC)]], colWidths=[USABLE])
     t.setStyle(TableStyle([
         ("BACKGROUND",    (0,0), (-1,-1), C_SEC),
-        ("TOPPADDING",    (0,0), (-1,-1), 2.5),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 2.5),
+        ("TOPPADDING",    (0,0), (-1,-1), 1.2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 1.2),
         ("LEFTPADDING",   (0,0), (-1,-1), 3),
         ("BOX",           (0,0), (-1,-1), 0.3, C_BRD),
     ]))
     return t
 
 
+SEC_W = 48 * mm   # largura da célula de título de seção, como no modelo oficial
+
+
 def _grid(cols_data: list[tuple[str,str]], widths: list[float],
-          bold_last=False) -> Table:
+          bold_last=False, secao: str | None = None,
+          bold: tuple[int, ...] = ()) -> Table:
     """
     cols_data: [(label, value), ...]
-    Gera 2 linhas: linha de rótulos (fundo C_LBL) + linha de valores.
+    Gera 2 linhas: rótulos em cima, valores embaixo.
+
+    `secao` desenha o título da seção como uma célula cinza à esquerda, ocupando
+    as duas linhas — é assim que o DANFSe oficial marca as seções, e não como
+    uma barra de largura total.
     """
     lbl_row = [Paragraph(l, S_LBL) for l, _ in cols_data]
     val_row = []
     for i, (_, v) in enumerate(cols_data):
-        s = S_VAL_B if (bold_last and i == len(cols_data)-1) else S_VAL
-        val_row.append(Paragraph(v, s))
+        destacado = (bold_last and i == len(cols_data) - 1) or i in bold
+        val_row.append(Paragraph(v, S_VAL_B if destacado else S_VAL))
+
+    extra = []
+    if secao is not None:
+        lbl_row = [Paragraph(secao, S_SEC)] + lbl_row
+        val_row = [""] + val_row
+        widths = [SEC_W] + list(widths)
+        extra = [
+            ("SPAN",       (0,0), (0,1)),
+            ("BACKGROUND", (0,0), (0,1), C_SEC),
+            ("VALIGN",     (0,0), (0,1), "MIDDLE"),
+        ]
 
     t = Table([lbl_row, val_row], colWidths=widths)
-    style = TableStyle(list(_STD.getCommands()) + [
-        ("BACKGROUND", (0,0), (-1,0), C_LBL),
-        ("BACKGROUND", (0,1), (-1,1), C_WHT),
-    ])
-    t.setStyle(style)
+    t.setStyle(TableStyle(list(_STD.getCommands()) + extra))
     return t
 
 
@@ -427,189 +628,231 @@ def _qr_image(chave: str, size_mm: float = 25):
 
 # ── Geração do PDF ────────────────────────────────────────────────────────────
 
-def gerar_danfse(xml_bytes: bytes) -> bytes:
-    root = ET.fromstring(xml_bytes)
-    _canc = any(e.tag.split("}")[-1] == "nfseCanc" for e in root.iter())
-    if not _canc:
-        for _tag in ("cSitNFSe", "tpSit", "cSit"):
-            _el = next((e for e in root.iter() if e.tag.split("}")[-1] == _tag), None)
-            if _el is not None and _el.text and _el.text.strip() not in ("1", ""):
-                _canc = True
-                break
-    if _canc:
-        raise ValueError("Nota cancelada — DANFSe não gerado.")
+def _marca_dagua(canvas, doc, texto="CANCELADA"):
+    """Carimbo diagonal para NFS-e cancelada ou substituída.
 
+    A nota cancelada continua tendo DANFSe — o documento existe e precisa ser
+    arquivado; o que muda e que ele ostenta a situacao de forma inequivoca.
+    """
+    canvas.saveState()
+    canvas.setFont("Helvetica-Bold", 68)
+    canvas.setFillColorRGB(0.85, 0.15, 0.15, alpha=0.22)
+    canvas.translate(A4[0] / 2, A4[1] / 2)
+    canvas.rotate(45)
+    canvas.drawCentredString(0, 0, texto)
+    canvas.restoreState()
+
+
+def _rodape(canvas, d, largura):
+    """Caixa de 3 colunas ancorada no pé da página, como no modelo oficial."""
+    alt = 13 * mm
+    y = M
+    x = M
+    c1, c2 = largura * 0.30, largura * 0.30
+    canvas.saveState()
+    canvas.setStrokeColor(C_BRD)
+    canvas.setLineWidth(0.3)
+    canvas.rect(x, y, largura, alt, fill=0, stroke=1)
+    canvas.line(x + c1, y, x + c1, y + alt)
+    canvas.line(x + c1 + c2, y, x + c1 + c2, y + alt)
+    canvas.setFillColor(C_BLK)
+    canvas.setFont("Helvetica-Bold", 6)
+    topo = y + alt - 4
+    canvas.drawString(x + 2, topo, "**** DATA CIENTIFICAÇÃO:")
+    canvas.drawString(x + c1 + 2, topo, "IDENTIFICAÇÃO E ASSINATURA")
+    canvas.drawString(x + c1 + c2 + 2, topo, "Nº NFS-e / CHAVE NFS-e")
+    canvas.setFont("Helvetica", 6.5)
+    canvas.drawString(x + c1 + c2 + 2, y + 3, f"{d['nNFSe']} / {d['chave']}")
+    canvas.restoreState()
+
+
+def gerar_danfse(xml_bytes: bytes, cancelada: bool | None = None) -> bytes:
+    """Gera o DANFSe conforme a NT-008 v1.02 (layout DANFSe v2.0).
+
+    `cancelada` força o carimbo quando o cancelamento só é conhecido por fora
+    do XML — que é o caso normal: a NFS-e cancelada mantém cStat=100, e o
+    cancelamento chega num documento <evento> separado (ver core/api_nfse.py).
+    """
     d = _parse(xml_bytes)
+    if cancelada is not None:
+        d["cancelada"] = cancelada
     buf = io.BytesIO()
 
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=M, rightMargin=M,
-        topMargin=M,  bottomMargin=M,
+        topMargin=M,  bottomMargin=M + 15 * mm,   # espaço reservado ao rodapé
         title=f"DANFSe - NFS-e {d['nNFSe']}",
     )
 
     story = []
     W = USABLE
+    WS = W - SEC_W   # largura restante nas linhas que levam título de seção
 
     # ── 1. CABEÇALHO ─────────────────────────────────────────────────────────
     # [Logo | Título | Prefeitura]
-    pref_txt = (f"PREFEITURA MUNICIPAL DE<br/>"
-                f"<b>{d['xLocEmi'].upper()}</b><br/>{d['uf_emit']}")
+    pref_txt = (f"Município: <b>{d['xLocEmi'].upper()} / {d['uf_emit']}</b><br/>"
+                f"Ambiente Gerador: {d['ambGer']}<br/>"
+                f"Tipo de Ambiente: {d['tpAmb']}")
     hdr = Table(
-        [[NfseLogo(),
-          [Paragraph("DANFSe v1.0", S_TTL),
+        [[_logo_oficial(),
+          [Paragraph("DANFSe v2.0", S_TTL),
            Paragraph("Documento Auxiliar da NFS-e", S_SUB)],
           Paragraph(pref_txt, S_PRF)]],
-        colWidths=[46*mm, W - 46*mm - 38*mm, 38*mm],
+        colWidths=[40*mm, W - 40*mm - 50*mm, 50*mm],
     )
     hdr.setStyle(TableStyle([
         ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
         ("ALIGN",         (2,0), (2,0),   "RIGHT"),
-        ("BOX",           (0,0), (-1,-1), 0.5, C_BRD),
-        ("TOPPADDING",    (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        # Faixa cinza sem moldura, fechada só pela linha de baixo — é assim no
+        # modelo oficial; a caixa em volta do logo não existe lá.
+        ("BACKGROUND",    (0,0), (-1,-1), colors.HexColor("#F0F0F0")),
+        ("LINEBELOW",     (0,0), (-1,-1), 0.6, C_BLK),
+        ("TOPPADDING",    (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
         ("LEFTPADDING",   (0,0), (-1,-1), 3),
         ("RIGHTPADDING",  (0,0), (-1,-1), 3),
     ]))
     story.append(hdr)
 
     # ── 2. CHAVE DE ACESSO + QR ───────────────────────────────────────────────
-    qr = _qr_image(d["chave"])
-    qr_col_w = 28 * mm
+    qr = _qr_image(d["chave"], 20)
+    qr_col_w = 48 * mm
     chave_w  = W - qr_col_w
 
     note_p = Paragraph(
-        "A autenticidade desta NFS-e pode ser<br/>"
-        "verificada pela leitura deste código QR ou<br/>"
-        "pela consulta da chave de acesso no portal",
+        "A autenticidade desta NFS-e pode ser verificada pela leitura "
+        "deste código QR ou pela consulta da chave de acesso no portal "
+        "nacional da NFS-e",
         S_NOTE,
     )
 
-    # Coluna direita: nota + QR juntos em célula única (SPAN das 2 linhas)
-    # Colocamos [note_p, qr] como lista na célula (1,0); (1,1) fica vazia pelo SPAN.
-    right_cell = [note_p, qr] if qr else note_p
+    # Chave + numeração à esquerda; QR e a nota de autenticidade à direita,
+    # abrangendo todas essas linhas — é esse SPAN que elimina o vazio e dá ao
+    # cabeçalho a densidade do modelo oficial.
+    w3 = chave_w / 3
+    esquerda = [
+        Table([[Paragraph("<b>CHAVE DE ACESSO DA NFS-e</b>", S_LBL)],
+               [Paragraph(d["chave"], S_VAL)]], colWidths=[chave_w]),
+        _grid([
+            ("NÚMERO DA NFS-e",                 d["nNFSe"]),
+            ("COMPETÊNCIA DA NFS-e",            d["competencia"]),
+            ("DATA E HORA DA EMISSÃO DA NFS-e", d["dhProc"]),
+        ], [w3]*3),
+        _grid([
+            ("NÚMERO DA DPS",                  d["nDPS"]),
+            ("SÉRIE DA DPS",                   d["serie"]),
+            ("DATA E HORA DA EMISSÃO DA DPS",  d["dhEmi"]),
+        ], [w3]*3),
+        _grid([
+            ("EMITENTE DA NFS-e", d["tpEmit"]),
+            ("SITUAÇÃO DA NFS-e", d["situacao"]),
+            ("FINALIDADE",        d["finalidade"]),
+        ], [w3]*3),
+    ]
+    esquerda[0].setStyle(TableStyle(list(_STD.getCommands())))
 
-    chave_table = Table(
-        [
-            [Paragraph("<b>Chave de Acesso da NFS-e</b>", S_LBL), right_cell],
-            [Paragraph(d["chave"], S_VAL),                         ""],
-        ],
-        colWidths=[chave_w, qr_col_w],
-    )
-    chave_table.setStyle(TableStyle([
-        ("SPAN",          (1,0), (1,1)),          # coluna direita: célula única
-        ("VALIGN",        (0,0), (0,-1), "MIDDLE"),
-        ("VALIGN",        (1,0), (1,0),  "MIDDLE"),
-        ("ALIGN",         (1,0), (1,0),  "CENTER"),
+    topo = Table([[esquerda, [qr, note_p] if qr else note_p]],
+                 colWidths=[chave_w, qr_col_w])
+    topo.setStyle(TableStyle([
+        ("VALIGN",        (0,0), (0,0), "TOP"),
+        ("VALIGN",        (1,0), (1,0), "TOP"),
+        ("ALIGN",         (1,0), (1,0), "CENTER"),
         ("BOX",           (0,0), (-1,-1), 0.3, C_BRD),
         ("INNERGRID",     (0,0), (-1,-1), 0.3, C_BRD),
-        ("BACKGROUND",    (0,0), (0,0),  C_LBL),   # só a célula do label: azul claro
-        ("BACKGROUND",    (0,1), (0,1),  C_WHT),   # célula do valor: branco
-        ("BACKGROUND",    (1,0), (1,0),  C_WHT),   # coluna direita: branco
-        ("TOPPADDING",    (0,0), (-1,-1), 1.5),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 1.5),
-        ("LEFTPADDING",   (0,0), (-1,-1), 2.5),
-        ("RIGHTPADDING",  (0,0), (-1,-1), 2),
+        ("TOPPADDING",    (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+        ("LEFTPADDING",   (0,0), (0,0), 0),
+        ("RIGHTPADDING",  (0,0), (0,0), 0),
+        ("LEFTPADDING",   (1,0), (1,0), 2),
+        ("RIGHTPADDING",  (1,0), (1,0), 2),
     ]))
-    story.append(chave_table)
-
-    # ── 3. NÚMEROS NFS-e e DPS ────────────────────────────────────────────────
+    story.append(topo)
     w4 = W / 4
-    story.append(_grid([
-        ("Número da NFS-e",              d["nNFSe"]),
-        ("Competência da NFS-e",         d["competencia"]),
-        ("Data e Hora da emissão da NFS-e", d["dhProc"]),
-        ("",                             ""),
-    ], [w4]*4))
-    story.append(_grid([
-        ("Número da DPS",               d["nDPS"]),
-        ("Série da DPS",                d["serie"]),
-        ("Data e Hora da emissão da DPS", d["dhEmi"]),
-        ("",                            ""),
-    ], [w4]*4))
 
-    # ── 4. EMITENTE ───────────────────────────────────────────────────────────
-    story.append(_sec_bar("EMITENTE DA NFS-e"))
+    # ── 4. PRESTADOR / FORNECEDOR ─────────────────────────────────────────────
     story.append(_grid([
-        ("Prestador do Serviço", ""),
-        ("CNPJ / CPF / NIF",    d["emit_cnpj"]),
-        ("Inscrição Municipal",  d["emit_im"]),
-        ("Telefone",             d["emit_fone"]),
-    ], [W*0.22, W*0.30, W*0.28, W*0.20]))
+        ("CNPJ / CPF / NIF",                d["emit_cnpj"]),
+        ("Indicador Municipal (Inscrição)", d["emit_im"]),
+        ("Telefone",                        d["emit_fone"]),
+    ], [WS*0.34, WS*0.33, WS*0.33], secao="PRESTADOR / FORNECEDOR"))
     story.append(_grid([
         ("Nome / Nome Empresarial", d["emit_nome"]),
-        ("E-mail",                  d["emit_email"]),
-    ], [W*0.65, W*0.35]))
+        ("Município / Sigla UF",    d["emit_mun"]),
+        ("Código IBGE / CEP",       d["emit_cep"]),
+    ], [W*0.50, W*0.25, W*0.25]))
     story.append(_grid([
-        ("Endereço",  d["emit_end"]),
-        ("Município", d["emit_mun"]),
-        ("CEP",       d["emit_cep"]),
-    ], [W*0.55, W*0.30, W*0.15]))
+        ("*Endereço", d["emit_end"]),
+        ("E-mail",    d["emit_email"]),
+    ], [W*0.50, W*0.50]))
     story.append(_grid([
         ("Simples Nacional na Data de Competência", d["opSimpNac"]),
         ("Regime de Apuração Tributária pelo SN",   d["regApTribSN"]),
-    ], [W*0.38, W*0.62]))
+    ], [W*0.45, W*0.55]))
 
-    # ── 5. TOMADOR ────────────────────────────────────────────────────────────
-    story.append(_sec_bar("TOMADOR DO SERVIÇO"))
+    # ── 5. TOMADOR / ADQUIRENTE ───────────────────────────────────────────────
     story.append(_grid([
-        ("",                    ""),
-        ("CNPJ / CPF / NIF",   d["toma_cnpj"]),
-        ("Inscrição Municipal", d["toma_im"]),
-        ("Telefone",            d["toma_fone"]),
-    ], [W*0.22, W*0.30, W*0.28, W*0.20]))
+        ("CNPJ / CPF / NIF",                d["toma_cnpj"]),
+        ("Indicador Municipal (Inscrição)", d["toma_im"]),
+        ("Telefone",                        d["toma_fone"]),
+    ], [WS*0.34, WS*0.33, WS*0.33], secao="TOMADOR / ADQUIRENTE"))
     story.append(_grid([
         ("Nome / Nome Empresarial", d["toma_nome"]),
-        ("E-mail",                  d["toma_email"]),
-    ], [W*0.65, W*0.35]))
+        ("Município / Sigla UF",    d["toma_mun"]),
+        ("Código IBGE / CEP",       d["toma_cep"]),
+    ], [W*0.50, W*0.25, W*0.25]))
     story.append(_grid([
-        ("Endereço",  d["toma_end"]),
-        ("Município", d["toma_mun"]),
-        ("CEP",       d["toma_cep"]),
-    ], [W*0.55, W*0.30, W*0.15]))
+        ("*Endereço", d["toma_end"]),
+        ("E-mail",    d["toma_email"]),
+    ], [W*0.50, W*0.50]))
 
-    # ── 6. INTERMEDIÁRIO ──────────────────────────────────────────────────────
-    t = Table([[Paragraph("INTERMEDIÁRIO DO SERVIÇO NÃO IDENTIFICADO NA NFS-e", S_INTER)]],
-              colWidths=[W])
-    t.setStyle(TableStyle([
-        ("BOX",           (0,0),(-1,-1), 0.3, C_BRD),
-        ("TOPPADDING",    (0,0),(-1,-1), 2.5),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 2.5),
-    ]))
-    story.append(t)
+    # ── 6. DESTINATÁRIO E INTERMEDIÁRIO ───────────────────────────────────────
+    # Blocos opcionais (regra 11 da NT): ausentes do XML, viram apenas a barra
+    # declarando a ausência — o DANFSe nunca omite a informação em silêncio.
+    for _rotulo in ("DESTINATÁRIO DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e",
+                    "INTERMEDIÁRIO DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e"):
+        t = Table([[Paragraph(_rotulo, S_INTER)]], colWidths=[W])
+        t.setStyle(TableStyle([
+            ("BOX",           (0,0),(-1,-1), 0.3, C_BRD),
+            ("TOPPADDING",    (0,0),(-1,-1), 1.2),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 1.2),
+        ]))
+        story.append(t)
 
     # ── 7. SERVIÇO PRESTADO ───────────────────────────────────────────────────
-    story.append(_sec_bar("SERVIÇO PRESTADO"))
     story.append(_grid([
-        ("Código de Tributação Nacional", d["cod_nac"]),
-        ("Código de Tributação Municipal", d["cod_mun"]),
-        ("Local da Prestação",            d["loc_prest"]),
-        ("País da Prestação",             d["pais_prest"]),
-    ], [W*0.33, W*0.27, W*0.25, W*0.15]))
+        ("Código de Tributação Nacional / Municipal", d["cod_nac_mun"]),
+        ("Código da NBS",                             d["cNBS"]),
+        ("Local da Prestação / Sigla UF / País",      d["loc_prest"]),
+    ], [WS*0.34, WS*0.28, WS*0.38], secao="SERVIÇO PRESTADO"))
+    desc_cod = Table([[Paragraph(d["xTribNac_desc"], S_VAL)]], colWidths=[W])
+    desc_cod.setStyle(TableStyle([
+        ("BOX",           (0,0),(-1,-1), 0.3, C_BRD),
+        ("TOPPADDING",    (0,0),(-1,-1), 1),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 1),
+        ("LEFTPADDING",   (0,0),(-1,-1), 3),
+    ]))
+    story.append(desc_cod)
     story.append(_grid([
         ("Descrição do Serviço", d["desc_serv"]),
     ], [W]))
 
-    # ── 8. TRIBUTAÇÃO MUNICIPAL ───────────────────────────────────────────────
-    story.append(_sec_bar("TRIBUTAÇÃO MUNICIPAL"))
+    # ── 8. TRIBUTAÇÃO MUNICIPAL (ISSQN) ───────────────────────────────────────
     story.append(_grid([
-        ("Tributação do ISSQN",                    d["tribISSQN"]),
-        ("País Resultado da Prestação do Serviço", d["paisResult"]),
-        ("Município de Incidência do ISSQN",       d["munIncid"]),
-        ("Regime Especial de Tributação",          d["regEsp"]),
+        ("Tipo de Tributação do ISSQN",                        d["tribISSQN"]),
+        ("Município / Sigla UF / País de Incidência do ISSQN", d["munIncid"]),
+    ], [WS*0.42, WS*0.58], secao="TRIBUTAÇÃO MUNICIPAL (ISSQN)"))
+    story.append(_grid([
+        ("Regime Especial de Tributação do ISSQN", d["regEsp"]),
+        ("Tipo de Imunidade do ISSQN",             d["tipoImun"]),
+        ("Suspensão da Exigibilidade do ISSQN",    d["suspExig"]),
+        ("Número Processo Suspensão",              d["numProc"]),
     ], [w4]*4))
     story.append(_grid([
-        ("Tipo de Imunidade",                   d["tipoImun"]),
-        ("Suspensão da Exigibilidade do ISSQN", d["suspExig"]),
-        ("Número Processo Suspensão",           d["numProc"]),
-        ("Benefício Municipal",                 d["benMun"]),
-    ], [w4]*4))
-    story.append(_grid([
-        ("Valor do Serviço",        d["vServ"]),
-        ("Desconto Incondicionado", d["descIncond"]),
-        ("Total Deduções/Reduções", d["totDed"]),
+        ("Benefício Municipal",     d["benMun"]),
         ("Cálculo do BM",           d["calcBM"]),
+        ("Total Deduções/Reduções", d["totDed"]),
+        ("Desconto Incondicionado", d["descIncond"]),
     ], [w4]*4))
     story.append(_grid([
         ("BC ISSQN",        d["vBC"]),
@@ -618,45 +861,67 @@ def gerar_danfse(xml_bytes: bytes) -> bytes:
         ("ISSQN Apurado",    d["vISSQN"]),
     ], [w4]*4))
 
-    # ── 9. TRIBUTAÇÃO FEDERAL ─────────────────────────────────────────────────
-    story.append(_sec_bar("TRIBUTAÇÃO FEDERAL"))
+    # ── 9. TRIBUTAÇÃO FEDERAL (EXCETO CBS) ────────────────────────────────────
     story.append(_grid([
-        ("IRRF",                              d["irrf"]),
+        ("IRRF",                                 d["irrf"]),
         ("Contribuição Previdenciária - Retida", d["contPrev"]),
-        ("Contribuições Sociais - Retidas",   d["contSoc"]),
-        ("Descrição Contrib. Sociais - Retidas", d["descCont"]),
-    ], [w4]*4))
+        ("Contribuições Sociais - Retidas",      d["contSoc"]),
+    ], [WS/3]*3, secao="TRIBUTAÇÃO FEDERAL (EXCETO CBS)"))
     story.append(_grid([
-        ("PIS - Débito Apuração Própria",    d["pis"]),
-        ("COFINS - Débito Apuração Própria", d["cofins"]),
-    ], [W/2, W/2]))
-
-    # ── 10. VALOR TOTAL ───────────────────────────────────────────────────────
-    story.append(_sec_bar("VALOR TOTAL DA NFS-E"))
-    story.append(_grid([
-        ("Valor do Serviço",       d["vServT"]),
-        ("Desconto Condicionado",  d["descCond"]),
-        ("Desconto Incondicionado",d["descIncondT"]),
-        ("ISSQN Retido",           d["issqnRet"]),
-    ], [w4]*4))
-    story.append(_grid([
-        ("Total das Retenções Federais",     d["totRetFed"]),
-        ("PIS/COFINS - Débito Apur. Própria",d["pisCofins"]),
-        ("",                                 ""),
-        ("Valor Líquido da NFS-e",           d["vLiq"]),
-    ], [w4]*4, bold_last=True))
-
-    # ── 11. TOTAIS APROXIMADOS ────────────────────────────────────────────────
-    story.append(_sec_bar("TOTAIS APROXIMADOS DOS TRIBUTOS"))
-    story.append(_grid([
-        ("Federais",  d["tbFed"]),
-        ("Estaduais", d["tbEst"]),
-        ("Municipais",d["tbMun"]),
+        ("PIS - Débito Apuração Própria",         d["pis"]),
+        ("COFINS - Débito Apuração Própria",      d["cofins"]),
+        ("Descrição Contrib. Sociais - Retidas",  d["descCont"]),
     ], [W/3, W/3, W/3]))
 
-    # ── 12. INFORMAÇÕES COMPLEMENTARES ───────────────────────────────────────
+    # ── 9b. TRIBUTAÇÃO IBS / CBS ──────────────────────────────────────────────
+    # Bloco da reforma tributária, exigido pela NT-008 v1.02. Os XMLs anteriores
+    # à reforma não o trazem; nesse caso os campos saem com traço.
+    story.append(_grid([
+        ("CST / cClassTrib", f"{d['ibs_cst']} / {d['ibs_classtrib']}"),
+        ("Indicador de Operação / Código IBGE Incidência / Município Incidência / Sigla UF",
+         f"{d['ibs_indop']} / {d['ibs_cod_incid']} / {d['ibs_mun_incid']}"),
+    ], [WS*0.30, WS*0.70], secao="TRIBUTAÇÃO IBS / CBS"))
+    story.append(_grid([
+        ("Exclusões e Reduções da Base de Cálculo",   d["ibs_exclusoes"]),
+        ("Base de Cálculo Após Exclusões e Reduções", d["ibs_bc"]),
+        ("Red. Alíquota IBS / Red. Alíquota CBS",     "-"),
+        ("Alíquota – IBS UF / IBS Mun",
+         f"{d['ibs_aliq_uf']} / {d['ibs_aliq_mun']}"),
+    ], [w4]*4))
+    story.append(_grid([
+        ("Alíq. Efetiva Municipal – IBS", d["ibs_efet_mun"]),
+        ("Valor Apurado Municipal – IBS", d["ibs_val_mun"]),
+        ("Alíq. Efetiva Estadual – IBS",  d["ibs_efet_uf"]),
+        ("Valor Apurado Estadual – IBS",  d["ibs_val_uf"]),
+    ], [w4]*4))
+    story.append(_grid([
+        ("Valor Total Apurado – IBS", d["ibs_val_tot"]),
+        ("Alíquota - CBS",            d["cbs_aliq"]),
+        ("Alíquota Efetiva – CBS",    d["cbs_efet"]),
+        ("Valor Total Apurado – CBS", d["cbs_val_tot"]),
+    ], [w4]*4))
+
+    # ── 10. VALOR TOTAL DA NFS-E ──────────────────────────────────────────────
+    story.append(_grid([
+        ("VALOR DA OPERAÇÃO / SERVIÇO", d["vServT"]),
+        ("Desconto Incondicionado",     d["descIncondT"]),
+        ("Desconto Condicionado",       d["descCond"]),
+    ], [WS/3]*3, secao="VALOR TOTAL DA NFS-E"))
+    story.append(_grid([
+        ("Total das Retenções (ISSQN / Federais)", d["totRetFed"]),
+        ("VALOR LÍQUIDO DA NFS-e",                 d["vLiq"]),
+        ("Total do IBS/CBS",                       d["total_ibscbs"]),
+        ("VALOR LÍQUIDO DA NFS-e + IBS/CBS",       d["liq_mais_ibscbs"]),
+    ], [w4]*4, bold=(1, 3)))
+
+    # ── 11. INFORMAÇÕES COMPLEMENTARES ───────────────────────────────────────
     story.append(_sec_bar("INFORMAÇÕES COMPLEMENTARES"))
-    info = Table([[Paragraph(d["infoComp"], S_VAL)]], colWidths=[W])
+    _linhas_info = [d["infoComp"]]
+    _linhas_info.append(
+        "<b>Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012:</b> "
+        f"Federais: {d['tbFed']}; Estaduais: {d['tbEst']}; Municipais: {d['tbMun']}"
+    )
+    info = Table([[Paragraph("<br/>".join(_linhas_info), S_VAL)]], colWidths=[W])
     info.setStyle(TableStyle([
         ("BOX",           (0,0),(-1,-1), 0.3, C_BRD),
         ("TOPPADDING",    (0,0),(-1,-1), 3),
@@ -665,9 +930,17 @@ def gerar_danfse(xml_bytes: bytes) -> bytes:
     ]))
     story.append(info)
 
-    doc.build(story)
+    # ── 12. RODAPÉ ────────────────────────────────────────────────────────────
+    # Fica ancorado no pé da página, não logo após o conteúdo — por isso é
+    # desenhado no callback de página, e não empilhado na story.
+    def _pagina(canvas, documento):
+        if d.get("cancelada"):
+            _marca_dagua(canvas, documento)
+        _rodape(canvas, d, W)
+
+    doc.build(story, onFirstPage=_pagina, onLaterPages=_pagina)
     return buf.getvalue()
 
 
-def gerar_pdf_bytes(xml_bytes: bytes) -> bytes:
-    return gerar_danfse(xml_bytes)
+def gerar_pdf_bytes(xml_bytes: bytes, cancelada: bool | None = None) -> bytes:
+    return gerar_danfse(xml_bytes, cancelada=cancelada)

@@ -360,9 +360,10 @@ def _baixar_pdfs_paralelo(
                 if abriu_circuito:
                     with log_lock:
                         log.append(
-                            "  Servico de DANFSe indisponivel "
-                            f"({_PDF_FORA_LIMITE} respostas seguidas sem servidor) "
-                            "— parando de insistir."
+                            "  API de DANFSe nao responde "
+                            f"({_PDF_FORA_LIMITE} respostas seguidas sem servidor). "
+                            "Ela foi suspensa em 03/08/2026 pela NT-008 — o PDF "
+                            "passa a ser gerado aqui, que e o padrao nacional."
                         )
                         try:
                             if log_cb: log_cb(log)
@@ -705,19 +706,26 @@ def baixar_xmls_nfse(
 
                 baixados_api = len(pdfs)
 
-                # ── Fallback: gera o DANFSe localmente a partir do XML ────────
-                # A API oficial e a fonte preferida, mas quando ela esta fora o
-                # XML que ja temos em maos basta para montar o mesmo documento.
+                # ── Geração local do DANFSe ───────────────────────────────────
+                # Desde 03/08/2026 a API de geração do DANFSe está suspensa
+                # (NT-008 v1.02): a nota técnica existe justamente para que o
+                # próprio software monte o documento. Tentamos a API primeiro
+                # por compatibilidade, mas é aqui que o PDF nasce hoje.
                 pendentes = [(nome, xml_b) for _c, nome, xml_b in tarefas_pdf if nome not in pdfs]
                 if pendentes:
-                    log.append(f"  Gerando {len(pendentes)} PDF(s) localmente a partir do XML...")
+                    log.append(f"  Gerando {len(pendentes)} DANFSe localmente (padrão NT-008)...")
                     if log_cb: log_cb(log)
                     from core.conversor_pdf import gerar_danfse
+                    from core.nfse_status import nome_indica_cancelada
 
                     gerados = falhas_local = 0
                     for nome_pdf, xml_b in pendentes:
                         try:
-                            pdfs[nome_pdf] = gerar_danfse(xml_b)
+                            # O XML da nota cancelada não registra o cancelamento;
+                            # quem sabe disso é o nome do arquivo (sufixo _CANC).
+                            pdfs[nome_pdf] = gerar_danfse(
+                                xml_b, cancelada=nome_indica_cancelada(nome_pdf)
+                            )
                             gerados += 1
                         except Exception as exc:
                             falhas_local += 1
