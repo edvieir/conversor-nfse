@@ -476,7 +476,8 @@ def _parse(xml_bytes: bytes) -> dict:
         "descCond":    _fmt_val(_t(root, "vDescCond")),
         "descIncondT": _fmt_val(_t(root, "vDescIncond")),
         "issqnRet":    _fmt_val(_t(root, "vISSRet")),
-        "totRetFed":   _fmt_val(_t(root, "vTotRet")),
+        # A tag é vTotalRet (infNFSe/valores); vTotRet não existe no layout.
+        "totRetFed":   _fmt_val(_t(root, "vTotalRet", "vTotRet")),
         "pisCofins":   "-",
         "vLiq":        _fmt_val(vLiq_raw),
         # Tributos aproximados (Lei 12.741/2012). As tags corretas são
@@ -573,10 +574,11 @@ class NfseLogo(Flowable):
 _STD = TableStyle([
     ("FONTNAME",      (0,0), (-1,-1), "Helvetica"),
     ("FONTSIZE",      (0,0), (-1,-1), 7),
-    # Padding mínimo: são ~25 grades de 2 linhas, e cada ponto aqui vira
-    # 50 pontos de altura no documento — é o que decide 1 ou 2 páginas.
-    ("TOPPADDING",    (0,0), (-1,-1), 0.6),
-    ("BOTTOMPADDING", (0,0), (-1,-1), 0.6),
+    # Linhas com a mesma respiração do DANFSe oficial. Cada ponto aqui vira
+    # ~50 de altura no documento, então mexer nisso decide 1 ou 2 páginas —
+    # o truncamento da descrição do serviço é o que dá a folga.
+    ("TOPPADDING",    (0,0), (-1,-1), 2.2),
+    ("BOTTOMPADDING", (0,0), (-1,-1), 2.2),
     ("LEFTPADDING",   (0,0), (-1,-1), 2.5),
     ("RIGHTPADDING",  (0,0), (-1,-1), 2),
     ("VALIGN",        (0,0), (-1,-1), "TOP"),
