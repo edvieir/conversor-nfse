@@ -121,17 +121,23 @@ def _fmt_fone(s):
 
 
 def _simp(cod):
+    """Texto por extenso, como no DANFSe oficial."""
     return {
-        "1": "Não optante", "2": "Não optante - Excluído",
-        "3": "Optante - ME/EPP", "4": "Optante - MEI",
+        "1": "Não optante",
+        "2": "Não optante - Excluído",
+        "3": "Optante - Microempresa ou Empresa de Pequeno Porte",
+        "4": "Optante - Microempreendedor Individual",
     }.get(cod, cod or "-")
 
 
 def _reg_sn(cod):
+    """Texto por extenso, como no DANFSe oficial."""
     return {
-        "1": "Federal e Municipal pelo SN",
-        "2": "Federal pelo SN e Municipal por fora",
-        "3": "Municipal pelo SN e Federal por fora",
+        "1": "Regime de apuração dos tributos federais e municipal pelo Simples Nacional",
+        "2": "Regime de apuração dos tributos federais pelo Simples Nacional e o ISSQN "
+             "pela tributação municipal fora do Simples Nacional",
+        "3": "Regime de apuração dos tributos federais fora do Simples Nacional e o ISSQN "
+             "pelo Simples Nacional",
     }.get(cod, cod or "-")
 
 
@@ -157,11 +163,11 @@ def _tp_emit(cod):
 
 
 def _situacao(cstat, cancelada):
-    """Situação da NFS-e. cStat 100/107 = regular; 101/108 = cancelada."""
+    """Situação da NFS-e, na redação do DANFSe oficial."""
     if cancelada or cstat in ("101", "108"):
-        return "NFS-e cancelada"
+        return "NFS-e Cancelada"
     if cstat in ("100", "107"):
-        return "NFS-e regular (Autorizada)"
+        return "NFS-e Gerada"
     return "-"
 
 
@@ -194,6 +200,15 @@ def _trib_iss(cod):
         "4": "Exportação", "5": "Não Incidência",
         "6": "Suspensa - Decisão Judicial", "7": "Suspensa - Processo Adm.",
     }.get(cod, cod or "-")
+
+
+def _fmt_ibge_cep(cod_mun, cep):
+    """"23.04400 / 60.165-078" — pontuação do DANFSe oficial."""
+    d = "".join(c for c in (cod_mun or "") if c.isdigit())
+    ibge = f"{d[:2]}.{d[2:]}" if len(d) == 7 else (d or "-")
+    c = "".join(ch for ch in (cep or "") if ch.isdigit())
+    cep_fmt = f"{c[:2]}.{c[2:5]}-{c[5:]}" if len(c) == 8 else (cep or "-")
+    return f"{ibge} / {cep_fmt}"
 
 
 def _fmt_nbs(s):
@@ -293,7 +308,8 @@ def _parse(xml_bytes: bytes) -> dict:
             pAliq_raw = _v
             break
     try:
-        pAliq_fmt = f"{float(pAliq_raw):.2f}%"
+        # Formato brasileiro, como no DANFSe oficial: "2,17 %"
+        pAliq_fmt = f"{float(pAliq_raw):.2f}".replace(".", ",") + " %"
     except Exception:
         pAliq_fmt = pAliq_raw or "-"
 
@@ -392,7 +408,7 @@ def _parse(xml_bytes: bytes) -> dict:
         "emit_fone":   _fmt_fone(_t(emit, "fone")),
         "emit_end":    emit_end,
         "emit_mun":    _mun(cMun_e, uf_e),
-        "emit_cep":    f"{cMun_e} / {_fmt_cep(_t(ender_e, 'CEP'))}",
+        "emit_cep":    _fmt_ibge_cep(cMun_e, _t(ender_e, "CEP")),
         "opSimpNac":   _simp(_t(reg, "opSimpNac")),
         "regApTribSN": _reg_sn(_t(reg, "regApTribSN")),
         # tomador
@@ -403,12 +419,15 @@ def _parse(xml_bytes: bytes) -> dict:
         "toma_fone":   _fmt_fone(_t(toma, "fone")),
         "toma_end":    toma_end,
         "toma_mun":    _mun(cMun_t, uf_t),
-        "toma_cep":    f"{cMun_t} / {_fmt_cep(_t(toma_ender_nac, 'CEP'))}",
+        "toma_cep":    _fmt_ibge_cep(cMun_t, _t(toma_ender_nac, "CEP")),
         # serviço
         "cod_nac":     cod_nac_label,
         "cod_nac_mun": f"{cTribNac_fmt} / {_t(root, 'cTribMun') if _t(root, 'cTribMun') != '-' else _t(cServ, 'cTribMun')}",
         "cod_mun":     _t(root, "xTribMun"),
-        "loc_prest":   _mun_upper(cLocPrest) if cLocPrest != "-" else _t(root, "xLocPrestacao"),
+        # O oficial imprime "MUNICÍPIO / UF / País"; sem país no XML, fica o traço.
+        "loc_prest":   ((_mun_upper(cLocPrest) if cLocPrest != "-"
+                         else _t(root, "xLocPrestacao"))
+                        + f" / {_t(root, 'xPaisPrestacao')}"),
         "pais_prest":  _t(root, "xPaisPrestacao"),
         # O DANFSe é documento de "consulta resumida" (NT-008, item 2); descrições
         # muito longas são cortadas para o documento caber em 1 página, com
@@ -418,7 +437,9 @@ def _parse(xml_bytes: bytes) -> dict:
         # trib mun
         "tribISSQN":   _trib_iss(_t(tribMun, "tribISSQN")),
         "paisResult":  _t(tribMun, "cPaisResult"),
-        "munIncid":    _mun_upper(cLocPrest) if cLocPrest != "-" else _t(root, "xLocIncid"),
+        "munIncid":    ((_mun_upper(cLocPrest) if cLocPrest != "-"
+                         else _t(root, "xLocIncid"))
+                        + f" / {_t(root, 'xPaisIncid')}"),
         "regEsp":      _reg_esp(_t(tribMun, "regEspTrib") if tribMun is not None
                                 else _t(reg, "regEspTrib")),
         "tipoImun":    _t(tribMun, "tpImunidade"),
@@ -427,7 +448,10 @@ def _parse(xml_bytes: bytes) -> dict:
         "benMun":      _t(root, "xBenMun"),
         "vServ":       _fmt_val(vServ_raw),
         "descIncond":  _fmt_val(_t(vals_dps or root, "vDescIncond")),
-        "totDed":      _fmt_val(_t(vals_dps or root, "vDedRed")),
+        # O total de deduções vem em <vDedRed><vDR>; ler <vDedRed> direto pega
+        # o container e devolve vazio.
+        "totDed":      _fmt_val(_t(root, "vDR") if _t(root, "vDR") != "-"
+                                else _t(vals_dps or root, "vDedRed")),
         "calcBM":      _fmt_val(_t(vals_dps or root, "vCalcBM")),
         "vBC":         _fmt_val(vBC_raw),
         "pAliq":       pAliq_fmt,
@@ -440,7 +464,8 @@ def _parse(xml_bytes: bytes) -> dict:
         # Sem nenhuma retenção federal informada, o modelo oficial declara isso
         # por extenso em vez de deixar o campo com traço.
         "descCont":    (_t(root, "xContribSoc") if _t(root, "xContribSoc") != "-"
-                        else ("PIS/COFINS/CSLL Não Retidos"
+                        else (f"{_norm_cod(_t(root, 'tpRetPisCofins')) or '0'} - "
+                              "PIS/COFINS/CSLL Não Retidos"
                               if _t(root, "vTotRet") in ("-", "", "0.00", "0")
                               else "-")),
         # No XML as tags são vPis/vCofins (e não vPIS/vCOFINS); _t é sensível a caixa.
@@ -782,7 +807,7 @@ def gerar_danfse(xml_bytes: bytes, cancelada: bool | None = None) -> bytes:
         ("Código IBGE / CEP",       d["emit_cep"]),
     ], [W*0.50, W*0.25, W*0.25]))
     story.append(_grid([
-        ("*Endereço", d["emit_end"]),
+        ("Endereço", d["emit_end"]),
         ("E-mail",    d["emit_email"]),
     ], [W*0.50, W*0.50]))
     story.append(_grid([
@@ -802,7 +827,7 @@ def gerar_danfse(xml_bytes: bytes, cancelada: bool | None = None) -> bytes:
         ("Código IBGE / CEP",       d["toma_cep"]),
     ], [W*0.50, W*0.25, W*0.25]))
     story.append(_grid([
-        ("*Endereço", d["toma_end"]),
+        ("Endereço", d["toma_end"]),
         ("E-mail",    d["toma_email"]),
     ], [W*0.50, W*0.50]))
 
