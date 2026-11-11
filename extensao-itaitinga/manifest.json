@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Escrituração ISS Itaitinga — NFS-e tomadas",
+  "version": "1.0.0",
+  "description": "Lê o ZIP de NFS-e tomadas, classifica cada nota pelo regime do prestador e preenche a tela de NFSe de Outros Municípios do portal ISS de Itaitinga.",
+  "permissions": ["activeTab", "scripting", "sidePanel", "storage"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {
+    "default_title": "Escrituração ISS Itaitinga"
+  },
+  "side_panel": {
+    "default_path": "painel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "128": "icone.png"
+  }
+}

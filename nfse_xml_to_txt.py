@@ -3965,10 +3965,34 @@ def parse_nfse(xml_path):
             d["vS"] = ft(vsp, "vServ")
 
     # --- Retencoes federais ---
-    tribf = fa("tribFed")
-    d["vPIS"]    = ft(tribf, "vPIS")    if tribf is not None else ""
-    d["vCOFINS"] = ft(tribf, "vCOFINS") if tribf is not None else ""
-    d["vINSS"]   = ft(tribf, "vINSS")   if tribf is not None else ""
+    # As tags reais do NFS-e Nacional sao vPis/vCofins (dentro de <piscofins>)
+    # e vRetCP para o INSS. Procurar por vPIS/vCOFINS/vINSS como filhos diretos
+    # de <tribFed> nao achava nada, e os tres campos saiam sempre vazios.
+    def _tag_qualquer(*nomes):
+        """Primeiro nome da lista que existir — a ordem e a preferencia."""
+        for nome in nomes:
+            alvo = nome.lower()
+            for el in root.iter():
+                if el.tag.split("}")[-1].lower() == alvo and el.text:
+                    return el.text.strip()
+        return ""
+
+    d["vPIS"]    = _tag_qualquer("vRetPis", "vPis")
+    d["vCOFINS"] = _tag_qualquer("vRetCofins", "vCofins")
+    d["vINSS"]   = _tag_qualquer("vRetCP", "vRetInss", "vInss")
+    d["vCSLL"]   = _tag_qualquer("vRetCSLL")
+    d["vIRRF"]   = _tag_qualquer("vRetIRRF")
+
+    # CSRF = CSLL + PIS + COFINS retidos. Soma apenas as tags explicitas de
+    # retencao: no NFS-e Nacional a vRetCSLL ja costuma trazer o agregado dos
+    # tres, e somar vPis/vCofins (que sao apuracao propria) contaria duas vezes.
+    _csrf = 0.0
+    for _tag in ("vRetPis", "vRetCofins", "vRetCSLL"):
+        try:
+            _csrf += float(_tag_qualquer(_tag) or 0)
+        except ValueError:
+            pass
+    d["vCSRF"] = f"{_csrf:.2f}" if _csrf > 0 else ""
 
     # --- Tipo retencao ISS ---
     tm = fa("tribMun")
@@ -4051,9 +4075,9 @@ def gerar_linha(d):
         "",                              # 38 Deducoes
         val_ret(d.get("vPIS", "")),      # 39 PIS
         val_ret(d.get("vCOFINS", "")),   # 40 COFINS
-        val_ret(d.get("vINSS", "")),     # 41 INSS
-        "",                              # 42
-        "",                              # 43
+        val_ret(d.get("vINSS", "")),     # 41 INSS (vRetCP)
+        val_ret(d.get("vCSRF", "")),     # 42 CSRF: CSLL+PIS+COFINS retidos
+        val_ret(d.get("vIRRF", "")),     # 43 IRRF retido
         "0",                             # 44
         "",                              # 45
         d.get("im") or "",               # 46 Inscricao municipal

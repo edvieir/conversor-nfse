@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Escrituração ISS Itaitinga</title>
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header>
+    <h1>Escrituração ISS Itaitinga</h1>
+    <p class="sub">NFS-e de serviços tomados · outros municípios</p>
+  </header>
+
+  <section class="bloco">
+    <label class="rotulo" for="arquivo">1 · ZIP ou XMLs da competência</label>
+    <input type="file" id="arquivo" accept=".zip,.xml" multiple>
+
+    <label class="rotulo" for="competencia">Competência a lançar</label>
+    <input type="month" id="competencia">
+  </section>
+
+  <section class="bloco" id="blocoResumo" hidden>
+    <div id="resumo"></div>
+  </section>
+
+  <section class="bloco" id="blocoNotas" hidden>
+    <div class="linha-opcoes">
+      <label><input type="checkbox" id="validar" checked> Validar após preencher</label>
+    </div>
+    <div id="notas"></div>
+  </section>
+
+  <section class="bloco">
+    <div class="rotulo">Registro</div>
+    <pre id="log" aria-live="polite">Carregue o ZIP para começar.</pre>
+  </section>
+
+  <footer>
+    <p class="aviso">
+      A extensão preenche e valida. <strong>Salvar é sempre você</strong>, no portal,
+      depois de conferir o diálogo.
+    </p>
+  </footer>
+
+  <script type="module" src="painel.js"></script>
+</body>
+</html>

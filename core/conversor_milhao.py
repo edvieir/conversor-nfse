@@ -377,8 +377,18 @@ def _gerar_linha_txt(r: list, im_padrao: str = "") -> str:
     cofins = _centavos(c[56])
     inss   = _centavos(c[57])
     csll   = _centavos(c[59])
-    # Campo [40]: INSS se disponível, senão CSLL (mesmo padrão do _fix_linha)
-    campo40 = inss or csll
+    # Campo [40] é INSS e só INSS.
+    #
+    # Antes era `inss or csll`: sem INSS na nota, a CSLL caía aqui. E no NFS-e
+    # Nacional a tag vRetCSLL costuma trazer a CSRF inteira (CSLL+PIS+COFINS),
+    # então a retenção aparecia no portal de Fortaleza como INSS — tributo
+    # diferente, com obrigação diferente. Preferível sair em branco e ser
+    # digitado do que entrar no campo errado.
+    campo40 = inss
+    # Campo [41] = campo 42 do layout de Fortaleza: CSRF (CSLL + PIS + COFINS
+    # retidos). É para cá que a retenção vinha tentando ir quando caía no INSS.
+    # No NFS-e Nacional a vRetCSLL já traz o agregado, então vai ela inteira.
+    campo41 = csll
 
     ind_ret = "1" if iss_retido else "0"
     im = im_padrao  # IM do tomador (usuário do sistema)
@@ -424,9 +434,9 @@ def _gerar_linha_txt(r: list, im_padrao: str = "") -> str:
         "",                     # [37] Deduções
         pis,                    # [38] PIS
         cofins,                 # [39] COFINS
-        campo40,                # [40] INSS / CSLL
-        "",                     # [41]
-        "",                     # [42]
+        campo40,                # [40] INSS (campo 41 do layout)
+        campo41,                # [41] CSRF: CSLL+PIS+COFINS retidos (campo 42)
+        "",                     # [42] IRRF (campo 43)
         ind_ret,                # [43] Indicador retenção ISS (0=não, 1=sim)
         "",                     # [44]
         im,                     # [45] IM do tomador (usuário)
